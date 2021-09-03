@@ -272,7 +272,7 @@ _INPUT_MODULE_LAYOUTS = {
                        hardware_type=Module.HardwareType.EMULATED,
                        inputs=[Input(input_id=16, tester_output_id=45),
                                Input(input_id=17, tester_output_id=46),
-                               Input(input_id=18, tester_output_id=47),]),
+                               Input(input_id=18, tester_output_id=47), ]),
     ],
     # Input(input_id=0, tester_output_id=24),
     TestPlatform.DEBIAN: [
@@ -303,9 +303,19 @@ _INPUT_MODULE_LAYOUTS = {
                        ]),
         Module(name='CC emulated input module', mtype='I', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
-               inputs=[Input(input_id=00, tester_output_id=58),
-                       Input(input_id=00, tester_output_id=58),
+               inputs=[Input(input_id=40, tester_output_id=58),
+                       Input(input_id=41, tester_output_id=59),
+                       Input(input_id=42, tester_output_id=60),
+                       Input(input_id=43, tester_output_id=61),
+                       Input(input_id=44, tester_output_id=62),
+                       Input(input_id=45, tester_output_id=63),
+                       Input(input_id=46, tester_output_id=64),
+                       Input(input_id=47, tester_output_id=65),
                       ]),
+        Module(name='CC emulated input module', mtype='I', is_can=True,
+               hardware_type=Module.HardwareType.EMULATED,
+               inputs=[Input(input_id=48, tester_output_id=66),
+                       ]),
     ]
 }
 INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
@@ -315,6 +325,9 @@ _TEMPERATURE_MODULE_LAYOUTS = {
     TestPlatform.DEBIAN: [
         Module(name='temperature module', mtype='T',
                hardware_type=Module.HardwareType.PHYSICAL,
+               temps=[]),
+        Module(name='CC emulated temperature module', mtype='T', is_can=True,
+               hardware_type=Module.HardwareType.EMULATED,
                temps=[]),
         Module(name='CC emulated temperature module', mtype='T', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
