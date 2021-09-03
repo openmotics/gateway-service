@@ -62,12 +62,12 @@ class RoomsMigrator(BaseMigrator):
         rooms = {}  # type: Dict[int, Room]
 
         # Rooms
-        logger.info('* Rooms')
+        cls.migrate_log(level=logging.INFO, msg='* Rooms')
         for room_id in range(100):
             try:
                 RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, skip_empty=True)
             except Exception:
-                logger.exception('Could not migrate single RoomConfiguration')
+                cls.migrate_log(level=logging.ERROR, msg='Could not migrate single RoomConfiguration')
 
         # Main objects
         items = [
@@ -78,7 +78,7 @@ class RoomsMigrator(BaseMigrator):
             (ShutterGroupConfiguration, ShutterGroup, lambda s: True)
         ]  # type: List[Tuple[Type[EepromModel], Type[BaseModel], Callable[[Any],bool]]]
         for eeprom_model, orm_model, filter_ in items:
-            logger.info('* {0}s'.format(eeprom_model.__name__))
+            cls.migrate_log(level=logging.INFO, msg='* {0}s'.format(eeprom_model.__name__))
             try:
                 for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
                     try:
@@ -105,15 +105,15 @@ class RoomsMigrator(BaseMigrator):
                         object_orm.save()
                         RoomsMigrator._delete_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room'])
                     except Exception:
-                        logger.exception('Could not migrate single {0}'.format(eeprom_model.__name__))
+                        cls.migrate_log(level=logging.ERROR, msg='Could not migrate single {0}'.format(eeprom_model.__name__))
             except Exception:
-                logger.exception('Could not migrate {0}s'.format(eeprom_model.__name__))
+                cls.migrate_log(level=logging.ERROR, msg='Could not migrate {0}s'.format(eeprom_model.__name__))
 
         # PulseCounters
         pulse_counter = None  # type: Optional[PulseCounter]
         # - Master
         try:
-            logger.info('* PulseCounters (master)')
+            cls.migrate_log(level=logging.INFO, msg='* PulseCounters (master)')
             for pulse_counter_classic_orm in master_controller._eeprom_controller.read_all(PulseCounterConfiguration):
                 try:
                     pulse_counter_id = pulse_counter_classic_orm.id
@@ -138,14 +138,14 @@ class RoomsMigrator(BaseMigrator):
                     pulse_counter.save()
                     RoomsMigrator._delete_eext_fields(eext_controller, 'PulseCounterConfiguration', pulse_counter_id, ['room'])
                 except Exception:
-                    logger.exception('Could not migrate classic master PulseCounter')
+                    cls.migrate_log(level=logging.ERROR, msg='Could not migrate classic master PulseCounter')
         except Exception:
-            logger.exception('Could not migrate classic master PulseCounters')
+            cls.migrate_log(level=logging.ERROR, msg='Could not migrate classic master PulseCounters')
         # - Old SQLite3
         old_sqlite_db = constants.get_pulse_counter_database_file()
         if os.path.exists(old_sqlite_db):
             try:
-                logger.info('* PulseCounters (gateway)')
+                cls.migrate_log(level=logging.INFO, msg='* PulseCounters (gateway)')
                 import sqlite3
                 connection = sqlite3.connect(old_sqlite_db,
                                              detect_types=sqlite3.PARSE_DECLTYPES,
@@ -172,10 +172,10 @@ class RoomsMigrator(BaseMigrator):
                             pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms)
                         pulse_counter.save()
                     except Exception:
-                        logger.exception('Could not migratie gateway PulseCounter')
+                        cls.migrate_log(level=logging.ERROR, msg='Could not migratie gateway PulseCounter')
                 os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
             except Exception:
-                logger.exception('Could not migrate gateway PulseCounters')
+                cls.migrate_log(level=logging.ERROR, msg='Could not migrate gateway PulseCounters')
 
     @staticmethod
     def _get_or_create_room(eext_controller, room_id, rooms, skip_empty=False):
