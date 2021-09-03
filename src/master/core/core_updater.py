@@ -105,7 +105,7 @@ class CoreUpdater(object):
             component_logger.info('Bootloader {0} active'.format(bootloader_version))
         else:
             component_logger.info('Bootloader not active, switching to bootloader')
-            Hardware.cycle_gpio(Hardware.GPIO.CORE_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
+            Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
             self._wait_for(entry='DS30HexLoader',
                            logger=component_logger)
             bootloader_version = self._in_bootloader(logger=component_logger)
@@ -129,7 +129,7 @@ class CoreUpdater(object):
 
         component_logger.info('Post-flash power cycle')
         time.sleep(CoreUpdater.POST_BOOTLOAD_DELAY)
-        Hardware.set_gpio(Hardware.GPIO.CORE_POWER, False)
+        Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, False)
 
         time.sleep(CoreUpdater.POWER_CYCLE_DELAY / 2)
         if self._master_communicator is not None and self._maintenance_communicator is not None:
@@ -139,7 +139,7 @@ class CoreUpdater(object):
 
         component_logger.info('Waiting for startup')
         self._master_started.clear()
-        Hardware.set_gpio(Hardware.GPIO.CORE_POWER, True)
+        Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, True)
         if not self._master_started.wait(CoreUpdater.APPLICATION_STARTUP_TIMEOUT):
             raise RuntimeError('Core was not started after {0}s'.format(CoreUpdater.APPLICATION_STARTUP_TIMEOUT))
         component_logger.info('Startup complete')
