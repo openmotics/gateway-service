@@ -274,7 +274,6 @@ _INPUT_MODULE_LAYOUTS = {
                                Input(input_id=17, tester_output_id=46),
                                Input(input_id=18, tester_output_id=47), ]),
     ],
-    # Input(input_id=0, tester_output_id=24),
     TestPlatform.DEBIAN: [
         Module(name='input module', mtype='I',
                hardware_type=Module.HardwareType.PHYSICAL,

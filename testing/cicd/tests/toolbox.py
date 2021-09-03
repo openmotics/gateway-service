@@ -422,7 +422,6 @@ class Toolbox(object):
         since = time.time()
         if ucans:
             # We actualy do NOT want to press the CC  BTN here since the CIT modules will be added first and the id's will be messed up
-            # count = 0
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
                 if module.is_can:
@@ -431,11 +430,6 @@ class Toolbox(object):
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
                 time.sleep(0.5)
-                # count+=1
-                # if (count%8)+1==0:
-                #     self.tester.toggle_output(TESTER.Button.can, delay=0.5)
-                # if count==len(ucan_inputs)-1:
-                #     self.tester.toggle_output(TESTER.Button.can, delay=0.5)
             time.sleep(0.5)  # Give a brief moment for the CC to settle
 
         new_modules = []
@@ -462,7 +456,10 @@ class Toolbox(object):
                 self.tester.toggle_output(TESTER.Button.can, delay=0.5)
                 module_amounts = {'C': 1}
                 if ucans:
-                    module_amounts.update({'I': 1, 'T': 1})
+                    # We will have 3 emulated Input modules and 2 emulated Temp modules
+                    # I think we do not want to press the CC BTN only once here at the end, but rather after adding (x%8)+1 uCANs
+                    # So after a bank of 8 has been filled, to make sure the input id's are correct
+                    module_amounts.update({'I': 3, 'T': 2})
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses)
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
