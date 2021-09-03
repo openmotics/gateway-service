@@ -105,7 +105,8 @@ class MailBox(RestAPIEndpoint):
             if box is None:
                 raise StateException("Could not open the rebus lock, lock did not open upon request")
         box_serial = MailboxSerializer.serialize(box)
-        return ApiResponse(body=box_serial)
+        status_code = 200 if box.is_open else 500
+        return ApiResponse(status_code=status_code, body=box_serial)
 
     def _check_controller(self):
         if self.rebus_controller is None:

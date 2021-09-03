@@ -43,9 +43,9 @@ class ApartmentController(object):
 
     @staticmethod
     @Inject
-    def send_config_change_event(error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
-        # type: (Dict[str, Any], PubSub) -> None
-        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'Apartment'}, error=error)
+    def send_config_change_event(msg, error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
+        # type: (str, Dict[str, Any], PubSub) -> None
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'Apartment', 'msg': msg}, error=error)
         pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
 
     @staticmethod
@@ -111,7 +111,7 @@ class ApartmentController(object):
         self._check_rebus_ids(apartment_dto)
         apartment_orm = ApartmentMapper.dto_to_orm(apartment_dto)
         apartment_orm.save()
-        ApartmentController.send_config_change_event()
+        ApartmentController.send_config_change_event('save')
         return ApartmentController.load_apartment(apartment_orm.id)
 
     def update_apartment(self, apartment_dto):
@@ -127,7 +127,7 @@ class ApartmentController(object):
                 if hasattr(apartment_orm, field):
                     setattr(apartment_orm, field, getattr(apartment_dto, field))
             apartment_orm.save()
-            ApartmentController.send_config_change_event()
+            ApartmentController.send_config_change_event('update')
         except Exception as e:
             raise RuntimeError('Could not update the user: {}'.format(e))
         return ApartmentController.load_apartment(apartment_dto.id)
@@ -141,7 +141,7 @@ class ApartmentController(object):
             # First check if there is only one:
             if Apartment.select().where(Apartment.name == apartment_dto.name).count() <= 1:
                 Apartment.delete().where(Apartment.name == apartment_dto.name).execute()
-                ApartmentController.send_config_change_event()
+                ApartmentController.send_config_change_event('delete')
             else:
                 raise RuntimeError('More than one apartment with the given name: {}'.format(apartment_dto.name))
         else:

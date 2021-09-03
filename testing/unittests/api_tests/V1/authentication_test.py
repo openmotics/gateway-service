@@ -57,7 +57,8 @@ class ApiAuthenticationTests(unittest.TestCase):
             role='SUPER',
             pin_code='6542',
             apartment=None,
-            accepted_terms=1
+            accepted_terms=1,
+            is_active=True
         )
 
         # setup some users that will be used throughout the tests
@@ -69,7 +70,8 @@ class ApiAuthenticationTests(unittest.TestCase):
             role='ADMIN',
             pin_code='0000',
             apartment=None,
-            accepted_terms=1
+            accepted_terms=1,
+            is_active=True
         )
 
         self.normal_user_1 = UserDTO(
@@ -80,7 +82,8 @@ class ApiAuthenticationTests(unittest.TestCase):
             pin_code='1111',
             apartment=None,
             language='en',
-            accepted_terms=1
+            accepted_terms=1,
+            is_active=True
         )
         self.normal_user_2 = UserDTO(
             id=2,
@@ -90,7 +93,8 @@ class ApiAuthenticationTests(unittest.TestCase):
             pin_code='2222',
             apartment=None,
             language='Nederlands',
-            accepted_terms=0
+            accepted_terms=0,
+            is_active=True
         )
         self.normal_user_3 = UserDTO(
             id=3,
@@ -101,7 +105,8 @@ class ApiAuthenticationTests(unittest.TestCase):
             pin_code='some_random_string',
             apartment=None,
             language='Francais',
-            accepted_terms=1
+            accepted_terms=1,
+            is_active=True
         )
         self.courier_1 = UserDTO(
             id=4,
@@ -112,7 +117,8 @@ class ApiAuthenticationTests(unittest.TestCase):
             pin_code='some_random_string',
             apartment=None,
             language='Nederlands',
-            accepted_terms=1
+            accepted_terms=1,
+            is_active=True
         )
 
         self.normal_users = [
@@ -133,7 +139,7 @@ class ApiAuthenticationTests(unittest.TestCase):
         with mock.patch.object(self.auth_controller, 'login_with_user_code', return_value=(True, auth_token)):
             response = self.web.authenticate_pin_code(request_body=body).decode('utf-8')
             expected = json.dumps(auth_token.to_dict())
-            self.assertEqual(response, expected)
+            self.assertEqual(expected, response)
 
     def test_authenticate_wrong_credentials(self):
         data = UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
