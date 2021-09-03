@@ -21,9 +21,10 @@ import os
 import subprocess
 import sys
 import constants
+import time
 
 if False:  # MYPY
-    from typing import Union, Dict
+    from typing import Union, Dict, List, Tuple
 
 logger = logging.getLogger('openmotics')
 
@@ -44,15 +45,19 @@ class Hardware(object):
         IN = 'in'
         OUT = 'out'
 
-    GPIO_BASE_PATH = '/sys/class/gpio'
-    GPIO_EXPORT_PATH = '{0}/export'.format(GPIO_BASE_PATH)
-    GPIO_DIRECTION_PATH = '{0}/gpio{{0}}/direction'.format(GPIO_BASE_PATH)
-    GPIO_VALUE_PATH = '{0}/gpio{{0}}/value'.format(GPIO_BASE_PATH)
+    GPIO_BASE_PATH = '/sys/class/gpio/gpio{0}'
+    GPIO_EXPORT_PATH = '/sys/class/gpio/export'
+    GPIO_DIRECTION_PATH = '{0}/direction'.format(GPIO_BASE_PATH)
+    GPIO_VALUE_PATH = '{0}/value'.format(GPIO_BASE_PATH)
 
-    class GPIO(object):
-        RS232_MODE = 77
-        P1_DATA_ENABLE = 113
-        P1_CABLE_CONNECTED = 115
+    class CoreGPIO(object):
+        RS232_MODE = (77, False)
+        P1_DATA_ENABLE = (113, False)
+        P1_CABLE_CONNECTED = (115, False)
+        MASTER_POWER = (49, True)
+
+    class ClassicGPIO(object):
+        pass
 
     # eMMC registers
     EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B = 269
@@ -123,28 +128,57 @@ class Hardware(object):
             return None
 
     @staticmethod
-    def set_gpio_direction(gpio_pin, direction):  # type: (int, str) -> None
-        try:
-            with open(Hardware.GPIO_EXPORT_PATH, 'w') as gpio:
-                gpio.write(str(gpio_pin))
-        except Exception:
-            pass  # This raises every now and then if the pin was already exported
-        with open(Hardware.GPIO_DIRECTION_PATH.format(gpio_pin), 'w') as gpio:
-            gpio.write(direction)
+    def set_gpio_direction(gpio, direction):  # type: (Tuple[int, bool], str) -> None
+        pin, inverted = gpio
+        if not os.path.exists(Hardware.GPIO_BASE_PATH.format(pin)):
+            with open(Hardware.GPIO_EXPORT_PATH, 'w') as gpio_file:
+                gpio_file.write(str(pin))
+        with open(Hardware.GPIO_DIRECTION_PATH.format(pin), 'w') as gpio_file:
+            gpio_file.write(direction)
 
     @staticmethod
-    def set_gpio(gpio_pin, value):  # type: (int, bool) -> None
-        Hardware.set_gpio_direction(gpio_pin=gpio_pin,
+    def set_gpio(gpio, value):  # type: (Tuple[int, bool], bool) -> None
+        pin, inverted = gpio
+        Hardware.set_gpio_direction(gpio=gpio,
                                     direction=Hardware.GPIO_DIRECTION.OUT)
-        with open(Hardware.GPIO_VALUE_PATH.format(gpio_pin), 'w') as gpio:
-            gpio.write('1' if value else '0')
+        if inverted:
+            value = not value
+        with open(Hardware.GPIO_VALUE_PATH.format(pin), 'w') as gpio_file:
+            gpio_file.write('1' if value else '0')
+
+    @staticmethod
+    def cycle_gpio(gpio, cycle):  # type: (Tuple[int, bool], List[Union[bool, float]]) -> None
+        """
+        Will cycle a given GPIO through a certain pattern `cycle`. This pattern
+        is a list of booleans and floats where every booilean will result in setting
+        the GPIO to this state, and every flow will wait for that amount of seconds.
+        Example:
+        > [False, 2.0, True]  # This will immediately turn the GPIO off, wait 2 seconds,
+        >                     # and turn it on again.
+        :param gpio: The GPIO pin
+        :param cycle: The cycle to follow
+        """
+        pin, inverted = gpio
+        Hardware.set_gpio_direction(gpio=gpio,
+                                    direction=Hardware.GPIO_DIRECTION.OUT)
+        for item in cycle:
+            if isinstance(item, bool):
+                with open(Hardware.GPIO_VALUE_PATH.format(pin), 'w') as gpio_file:
+                    value = item
+                    if inverted:
+                        value = not value
+                    gpio_file.write('1' if value else '0')
+            elif isinstance(item, float):
+                time.sleep(item)
+            else:
+                raise ValueError('Unexpected {0} in cycle {1}'.format(item, cycle))
 
     @staticmethod
     def enable_extension_rs485_port():
         current_platform = Platform.get_platform()
         if current_platform not in Platform.CoreTypes:
             raise RuntimeError('Platform {0} does not support the extension RS485 port')
-        Hardware.set_gpio(Hardware.GPIO.RS232_MODE, False)
+        Hardware.set_gpio(Hardware.CoreGPIO.RS232_MODE, False)
 
 
 class System(object):
