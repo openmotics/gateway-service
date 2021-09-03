@@ -145,6 +145,16 @@ class Hardware(object):
 
     @staticmethod
     def cycle_gpio(gpio_pin, cycle):  # type: (int, List[Union[bool, float]]) -> None
+        """
+        Will cycle a given GPIO through a certain pattern `cycle`. This pattern
+        is a list of booleans and floats where every booilean will result in setting
+        the GPIO to this state, and every flow will wait for that amount of seconds.
+        Example:
+        > [False, 2.0, True]  # This will immediately turn the GPIO off, wait 2 seconds,
+        >                     # and turn it on again.
+        :param gpio_pin: The GPIO pin
+        :param cycle: The cycle to follow
+        """
         Hardware.set_gpio_direction(gpio_pin=gpio_pin,
                                     direction=Hardware.GPIO_DIRECTION.OUT)
         for item in cycle:
