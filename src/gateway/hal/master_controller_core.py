@@ -57,6 +57,7 @@ from master.core.slave_updater import SlaveUpdater
 from master.core.system_value import Humidity, Temperature
 from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
+from platform_utils import Hardware
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
@@ -1270,19 +1271,11 @@ class MasterCoreController(MasterController):
     def cold_reset(self, power_on=True):
         # type: (bool) -> None
         _ = self  # Must be an instance method
-        with open('/sys/class/gpio/gpio49/direction', 'w') as gpio_direction:
-            gpio_direction.write('out')
 
-        def power(master_on):
-            """ Set the power on the master. """
-            with open('/sys/class/gpio/gpio49/value', 'w') as gpio_file:
-                gpio_file.write('0' if master_on else '1')
-
-        power(False)
+        cycle = [False]  # type: List[Union[bool, float]]
         if power_on:
-            time.sleep(5)
-            power(True)
-
+            cycle += [2.0, True]
+        Hardware.cycle_gpio(Hardware.GPIO.CORE_POWER, cycle)
         self._master_communicator.reset_communication_statistics()
 
     def update_master(self, hex_filename, version):
