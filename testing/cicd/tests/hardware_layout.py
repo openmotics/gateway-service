@@ -268,7 +268,13 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=13, tester_output_id=53),
                        Input(input_id=14, tester_output_id=54),
                        Input(input_id=15, tester_output_id=55)]),
+        Module(name='CC emulated input module', mtype='I', is_can=True,
+                       hardware_type=Module.HardwareType.EMULATED,
+                       inputs=[Input(input_id=16, tester_output_id=45),
+                               Input(input_id=17, tester_output_id=46),
+                               Input(input_id=18, tester_output_id=47),]),
     ],
+    # Input(input_id=0, tester_output_id=24),
     TestPlatform.DEBIAN: [
         Module(name='input module', mtype='I',
                hardware_type=Module.HardwareType.PHYSICAL,
@@ -290,7 +296,16 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=26, tester_output_id=18),
                        Input(input_id=27, tester_output_id=19),
                        Input(input_id=28, tester_output_id=20),
-                       Input(input_id=29, tester_output_id=21)]),
+                       Input(input_id=29, tester_output_id=21),
+                       # Lange bus uCAN's
+                       Input(input_id=30, tester_output_id=56),
+                       Input(input_id=31, tester_output_id=57),
+                       ]),
+        Module(name='CC emulated input module', mtype='I', is_can=True,
+               hardware_type=Module.HardwareType.EMULATED,
+               inputs=[Input(input_id=00, tester_output_id=58),
+                       Input(input_id=00, tester_output_id=58),
+                      ]),
     ]
 }
 INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
