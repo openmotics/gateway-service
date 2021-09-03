@@ -29,7 +29,7 @@ import hashlib
 import shutil
 import subprocess
 from collections import namedtuple
-from urlparse import urlparse, urlunparse
+from six.moves.urllib.parse import urlparse, urlunparse
 from ioc import INJECTED, Inject, Injectable
 from logs import Logs
 from gateway.dto import ModuleDTO
