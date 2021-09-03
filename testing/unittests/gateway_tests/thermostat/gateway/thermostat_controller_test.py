@@ -20,10 +20,10 @@ import unittest
 from mock import Mock
 from peewee import SqliteDatabase
 
-import fakesleep
 from gateway.dto import OutputStatusDTO, PumpGroupDTO, ScheduleDTO, \
     SensorStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
     ThermostatGroupStatusDTO, ThermostatScheduleDTO, ThermostatStatusDTO
+from gateway.events import GatewayEvent
 from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
     Preset, Pump, PumpToValve, Room, Sensor, Thermostat, ThermostatGroup, \
     Valve, ValveToThermostat
@@ -43,29 +43,26 @@ MODELS = [Pump, Output, Valve, PumpToValve, Thermostat,
 
 class ThermostatControllerTest(unittest.TestCase):
     maxDiff = None
+    test_db = None
 
     @classmethod
     def setUpClass(cls):
-        fakesleep.monkey_patch()
+        cls.test_db = SqliteDatabase(':memory:')
         SetTestMode()
         Logs.setup_logger(log_level_override=logging.DEBUG)
 
-    @classmethod
-    def tearDownClass(cls):
-        fakesleep.monkey_restore()
-
     def setUp(self):
-        self.test_db = SqliteDatabase(':memory:')
         self.test_db.bind(MODELS)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
+        self.pubsub = PubSub()
         output_controller = Mock(OutputController)
         output_controller.get_output_status.return_value = OutputStatusDTO(id=0, status=False)
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self.scheduling_controller = Mock(SchedulingController)
         self.scheduling_controller.load_schedules.return_value = []
-        SetUpTestInjections(pubsub=Mock(PubSub),
+        SetUpTestInjections(pubsub=self.pubsub,
                             scheduling_controller=self.scheduling_controller,
                             output_controller=output_controller,
                             sensor_controller=sensor_controller)
@@ -246,6 +243,13 @@ class ThermostatControllerTest(unittest.TestCase):
                                        room_id=None)], pump_groups)
 
     def test_thermostat_group_crud(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, handle_event)
+
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,
                                        name='thermostat 1',
@@ -284,6 +288,8 @@ class ThermostatControllerTest(unittest.TestCase):
                                                                              switch_to_heating_0=(1, 0),
                                                                              switch_to_heating_1=(2, 100),
                                                                              switch_to_cooling_0=(1, 100)))
+        self.pubsub._publish_all_events(blocking=False)
+        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'HEATING'}, 'location': {}}), events)
         thermostat_group = ThermostatGroup.get(number=0)
         self.assertEqual(15.0, thermostat_group.threshold_temperature)
         links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}
@@ -303,6 +309,9 @@ class ThermostatControllerTest(unittest.TestCase):
                                                       switch_to_cooling_0=(2, 0),
                                                       switch_to_cooling_1=None)
         self._thermostat_controller.save_thermostat_group(new_thermostat_group_dto)
+
+        self.pubsub._publish_all_events(blocking=False)
+        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'HEATING'}, 'location': {}}), events)
         thermostat_group = ThermostatGroup.get(number=0)
         self.assertEqual(10.0, thermostat_group.threshold_temperature)
         links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}
@@ -315,6 +324,13 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(new_thermostat_group_dto, self._thermostat_controller.load_thermostat_group())
 
     def test_thermostat_control(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, handle_event)
+
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,
                                        name='thermostat 1',
@@ -369,6 +385,9 @@ class ThermostatControllerTest(unittest.TestCase):
         self._thermostat_controller.set_per_thermostat_mode(thermostat_number=1,
                                                             automatic=False,
                                                             setpoint=3)
+        self.pubsub._publish_all_events(blocking=False)
+        event_data = {'id': 1, 'status': {'preset': 'AWAY', 'current_setpoint': 16.0, 'actual_temperature': 10.0, 'output_0': 100, 'output_1': None}, 'location': {}}
+        self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
         expected.statusses[0].setpoint_temperature = 16.0
         expected.statusses[0].setpoint = 3
         expected.statusses[0].automatic = False
@@ -379,6 +398,9 @@ class ThermostatControllerTest(unittest.TestCase):
         self._thermostat_controller.set_per_thermostat_mode(thermostat_number=1,
                                                             automatic=True,
                                                             setpoint=3)
+        self.pubsub._publish_all_events(blocking=False)
+        event_data = {'id': 1, 'status': {'preset': 'AUTO', 'current_setpoint': 15.0, 'actual_temperature': 10.0, 'output_0': 100, 'output_1': None}, 'location': {}}
+        self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
         expected.statusses[0].setpoint_temperature = 15.0
         expected.statusses[0].setpoint = 0
         expected.statusses[0].automatic = True
@@ -402,6 +424,8 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
 
         self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=True, cooling_on=True, automatic=False, setpoint=4)
+        self.pubsub._publish_all_events(blocking=False)
+        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'COOLING'}, 'location': {}}), events)
         expected.statusses[0].setpoint_temperature = 38.0
         expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
         expected.cooling = True

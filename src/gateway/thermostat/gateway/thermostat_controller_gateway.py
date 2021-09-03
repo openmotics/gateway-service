@@ -13,12 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime
 import logging
 
-from playhouse.signals import post_save
-
-import constants
 from gateway.daemon_thread import DaemonThread
 from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, ScheduleDTO, \
     ThermostatDTO, ThermostatGroupDTO, ThermostatGroupStatusDTO, \
@@ -39,7 +35,7 @@ from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Dict, List, Literal, Tuple, Optional
+    from typing import Dict, List, Literal, Optional
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
 
@@ -304,9 +300,16 @@ class ThermostatControllerGateway(ThermostatController):
         # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
         mode = ThermostatMode.COOLING if cooling_mode else ThermostatMode.HEATING  # type: Literal['cooling', 'heating']
         global_thermosat = ThermostatGroup.get(number=0)
-        global_thermosat.on = thermostat_on
-        global_thermosat.mode = mode
-        global_thermosat.save()
+        changed = False
+        if global_thermosat.on != thermostat_on:
+            global_thermosat.on = thermostat_on
+            changed = True
+        if global_thermosat.mode != mode:
+            global_thermosat.mode = mode
+            changed = True
+        if changed:
+            global_thermosat.save()
+            self._thermostat_group_changed(global_thermosat)
 
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
             thermostat = Thermostat.get(number=thermostat_number)
@@ -399,11 +402,16 @@ class ThermostatControllerGateway(ThermostatController):
     def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
         # Update thermostat group configuration
         orm_object = ThermostatGroup.get(number=0)  # type: ThermostatGroup
+        changed = False
         if 'outside_sensor_id' in thermostat_group.loaded_fields:
             orm_object.sensor = Sensor.get(id=thermostat_group.outside_sensor_id)
+            changed = True
         if 'threshold_temperature' in thermostat_group.loaded_fields:
             orm_object.threshold_temperature = thermostat_group.threshold_temperature  # type: ignore
-        orm_object.save()
+            changed = True
+        if changed:
+            orm_object.save()
+            self._thermostat_group_changed(orm_object)
 
         # Link configuration outputs to global thermostat config
         for mode in ['cooling', 'heating']:
@@ -525,7 +533,7 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
         # type: (int, str, float, Optional[float], List[float], int) -> None
-        location = {'room_id': room}
+        location = {'room_id': room} if room not in (None, 255) else {}
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_number,
                                       'status': {'preset': active_preset.upper(),
@@ -573,11 +581,3 @@ class ThermostatControllerGateway(ThermostatController):
 
     def load_airco_status(self):
         raise UnsupportedException()
-
-
-@post_save(sender=ThermostatGroup)
-@Inject
-def on_thermostat_group_change_handler(model_class, instance, created, thermostat_controller=INJECTED):
-    _ = model_class
-    if not created:
-        thermostat_controller._thermostat_group_changed(instance)
