@@ -195,7 +195,7 @@ class Users(RestAPIEndpoint):
         user_dto_orig = self.user_controller.load_user(user_id, clear_password=False)
         user_dto = UserSerializer.deserialize(user_json)
         # only allow a subset of fields to be altered
-        for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment', 'email']:
+        for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment', 'email', 'is_active']:
             if field in user_dto.loaded_fields:
                 setattr(user_dto_orig, field, getattr(user_dto, field))
         saved_user = self.user_controller.save_user(user_dto_orig)
