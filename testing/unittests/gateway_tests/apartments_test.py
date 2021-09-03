@@ -22,6 +22,7 @@ import fakesleep
 import time
 import unittest
 import sqlite3
+import mock
 
 import peewee
 from peewee import SqliteDatabase
@@ -53,7 +54,10 @@ class ApartmentControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self.controller = ApartmentController()
-        # self.db_cursor = self.test_db.cursor()  # type: peewee.Database.cursor
+        self.rebus_controller = mock.Mock()
+        self.controller.set_rebus_controller(self.rebus_controller)
+        self.pubsub = mock.Mock()
+        SetUpTestInjections(pubsub=self.pubsub)
 
         self.test_apartment_1 = ApartmentDTO(
             name='Test-Apartment-1',

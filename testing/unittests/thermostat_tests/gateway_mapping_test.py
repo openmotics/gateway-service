@@ -20,13 +20,14 @@ import xmlrunner
 from mock import Mock
 from peewee import SqliteDatabase
 
-from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, SensorStatusDTO
+from gateway.dto import SensorStatusDTO, ThermostatDTO, ThermostatScheduleDTO
 from gateway.models import DaySchedule, Feature, Output, \
     OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
     Thermostat, ThermostatGroup, Valve, ValveToThermostat
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.sensor_controller import SensorController
+from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
 from ioc import SetTestMode, SetUpTestInjections
@@ -58,8 +59,12 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(x, value=10.0)
 
+        scheduling_controller = Mock(SchedulingController)
+        scheduling_controller.load_schedules.return_value = []
+
         SetUpTestInjections(message_client=Mock(),
                             output_controller=Mock(OutputController),
+                            scheduling_controller=scheduling_controller,
                             sensor_controller=sensor_controller,
                             pubsub=Mock(PubSub))
         thermostat_controller = ThermostatControllerGateway()

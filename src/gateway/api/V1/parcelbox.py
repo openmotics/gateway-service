@@ -24,7 +24,7 @@ from ioc import INJECTED, Inject
 
 from gateway.api.serializers import ParcelBoxSerializer, DeliverySerializer
 from esafe.rebus.rebus_controller import RebusController
-from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException, WrongInputParametersException
+from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException, WrongInputParametersException, StateException
 from gateway.models import User
 from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
@@ -99,8 +99,11 @@ class ParcelBox(RestAPIEndpoint):
             raise InvalidOperationException('Cannot open box of size: {}, no boxes available'.format(size))
         random_index = random.randint(0, len(boxes)-1)
         box = self.rebus_controller.open_box(boxes[random_index].id)
-        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
-        return ApiResponse(body=box_serial)
+        if box is None:
+            raise StateException("Could not open the rebus lock, lock did not open upon request")
+        box_serial = ParcelBoxSerializer.serialize(box)
+        status_code = 200 if box.is_open else 500
+        return ApiResponse(status_code=status_code, body=box_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', check={'rebus_id': int})
     def put_parcelbox(self, rebus_id, request_body, auth_token):
@@ -121,8 +124,11 @@ class ParcelBox(RestAPIEndpoint):
 
         if request_body['open'] is True:
             box = self.rebus_controller.open_box(box.id)
-        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
-        return ApiResponse(body=box_serial)
+            if box is None:
+                raise StateException("Could not open the rebus lock, lock did not open upon request")
+        box_serial = ParcelBoxSerializer.serialize(box)
+        status_code = 200 if box.is_open else 500
+        return ApiResponse(status_code=status_code, body=box_serial)
 
     def _check_controller(self):
         if self.rebus_controller is None:

@@ -49,15 +49,16 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
     UserDTO, InputStatusDTO, ModuleDTO
-from gateway.enums import ShutterEnums, UserEnums, ModuleType, UpdateEnums
+from gateway.enums import ShutterEnums, UserEnums, ModuleType
+from gateway.events import BaseEvent
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, User, Module
+from gateway.models import Config, Database, Feature, Schedule, User, Module
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
-    MetricsSocket, OMPlugin, OMSocketTool
+    MetricsSocket, OMPlugin, OMSocketTool, WebSocketEncoding
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
@@ -235,7 +236,9 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             else _self.webinterface.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
         # check if the call is done from localhost, and then verify the token
-        if request.remote.ip != '127.0.0.1':
+        # The toggle check added for development purposes.
+        # Do NOT enable unless you know what you're doing and understand the risks.
+        if not Config.get_entry('disable_api_authentication_very_insecure', False) and request.remote.ip != '127.0.0.1':
             if checked_token is None:
                 raise RuntimeError('Call is not performed from localhost and no token is provided')
             if checked_token.user.role != 'SUPER':
@@ -409,7 +412,8 @@ class WebInterface(object):
                     sources = self._metrics_controller.get_filter('source', receiver_info['source'])
                     metric_types = self._metrics_controller.get_filter('metric_type', receiver_info['metric_type'])
                     if metric['source'] in sources and metric['type'] in metric_types:
-                        receiver_info['socket'].send(msgpack.dumps(metric), binary=True)
+                        receiver_info['socket'].send_encoded(metric)
+                        # receiver_info['socket'].send(msgpack.dumps(metric), binary=True)
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function
                     receiver_info['socket'].close(ex.code, ex.message)
                 except Exception as ex:
@@ -419,11 +423,12 @@ class WebInterface(object):
             logger.error('Failed to distribute metrics to WebSockets: %s', ex)
 
     def send_event_websocket(self, event):
+        # type: (BaseEvent) -> None
         try:
             answers = cherrypy.engine.publish('get-events-receivers')
             if not answers:
                 return
-            receivers = answers.pop()
+            receivers = answers.pop()  # type: Dict[str, Dict[str, Any]]  # unpop since cherrypy bus returns reply of publish in a list
             for client_id in receivers.keys():
                 receiver_info = receivers.get(client_id)
                 if receiver_info is None:
@@ -431,9 +436,16 @@ class WebInterface(object):
                 try:
                     if event.type not in receiver_info['subscribed_types']:
                         continue
-                    if cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
+                    # check if the namespace matches,
+                    # only do this when a namespace is defined in the websocket metadata
+                    if 'namespace' in receiver_info and \
+                            (event.namespace != receiver_info['namespace']):
+                        continue
+                    # The toggle check added for development purposes.
+                    # Do NOT enable unless you know what you're doing and understand the risks.
+                    if not Config.get_entry('disable_api_authentication_very_insecure', False) and cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
                         raise cherrypy.HTTPError(401, 'invalid_token')
-                    receiver_info['socket'].send(msgpack.dumps(event.serialize()), binary=True)
+                    receiver_info['socket'].send_encoded(event.serialize())
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function
                     receiver_info['socket'].close(ex.code, ex.message)
                 except Exception as ex:
@@ -910,6 +922,15 @@ class WebInterface(object):
     def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
         """ Set the current setpoint of a thermostat. """
         self._thermostat_controller.set_current_setpoint(thermostat, temperature)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(thermostat=int, heating_temperature=float, cooling_temperature=float))
+    def set_setpoint_from_scheduler(self, thermostat, heating_temperature=None, cooling_temperature=None):
+        # type: (int, Optional[float], Optional[float]) -> Dict[str, str]
+        """ Set the scheduled setpoint of a thermostat. """
+        self._thermostat_controller.set_setpoint_from_scheduler(thermostat,
+                                                                heating_temperature=heating_temperature,
+                                                                cooling_temperature=cooling_temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool))
@@ -2201,6 +2222,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
         schedule_dto = ScheduleDTO(id=None,
+                                   source=Schedule.Sources.GATEWAY,
                                    name=name,
                                    start=start,
                                    action=schedule_type,
@@ -2400,10 +2422,16 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
-    def ws_events(self, token):
-        cherrypy.request.ws_handler.metadata = {'token': token,
-                                                'client_id': uuid.uuid4().hex,
-                                                'interface': self}
+    def ws_events(self, token, serialization=WebSocketEncoding.MSGPACK):
+        if serialization not in WebSocketEncoding.get_values():
+            raise ValueError('Cannot create a websocket with serialization: {}'.format(serialization))
+        handler = cherrypy.request.ws_handler
+        handler.metadata = {
+            'token': token,
+            'client_id': uuid.uuid4().hex,
+            'interface': self,
+            'serialization': serialization
+        }
 
     @cherrypy.expose
     @cherrypy.tools.cors()

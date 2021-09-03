@@ -988,18 +988,6 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def get_modules_information(self):  # type: () -> List[ModuleDTO]
         """ Gets module information """
-
-        def get_master_version(_module_address):
-            try:
-                _module_version = self._master_communicator.do_command(master_api.get_module_version(),
-                                                                       {'addr': _module_address.bytes},
-                                                                       extended_crc=True,
-                                                                       timeout=5)
-                _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
-                return True, _module_version['hw_version'], _firmware_version
-            except CommunicationTimedOutException:
-                return False, None, None
-
         information = []
         module_type_lookup = {'c': ModuleType.CAN_CONTROL,
                               't': ModuleType.SENSOR,
@@ -1026,7 +1014,7 @@ class MasterClassicController(MasterController):
                             hardware_type=hardware_type,
                             order=i)
             if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+                dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
             information.append(dto)
 
         for i in range(no_modules['out']):
@@ -1041,7 +1029,7 @@ class MasterClassicController(MasterController):
                                            HardwareType.PHYSICAL),
                             order=i)
             if not is_virtual:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+                dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
             information.append(dto)
 
         for i in range(no_modules['shutter']):
@@ -1056,10 +1044,23 @@ class MasterClassicController(MasterController):
                                            HardwareType.PHYSICAL),
                             order=i)
             if not is_virtual:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+                dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
             information.append(dto)
 
         return information
+
+    @communication_enabled
+    def get_module_information(self, address):
+        # type: (bytearray) -> Tuple[bool, Optional[str], Optional[str]]
+        try:
+            _module_version = self._master_communicator.do_command(master_api.get_module_version(),
+                                                                   {'addr': address},
+                                                                   extended_crc=True,
+                                                                   timeout=5)
+            _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
+            return True, _module_version['hw_version'], _firmware_version
+        except CommunicationTimedOutException:
+            return False, None, None
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         old_address_bytes = bytearray([int(part) for part in old_address.split('.')])

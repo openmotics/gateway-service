@@ -36,6 +36,10 @@ class ThermostatController(object):
         # type: (int, Optional[float], Optional[float], Optional[float]) -> None
         raise NotImplementedError()
 
+    def set_setpoint_from_scheduler(self, thermostat_number, heating_temperature=None, cooling_temperature=None):
+        # type: (int, Optional[float], Optional[float]) -> None
+        raise NotImplementedError()
+
     def get_current_preset(self, thermostat_number):
         raise NotImplementedError()
 

@@ -40,10 +40,10 @@ try:
     from rebus import RebusComponentEsafeLock, RebusComponentEsafeEightChannelOutput, RebusComponentEsafeCollector
     from rebus.general.enums import EsafeBoxType, EsafeBoxSize
 except ImportError:
-    pass
+    rebus = None
 
 
-@unittest.skipIf(six.PY2, "Not running when in py2")
+@unittest.skipIf(rebus == None, 'openmotics-rebus not installed')
 class EsafeControllerTest(unittest.TestCase):
     """ Tests for RebusController. """
 
@@ -95,7 +95,7 @@ class EsafeControllerTest(unittest.TestCase):
                 device.get_lock_status = get_lock_status_mock
                 # open lock
                 device.open_lock = lambda: True
-        self.rebus_controller.rebus_device = self.rebus
+        self.rebus_controller._rebus_device = self.rebus
 
     def tearDown(self):
         pass
@@ -146,9 +146,13 @@ class EsafeControllerTest(unittest.TestCase):
         open_lock_mock = mock.Mock()
         open_lock_mock.return_value = True
         device.open_lock = open_lock_mock
+        get_lock_status_mock = mock.Mock()
+        get_lock_status_mock.return_value = True
+        device.get_lock_status = get_lock_status_mock
 
         result = self.rebus_controller.open_box(id_to_open)
         open_lock_mock.assert_called_once()  # Assert that this one specific mock is called, not any of the other devices open functions
+        get_lock_status_mock.assert_called_once()
         self.assertEqual(self.rebus_controller._rebus_parcelbox_to_dto(self.rebus_controller.devices[id_to_open]), result)
 
         with self.assertRaises(ValueError):

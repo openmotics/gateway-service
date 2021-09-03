@@ -168,9 +168,10 @@ class SchedulingController(object):
             raise Schedule.DoesNotExist('Schedule {0} does not exist'.format(schedule_id))
         return schedule_dto
 
-    def load_schedules(self):
-        # type: () -> List[ScheduleDTO]
-        return [schedule_dto for schedule_dto in self._schedules.values()]
+    def load_schedules(self, source=Schedule.Sources.GATEWAY):
+        # type: (str) -> List[ScheduleDTO]
+        return [schedule_dto for schedule_dto in self._schedules.values()
+                if schedule_dto.source == source]
 
     def save_schedules(self, schedules):
         # type: (List[ScheduleDTO]) -> None

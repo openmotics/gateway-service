@@ -88,7 +88,7 @@ class SchedulingControllerTest(unittest.TestCase):
         self.controller.stop()
 
     def test_save_load(self):
-        dto = ScheduleDTO(id=None, name='schedule', start=0, action='GROUP_ACTION', arguments=0)
+        dto = ScheduleDTO(id=None, source='gateway', name='schedule', start=0, action='GROUP_ACTION', arguments=0)
         self.controller.save_schedules([dto])
         loaded_dto = self.controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
@@ -177,7 +177,8 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual(invalid_arguments_error, str(ctx.exception))
 
         # Normal
-        dto = ScheduleDTO(id=None, name='schedule', start=time.time() + 0.5, action='BASIC_ACTION',
+        dto = ScheduleDTO(id=None, source='gateway',
+                          name='schedule', start=time.time() + 0.5, action='BASIC_ACTION',
                           arguments={'action_type': 1, 'action_number': 2})
         self.controller.save_schedules([dto])
         schedules = self.controller.load_schedules()
@@ -298,5 +299,5 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertIsNone(schedule.last_executed)
 
     def _add_schedule(self, **kwargs):
-        dto = ScheduleDTO(id=None, **kwargs)
+        dto = ScheduleDTO(id=None, source='gateway', **kwargs)
         self.controller.save_schedules([dto])
