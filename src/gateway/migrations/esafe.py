@@ -16,6 +16,7 @@
 eSafe initial migration
 """
 
+from shutil import copyfile
 import os
 import logging
 import uuid
@@ -45,7 +46,7 @@ class EsafeMigrator(BaseMigrator):
         # type: () -> None
 
         # The old eSafe database will be in the OPENMOTICS_PREFIX path that is set by the eSafe app package
-        openmotics_prefix = os.environ['OPENMOTICS_PREFIX'] or constants.OPENMOTICS_PREFIX  # Make sure to load the latest value of the environ variable
+        openmotics_prefix = os.environ.get('OPENMOTICS_PREFIX') or constants.OPENMOTICS_PREFIX  # Make sure to load the latest value of the environ variable
         old_sqlite_db = os.path.join(openmotics_prefix, 'database.db')
 
         cls.migrate_log("Starting eSafe initial migration for esafe database: {}".format(old_sqlite_db))
@@ -53,6 +54,12 @@ class EsafeMigrator(BaseMigrator):
         if not os.path.exists(old_sqlite_db):
             cls.migrate_log("Old eSafe database does not exists, skipping migration")
             return
+
+        # Make a copy of the database in case something goes wrong, or the data needs to be accessed for future reference
+        gw_database = constants.get_gateway_database_file()
+        gw_database_backup = '{}_ESAFE_MIGRATION_BACKUP'.format(gw_database)
+        if os.path.exists(gw_database):
+            copyfile(gw_database, gw_database_backup)
 
         import sqlite3
         connection = sqlite3.connect(old_sqlite_db,
@@ -65,7 +72,7 @@ class EsafeMigrator(BaseMigrator):
         # ------------------
         cls.migrate_log("Migrating Apartments")
         apartment_cache = {}  # link of the old ID to the new ORM object
-        cls.migrate_log("Deleting existing apartments")
+        cls.migrate_log("Deleting existing apartments", level=logging.DEBUG)
         Apartment.delete().where(Apartment.id > 0).execute()
 
         for row in cursor.execute('SELECT apartment_id, apartment_name, mailbox_rebus_id, doorbell_rebus_id FROM apartment;'):
@@ -74,7 +81,9 @@ class EsafeMigrator(BaseMigrator):
             mailbox_rebus_id = row[2]
             doorbell_rebus_id = row[3]
 
-            cls.migrate_log("Got apartment: id: {}, name: {}, mailbox: {}, doorbell: {}".format(apartment_id, apartment_name, mailbox_rebus_id, doorbell_rebus_id), level=logging.INFO)
+            cls.migrate_log("Got apartment: id: {}, name: {}, mailbox: {}, doorbell: {}"
+                            .format(apartment_id, apartment_name, mailbox_rebus_id, doorbell_rebus_id),
+                            level=logging.DEBUG)
 
             apartment_orm = Apartment(
                 name=apartment_name,
@@ -108,7 +117,7 @@ class EsafeMigrator(BaseMigrator):
                                     language,
                                     is_active
                                     ),
-                            level=logging.INFO)
+                            level=logging.DEBUG)
 
             # double check the apartment_id so that the id did not change with the migration and it can be found again
             if apartment_id is not None:
@@ -168,7 +177,7 @@ class EsafeMigrator(BaseMigrator):
                                     rfid_timestamp_last_used,
                                     user_id
                                     ),
-                            level=logging.INFO)
+                            level=logging.DEBUG)
 
             rfid_orm = RFID.get_or_none(uid_manufacturer=rfid_uid_manufact)  # type: RFID
             user_orm = user_cache[user_id]
@@ -219,7 +228,7 @@ class EsafeMigrator(BaseMigrator):
                                     user_id_pickup,
                                     user_id_delivery
                                     ),
-                            level=logging.INFO)
+                            level=logging.DEBUG)
 
             user_delivery_orm = user_cache.get(user_id_delivery, None)
             user_pickup_orm = user_cache.get(user_id_pickup, None)
@@ -235,7 +244,6 @@ class EsafeMigrator(BaseMigrator):
                 user_delivery=user_delivery_orm,
                 user_pickup=user_pickup_orm
             )
-            cls.migrate_log("Saving delivery")
             delivery_orm.save()
 
         # Migrate Config
@@ -249,7 +257,7 @@ class EsafeMigrator(BaseMigrator):
 
             cls.migrate_log("Got config: key: {}, value: {}"
                             .format(key, value),
-                            level=logging.INFO)
+                            level=logging.DEBUG)
 
             config[key] = value
 
@@ -281,19 +289,19 @@ class EsafeMigrator(BaseMigrator):
         for old_key, new_key in {'doorbell_enabled': 'enabled'}.items():
             doorbell_config = save_key_into_config(old_key, new_key, doorbell_config)
 
-        cls.migrate_log("Doorbell_config: {}".format(doorbell_config))
+        cls.migrate_log("Doorbell_config: {}".format(doorbell_config), level=logging.DEBUG)
 
         # 2. RFID
         rfid_config = {}
         for old_key, new_key in {'rfid_enabled': 'enabled', 'max_rfid': 'max_tags', 'rfid_security_enabled': 'security_enabled'}.items():
             rfid_config = save_key_into_config(old_key, new_key, rfid_config)
-        cls.migrate_log("rfid config: {}".format(rfid_config))
+        cls.migrate_log("rfid config: {}".format(rfid_config), level=logging.DEBUG)
 
         # 3. RFID Sector
         rfid_sector_config = {}
         for old_key, new_key in {'rfid_sector_block': 'rfid_sector_block'}.items():
             rfid_sector_config = save_key_into_config(old_key, new_key, rfid_sector_config)
-        cls.migrate_log("rfid sector config: {}".format(rfid_sector_config))
+        cls.migrate_log("rfid sector config: {}".format(rfid_sector_config), level=logging.DEBUG)
 
         # 4. global
         global_config = {}
@@ -305,7 +313,7 @@ class EsafeMigrator(BaseMigrator):
                                  'house_number': 'house_number',
                                  'language': 'language'}.items():
             global_config = save_key_into_config(old_key, new_key, global_config)
-        cls.migrate_log("global config: {}".format(global_config))
+        cls.migrate_log("global config: {}".format(global_config), level=logging.DEBUG)
 
         # 5. Activate User Config
         activate_user_config = {}
@@ -314,7 +322,7 @@ class EsafeMigrator(BaseMigrator):
                                  'change_language': 'activate_change_language_enabled',
                                  'change_pin_code': 'activate_change_user_code_enabled'}.items():
             activate_user_config = save_key_into_config(old_key, new_key, activate_user_config)
-        cls.migrate_log("activate user config: {}".format(activate_user_config))
+        cls.migrate_log("activate user config: {}".format(activate_user_config), level=logging.DEBUG)
 
         Config.set_entry('doorbell_config', doorbell_config)
         Config.set_entry('rfid_config', rfid_config)
@@ -323,3 +331,8 @@ class EsafeMigrator(BaseMigrator):
         Config.set_entry('activate_user_config', activate_user_config)
         Config.set_entry('rfid_auth_key_A', config['rfid_auth_key_A'])
         Config.set_entry('rfid_auth_key_B', config['rfid_auth_key_B'])
+
+        # When the migration is successful, save the old database under a backup name
+        backup_database_name = '{}_ESAFE_BACKUP'.format(old_sqlite_db)
+        os.rename(old_sqlite_db, backup_database_name)
+
