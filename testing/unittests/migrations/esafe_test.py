@@ -83,8 +83,10 @@ class EsafeMigrationTest(unittest.TestCase):
         self.esafe_cursor = self.test_esafe_db.cursor()
 
     def tearDown(self):
-        if os.path.exists(self.esafe_db_location):
-            os.remove(self.esafe_db_location)
+        # Delete all the remaining database files that where created during the test migration
+        for filename in [self.esafe_db_location, '{}_ESAFE_BACKUP'.format(self.esafe_db_location)]:
+            if os.path.exists(filename):
+                os.remove(filename)
 
     def _create_esafe_database_dummy_data(self):
         # This is a literal copy from an existing test eSafe database
@@ -429,7 +431,7 @@ class EsafeMigrationTest(unittest.TestCase):
         def save_user(user_dto):
             user_orm = UserMapper.dto_to_orm(user_dto)
             user_orm.save()
-        # Typical setup of users (only super users
+        # Typical setup of users (only super users)
         user_1 = UserDTO(username='test_user_1', first_name='tester', last_name='user', role=User.UserRoles.SUPER, accepted_terms=1, is_active=True).set_password('test')
         save_user(user_1)
         user_2 = UserDTO(username='test_user_2', first_name='tester', last_name='user2', role=User.UserRoles.SUPER, accepted_terms=1, is_active=True).set_password('test')

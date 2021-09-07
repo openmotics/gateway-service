@@ -28,6 +28,9 @@ from gateway.enums import Languages
 
 logger = logging.getLogger(__name__)
 
+if False:  # MyPy
+    from typing import Optional, Dict, Any
+
 
 class EsafeMigrator(BaseMigrator):
 
@@ -121,12 +124,11 @@ class EsafeMigrator(BaseMigrator):
 
             # double check the apartment_id so that the id did not change with the migration and it can be found again
             if apartment_id is not None:
-                old_apartment_orm = apartment_cache.get(apartment_id, None)
-                if old_apartment_orm is None:
+                apartment_orm_user = apartment_cache.get(apartment_id, None)  # type: Optional[Apartment]
+                if apartment_orm_user is None:
                     raise ValueError('Could not find apartment that was linked in the database to the user')
-                apartment_orm = Apartment.get_or_none(name=old_apartment_orm.name, mailbox_rebus_id=old_apartment_orm.mailbox_rebus_id, doorbell_rebus_id=old_apartment_orm.doorbell_rebus_id)
             else:
-                apartment_orm = None
+                apartment_orm_user = None
 
             language_translated = cls.lang_translate.get(language.lower()[0:3], Languages.EN)
 
@@ -138,7 +140,7 @@ class EsafeMigrator(BaseMigrator):
                     last_name=last_name,
                     role=role,
                     pin_code=pin_code,
-                    apartment=apartment_orm,
+                    apartment=apartment_orm_user,
                     language=language_translated,
                     is_active=is_active,
                     accepted_terms=1
@@ -285,26 +287,26 @@ class EsafeMigrator(BaseMigrator):
 
         # manually group the correct settings in one dict per namespace:
         # 1. Doorbell
-        doorbell_config = {}
+        doorbell_config = {}  # type: Dict[str, Any]
         for old_key, new_key in {'doorbell_enabled': 'enabled'}.items():
             doorbell_config = save_key_into_config(old_key, new_key, doorbell_config)
 
         cls.migrate_log("Doorbell_config: {}".format(doorbell_config), level=logging.DEBUG)
 
         # 2. RFID
-        rfid_config = {}
+        rfid_config = {}  # type: Dict[str, Any]
         for old_key, new_key in {'rfid_enabled': 'enabled', 'max_rfid': 'max_tags', 'rfid_security_enabled': 'security_enabled'}.items():
             rfid_config = save_key_into_config(old_key, new_key, rfid_config)
         cls.migrate_log("rfid config: {}".format(rfid_config), level=logging.DEBUG)
 
         # 3. RFID Sector
-        rfid_sector_config = {}
+        rfid_sector_config = {}  # type: Dict[str, Any]
         for old_key, new_key in {'rfid_sector_block': 'rfid_sector_block'}.items():
             rfid_sector_config = save_key_into_config(old_key, new_key, rfid_sector_config)
         cls.migrate_log("rfid sector config: {}".format(rfid_sector_config), level=logging.DEBUG)
 
         # 4. global
-        global_config = {}
+        global_config = {}  # type: Dict[str, Any]
         for old_key, new_key in {'device_name': 'device_name',
                                  'country': 'country',
                                  'postal_code': 'postal_code',
@@ -316,7 +318,7 @@ class EsafeMigrator(BaseMigrator):
         cls.migrate_log("global config: {}".format(global_config), level=logging.DEBUG)
 
         # 5. Activate User Config
-        activate_user_config = {}
+        activate_user_config = {}  # type: Dict[str, Any]
         for new_key, old_key in {'change_first_name': 'activate_change_first_name_enabled',
                                  'change_last_name': 'activate_change_last_name_enabled',
                                  'change_language': 'activate_change_language_enabled',
