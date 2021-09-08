@@ -163,7 +163,7 @@ class EsafeMigrator(BaseMigrator):
             enter_count = row[4]
             blacklisted = row[5]
             rfid_label = row[6]
-            rfid_timestamp_created = row[7]
+            rfid_timestamp_created = row[7] or '2018-01-01T01:00:00+01:00'
             rfid_timestamp_last_used = row[8]
             user_id = row[9]
 

@@ -170,6 +170,7 @@ class EsafeMigrationTest(unittest.TestCase):
         # RFID
         # --------------
         self.log("* RFID")
+        # INSERT INTO rfid VALUES(39,'RFIDTAG1','RFIDTAG1','',-1,0,'test-tag-1','2021-01-29T15:09:49+01:00','2021-01-29T15:10:00+01:00',7);
         self.esafe_cursor.executescript("""
         PRAGMA foreign_keys=OFF;
         BEGIN TRANSACTION;
@@ -187,7 +188,7 @@ class EsafeMigrationTest(unittest.TestCase):
           FOREIGN KEY (user_id) REFERENCES user(user_id)
             ON DELETE CASCADE
         );
-        INSERT INTO rfid VALUES(39,'RFIDTAG1','RFIDTAG1','',-1,0,'test-tag-1','2021-01-29T15:09:49+01:00','2021-01-29T15:10:00+01:00',7);
+        INSERT INTO rfid VALUES(39,'RFIDTAG1','RFIDTAG1','',-1,0,'test-tag-1','','2021-01-29T15:10:00+01:00',7);
         INSERT INTO rfid VALUES(41,'RFIDTAG2','RFIDTAG2','',-1,0,'test-tag-2','2021-02-03T14:39:25+01:00','',3);
         INSERT INTO rfid VALUES(44,'RFIDTAG3','RFIDTAG3','RFIDEXT',10,1,'test-tag-3','2021-02-03T14:40:00+02:00','2021-01-29T15:11:00+01:00',40);
         COMMIT;
@@ -306,7 +307,7 @@ class EsafeMigrationTest(unittest.TestCase):
         self.assertEqual(-1, rfid_orm.enter_count)
         self.assertEqual(False, rfid_orm.blacklisted)
         self.assertEqual('test-tag-1', rfid_orm.label)
-        self.assertEqual('2021-01-29T15:09:49+01:00', rfid_orm.timestamp_created)
+        self.assertEqual('2018-01-01T01:00:00+01:00', rfid_orm.timestamp_created)
         self.assertEqual('2021-01-29T15:10:00+01:00', rfid_orm.timestamp_last_used)
         self.assertEqual('pj', rfid_orm.user.first_name)
 
