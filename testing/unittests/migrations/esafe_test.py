@@ -214,7 +214,7 @@ class EsafeMigrationTest(unittest.TestCase):
         );
         INSERT INTO delivery VALUES(1,'DELIVERY','2020-10-07T15:15:24+02:00','2020-10-07T15:19:14+02:00','DPD','Signature_Delivery','Signature_pickup',128,7,NULL);
         INSERT INTO delivery VALUES(2,'DELIVERY','2020-10-07T15:16:49+02:00','2021-01-07T16:54:55+01:00','UPS','','',80,3,NULL);
-        INSERT INTO delivery VALUES(3,'RETURN','2020-10-07T15:28:19+02:00','2020-10-07T15:28:42+02:00',NULL,'','',128,40,5);
+        INSERT INTO delivery VALUES(3,'RETURN','2020-10-07T15:28:19+02:00','2020-10-07T15:28:42+02:00',NULL,'','',128,30,5);
         INSERT INTO delivery VALUES(4,'DELIVERY','2020-11-24T16:39:15+01:00',NULL,NULL,'','',128,7,NULL);
         INSERT INTO delivery VALUES(5,'DELIVERY','2020-12-06T12:49:50+01:00','2021-01-05T09:51:41+01:00','Bpost','','',64,7,NULL);
         INSERT INTO delivery VALUES(6,'DELIVERY','2021-01-05T09:57:47+01:00','2021-01-07T16:55:05+01:00','UPS','','',64,3,NULL);
@@ -364,7 +364,7 @@ class EsafeMigrationTest(unittest.TestCase):
         self.assertEqual('', delivery_orm.signature_delivery)
         self.assertEqual('', delivery_orm.signature_pickup)
         self.assertEqual(128, delivery_orm.parcelbox_rebus_id)
-        self.assertEqual('Thomas', delivery_orm.user_pickup.first_name)
+        self.assertEqual('ADMIN', delivery_orm.user_pickup.role)
         self.assertIsNone(delivery_orm.user_delivery)
 
         delivery_orm = Delivery.get_or_none(Delivery.timestamp_delivery == '2020-11-24T16:39:15+01:00')  # type: Delivery

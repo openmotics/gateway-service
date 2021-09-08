@@ -206,6 +206,8 @@ class EsafeMigrator(BaseMigrator):
         # Delete all the existing deliveries and copy the eSafe V1 deliveries in
         Delivery.delete().where(Delivery.id > 0).execute()
 
+        admin_user = [user for user_id, user in user_cache.items() if user.role == 'ADMIN'][0]
+
         for row in cursor.execute('SELECT delivery_id, delivery_type, delivery_timestamp_delivery, delivery_timestamp_pickup, delivery_courier_firm, delivery_signature_delivery, delivery_signature_pickup, parcelbox_rebus_id, user_id_pickup, user_id_delivery FROM delivery;'):
             delivery_id = row[0]
             delivery_type = row[1]
@@ -233,7 +235,7 @@ class EsafeMigrator(BaseMigrator):
                             level=logging.DEBUG)
 
             user_delivery_orm = user_cache.get(user_id_delivery, None)
-            user_pickup_orm = user_cache.get(user_id_pickup, None)
+            user_pickup_orm = user_cache.get(user_id_pickup, None) or admin_user  # Assign hte delivery to the admin if it was for a courier, otherwise it would be none which is not possible
 
             delivery_orm = Delivery(
                 type=delivery_type,
