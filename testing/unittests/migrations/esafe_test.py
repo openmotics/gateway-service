@@ -77,12 +77,13 @@ class EsafeMigrationTest(unittest.TestCase):
         self.test_gw_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_gw_db.connect()
         self.test_gw_db.create_tables(MODELS)
-        self.gw_cursor = self.test_gw_db.cursor()
 
         self.test_esafe_db.connect()
         self.esafe_cursor = self.test_esafe_db.cursor()
 
     def tearDown(self):
+        self.test_gw_db.close()
+        self.test_esafe_db.close()
         # Delete all the remaining database files that where created during the test migration
         for filename in [self.esafe_db_location, '{}_ESAFE_BACKUP'.format(self.esafe_db_location)]:
             if os.path.exists(filename):
