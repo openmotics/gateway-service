@@ -76,7 +76,7 @@ class EsafeMigrator(BaseMigrator):
         cls.migrate_log("Migrating Apartments")
         apartment_cache = {}  # link of the old ID to the new ORM object
         cls.migrate_log("Deleting existing apartments", level=logging.DEBUG)
-        Apartment.delete().where(Apartment.id > 0).execute()
+        Apartment.delete().execute()
 
         for row in cursor.execute('SELECT apartment_id, apartment_name, mailbox_rebus_id, doorbell_rebus_id FROM apartment;'):
             apartment_id = row[0]
@@ -204,7 +204,7 @@ class EsafeMigrator(BaseMigrator):
         cls.migrate_log("Migrating Deliveries")
 
         # Delete all the existing deliveries and copy the eSafe V1 deliveries in
-        Delivery.delete().where(Delivery.id > 0).execute()
+        Delivery.delete().execute()
 
         admin_user = [user for user_id, user in user_cache.items() if user.role == 'ADMIN'][0]
 
