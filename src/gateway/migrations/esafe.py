@@ -49,7 +49,7 @@ class EsafeMigrator(BaseMigrator):
         # type: () -> None
 
         # The old eSafe database will be in the OPENMOTICS_PREFIX path that is set by the eSafe app package
-        openmotics_prefix = os.environ.get('OPENMOTICS_PREFIX') or constants.OPENMOTICS_PREFIX  # Make sure to load the latest value of the environ variable
+        openmotics_prefix = constants.get_openmotics_prefix()
         old_sqlite_db = os.path.join(openmotics_prefix, 'database.db')
 
         cls.migrate_log("Starting eSafe initial migration for esafe database: {}".format(old_sqlite_db))

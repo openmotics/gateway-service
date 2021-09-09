@@ -19,7 +19,9 @@ Test of the eSafe migrations
 from __future__ import absolute_import
 
 import unittest
+import mock
 import os
+import constants
 
 from peewee import SqliteDatabase
 
@@ -63,13 +65,8 @@ class EsafeMigrationTest(unittest.TestCase):
         super(EsafeMigrationTest, cls).tearDownClass()
 
     def setUp(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.esafe_db_location = os.path.join(current_dir, 'database.db')
-
-        # Set the environment variable so the migration script knows where to look for the esafe database
-        os.environ['OPENMOTICS_PREFIX'] = current_dir
-
-        print(os.environ['OPENMOTICS_PREFIX'])
+        self.current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.esafe_db_location = os.path.join(self.current_dir, 'database.db')
 
         self.test_gw_db = SqliteDatabase(':memory:')
         self.test_esafe_db = SqliteDatabase(self.esafe_db_location)
@@ -417,14 +414,13 @@ class EsafeMigrationTest(unittest.TestCase):
         }, activate_user_config)
 
     def test_migrate_to_empty(self):
-        print(os.environ['OPENMOTICS_PREFIX'])
         self.log("Testing eSafe migration to empty database")
         self._create_esafe_database_dummy_data()
-        EsafeMigrator.migrate()
+        with mock.patch.object(constants, 'get_openmotics_prefix', return_value=self.current_dir):
+            EsafeMigrator.migrate()
         self._assert_database_migration()
 
     def test_migrate_to_filled(self):
-        print(os.environ['OPENMOTICS_PREFIX'])
         self.log("Testing eSafe migration to filled database")
         self._create_esafe_database_dummy_data()
 
@@ -456,6 +452,7 @@ class EsafeMigrationTest(unittest.TestCase):
         save_rfid(RfidDTO(tag_string='RFIDTAG1', uid_manufacturer='RFIDTAG1', label='test-rfid', enter_count=-1, user=user_1))
         save_rfid(RfidDTO(tag_string='RFIDTAG2', uid_manufacturer='RFIDTAG2', label='test-rfid', enter_count=10, blacklisted=True, user=user_2))
 
-        EsafeMigrator.migrate()
+        with mock.patch.object(constants, 'get_openmotics_prefix', return_value=self.current_dir):
+            EsafeMigrator.migrate()
         self._assert_database_migration()
 

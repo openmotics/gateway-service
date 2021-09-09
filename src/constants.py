@@ -25,6 +25,11 @@ PYINSTALLER_PREFIX = os.environ.get('PYINSTALLER_PREFIX', None)
 OPENMOTICS_PREFIX = os.environ.get('OPENMOTICS_PREFIX', os.path.abspath(os.path.join(__file__, '../..')))
 
 
+def get_openmotics_prefix():
+    """ Returns the openmotics prefix, this can be useful to be mocked in unit-tests """
+    return OPENMOTICS_PREFIX
+
+
 def get_src_root_full_path():
     """ Returns the top level directory of the python src code """
     return os.path.abspath(os.path.join(__file__, '..'))
