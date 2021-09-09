@@ -78,6 +78,8 @@ class ParcelBox(RestAPIEndpoint):
                 delivery = deliveries[0] if len(deliveries) == 1 else None
                 if delivery is not None:
                     box['delivery'] = DeliverySerializer.serialize(delivery)
+                else:
+                    box['delivery'] = None
         return ApiResponse(body=boxes_serial)
 
     @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
