@@ -428,6 +428,9 @@ class Thermostat(BaseModel):
                                     (Preset.thermostat_id == self.id))
         if preset is None:
             preset = Preset(thermostat=self, type=preset_type)
+            if preset_type in Preset.DEFAULT_PRESET_TYPES:
+                preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
+                preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
             preset.save()
         return preset
 
@@ -563,29 +566,6 @@ class DaySchedule(BaseModel):
                 break
             last_value = data[key]
         return last_value
-
-
-@post_save(sender=Thermostat)
-def on_thermostat_save_handler(model_class, instance, created):
-    _ = model_class
-    if created:
-        for preset_type in Preset.ALL_TYPES:
-            try:
-                preset = Preset.get(type=preset_type, thermostat=instance)
-            except DoesNotExist:
-                preset = Preset(type=preset_type, thermostat=instance)
-                if preset_type in Preset.DEFAULT_PRESET_TYPES:
-                    preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
-                    preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
-            preset.active = False
-            if preset_type == Preset.Types.AUTO:
-                preset.active = True
-            preset.save()
-        for mode in [ThermostatGroup.Modes.HEATING, ThermostatGroup.Modes.COOLING]:
-            for day_index in range(7):
-                day_schedule = DaySchedule(thermostat=instance, index=day_index, mode=mode)
-                day_schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
-                day_schedule.save()
 
 
 class Apartment(BaseModel):
