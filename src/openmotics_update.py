@@ -50,7 +50,6 @@ if __name__ == '__main__':
     parser.add_argument('--prepare-gateway-service-for-first-startup',
                         dest='prepare_gateway_service',
                         help=SUPPRESS)
-    # TODO: Make grouping smarter
     group = parser.add_mutually_exclusive_group()
     for module_type in UpdateController.MODULE_TYPE_MAP.keys():
         if module_type in ['master_core', 'master_classic']:
