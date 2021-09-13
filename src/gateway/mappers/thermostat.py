@@ -218,15 +218,15 @@ class ThermostatMapper(object):
                                (4, 'auto_fri'),
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
-            if day_index not in day_schedules:
-                raise RuntimeError('Could not find schedule `{0}`'.format(key))
-            if key not in thermostat_dto.loaded_fields:
-                continue
-            dto_data = getattr(thermostat_dto, key)
-            if dto_data is None:
-                continue
-            day_schedule = day_schedules[day_index]
-            day_schedule.schedule_data = ThermostatMapper._schedule_dto_to_orm(dto_data, mode)
+            if day_index in day_schedules:
+                day_schedule = day_schedules[day_index]
+            else:
+                # Default schedules
+                day_schedule = DaySchedule(thermostat=thermostat, index=day_index, mode=mode)
+                day_schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
+            if key in thermostat_dto.loaded_fields:
+                dto_data = getattr(thermostat_dto, key)
+                day_schedule.schedule_data = ThermostatMapper._schedule_dto_to_orm(dto_data, mode)
             day_schedule.save()
 
         # Presets
@@ -236,7 +236,15 @@ class ThermostatMapper(object):
                                    ('setp4', Preset.Types.VACATION),
                                    ('setp5', Preset.Types.PARTY)]:
             if preset_type not in presets:
-                raise RuntimeError('Could not find preset `{0}`'.format(preset_type))
+                # Create default presets
+                preset = Preset(type=preset_type, thermostat=thermostat)
+                if preset_type in Preset.DEFAULT_PRESET_TYPES:
+                    preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
+                    preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
+                preset.active = False
+                if preset_type == Preset.Types.AUTO:
+                    preset.active = True
+                preset.save()
             if field not in thermostat_dto.loaded_fields:
                 continue
             dto_data = getattr(thermostat_dto, field)

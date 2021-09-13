@@ -166,6 +166,10 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
         check_token = auth_controller.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
 
+        if token is not None and checked_token is None:
+            raise UnAuthorizedException('The passed authentication token is invalid')
+
+
         # check the security level for this call
         if auth:
             if checked_token is None:

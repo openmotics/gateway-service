@@ -16,7 +16,6 @@
 import logging
 import unittest
 
-import xmlrunner
 from mock import Mock
 from peewee import SqliteDatabase
 
@@ -106,11 +105,8 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         controller = GatewayThermostatMappingTests._create_controller()
 
         group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
-        thermostat = Thermostat(number=10,
-                                start=0,  # 0 is on a thursday
-                                name='thermostat',
-                                thermostat_group=group)
-        thermostat.save()
+        controller.save_heating_thermostats([ThermostatDTO(id=10, name='thermostat')])
+        thermostat = Thermostat.get(number=10)
 
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
@@ -143,7 +139,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        auto_sat=schedule_dto,
                                        auto_sun=schedule_dto), dto)
 
-        day_schedule = thermostat.heating_schedules()[0]  # type: DaySchedule
+        day_schedule = next(x for x in thermostat.heating_schedules() if x.index == 3)  # type: DaySchedule
         day_schedule.schedule_data = {0: 5.0,
                                       120: 5.5,   # 120 and 1200 are selected because 120 < 1200,
                                       1200: 6.0,  # but str(120) > str(1200)
@@ -240,7 +236,3 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        auto_fri=default_schedule_dto,
                                        auto_sat=default_schedule_dto,
                                        auto_sun=default_schedule_dto), dto)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

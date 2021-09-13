@@ -379,16 +379,17 @@ class Platform(object):
 
     class Type(object):
         DUMMY = 'DUMMY'
+        ESAFE_DUMMY = 'ESAFE_DUMMY'
         CLASSIC = 'CLASSIC'
         CORE_PLUS = 'CORE_PLUS'
         CORE = 'CORE'
         ESAFE = 'ESAFE'
 
-    AnyTypes = [Type.DUMMY]
+    DummyTypes = [Type.DUMMY, Type.ESAFE_DUMMY]
     ClassicTypes = [Type.CLASSIC]
     CoreTypes = [Type.CORE, Type.CORE_PLUS]
     EsafeTypes = [Type.ESAFE]
-    Types = AnyTypes + ClassicTypes + CoreTypes + EsafeTypes
+    Types = DummyTypes + ClassicTypes + CoreTypes + EsafeTypes
 
     @staticmethod
     def get_platform():
