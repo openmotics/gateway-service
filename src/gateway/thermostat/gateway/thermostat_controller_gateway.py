@@ -404,10 +404,12 @@ class ThermostatControllerGateway(ThermostatController):
         orm_object = ThermostatGroup.get(number=0)  # type: ThermostatGroup
         changed = False
         if 'outside_sensor_id' in thermostat_group.loaded_fields:
-            orm_object.sensor = Sensor.get(id=thermostat_group.outside_sensor_id)
+            sensor = None if thermostat_group.outside_sensor_id in (None, 240, 255) else \
+                Sensor.get(id=thermostat_group.outside_sensor_id)
+            orm_object.sensor = sensor
             changed = True
         if 'threshold_temperature' in thermostat_group.loaded_fields:
-            orm_object.threshold_temperature = thermostat_group.threshold_temperature  # type: ignore
+            orm_object.threshold_temperature = thermostat_group.threshold_temperature
             changed = True
         if changed:
             orm_object.save()
@@ -427,7 +429,7 @@ class ThermostatControllerGateway(ThermostatController):
 
                 link = links.get(i)
                 data = getattr(thermostat_group, field)
-                if data is None:
+                if data in (None, 255):
                     if link is not None:
                         link.delete_instance()
                 else:
@@ -448,7 +450,7 @@ class ThermostatControllerGateway(ThermostatController):
             # Set valve delay for all valves in this group
             for thermostat in orm_object.thermostats:
                 for valve in thermostat.valves:
-                    valve.delay = thermostat_group.pump_delay  # type: ignore
+                    valve.delay = thermostat_group.pump_delay
                     valve.save()
 
         self._thermostat_config_changed()
