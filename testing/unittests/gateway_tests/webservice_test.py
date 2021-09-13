@@ -21,10 +21,11 @@ import mock
 
 from bus.om_bus_client import MessageClient
 from gateway.api.serializers import SensorSerializer
-from gateway.dto import DimmerConfigurationDTO, LegacyScheduleDTO, \
-    LegacyStartupActionDTO, ModuleDTO, OutputStatusDTO, ScheduleDTO, \
-    SensorDTO, SensorSourceDTO, SensorStatusDTO, UserDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO, EnergyModuleDTO
+from gateway.dto import DimmerConfigurationDTO, EnergyModuleDTO, \
+    LegacyScheduleDTO, LegacyStartupActionDTO, ModuleDTO, OutputStatusDTO, \
+    ScheduleDTO, SensorDTO, SensorSourceDTO, SensorStatusDTO, ThermostatDTO, \
+    ThermostatGroupDTO, ThermostatStatusDTO, UserDTO, VentilationDTO, \
+    VentilationSourceDTO, VentilationStatusDTO
 from gateway.energy_module_controller import EnergyModuleController
 from gateway.enums import HardwareType, ModuleType
 from gateway.group_action_controller import GroupActionController
@@ -56,6 +57,7 @@ class WebInterfaceTest(unittest.TestCase):
         self.output_controller = mock.Mock(OutputController)
         self.scheduling_controller = mock.Mock(SchedulingController)
         self.sensor_controller = mock.Mock(SensorController)
+        self.thermostat_controller = mock.Mock(ThermostatController)
         self.ventilation_controller = mock.Mock(VentilationController)
         self.module_controller = mock.Mock(ModuleController)
         self.energy_module_controller = mock.Mock(EnergyModuleController)
@@ -71,7 +73,7 @@ class WebInterfaceTest(unittest.TestCase):
                             sensor_controller=self.sensor_controller,
                             shutter_controller=mock.Mock(ShutterController),
                             system_controller=mock.Mock(),
-                            thermostat_controller=mock.Mock(ThermostatController),
+                            thermostat_controller=self.thermostat_controller,
                             user_controller=self.user_controller,
                             ventilation_controller=self.ventilation_controller,
                             module_controller=self.module_controller,
@@ -229,6 +231,59 @@ class WebInterfaceTest(unittest.TestCase):
                 None, None, 21.0
             ]
             self.assertEqual(expected_status, json.loads(response)['status'])
+
+    def test_get_global_thermostat_configuration(self):
+        with mock.patch.object(self.thermostat_controller, 'load_thermostat_group',
+                               return_value=ThermostatGroupDTO(0,
+                                                               pump_delay=120,
+                                                               outside_sensor_id=510,
+                                                               threshold_temperature=24.0,
+                                                               switch_to_heating_0=(8, 100),
+                                                               switch_to_cooling_0=(9, 0))):
+            response = self.web.get_global_thermostat_configuration()
+            self.assertEqual({
+                'id': 0,
+                'pump_delay': 120,
+                'outside_sensor': 510,
+                'threshold_temp': 24.0,
+                'switch_to_heating_output_0': 8,
+                'switch_to_heating_output_1': 255,
+                'switch_to_heating_output_2': 255,
+                'switch_to_heating_output_3': 255,
+                'switch_to_heating_value_0': 100,
+                'switch_to_heating_value_1': 255,
+                'switch_to_heating_value_2': 255,
+                'switch_to_heating_value_3': 255,
+                'switch_to_cooling_output_0': 9,
+                'switch_to_cooling_output_1': 255,
+                'switch_to_cooling_output_2': 255,
+                'switch_to_cooling_output_3': 255,
+                'switch_to_cooling_value_0': 0,
+                'switch_to_cooling_value_1': 255,
+                'switch_to_cooling_value_2': 255,
+                'switch_to_cooling_value_3': 255,
+            }, json.loads(response)['config'])
+
+    def test_set_global_thermostat_configuration(self):
+        with mock.patch.object(self.thermostat_controller, 'save_thermostat_group',
+                               return_value=None) as save:
+            config = {
+                'id': 0,
+                'pump_delay': 120,
+                'outside_sensor': 255,
+                'threshold_temp': 24.0,
+                'switch_to_heating_output_0': 8,
+                'switch_to_heating_value_0': 100,
+                'switch_to_cooling_output_0': 255,
+                'switch_to_cooling_value_0': 255,
+            }
+            self.web.set_global_thermostat_configuration(config=config)
+            save.assert_called_with(ThermostatGroupDTO(id=0,
+                                                       pump_delay=120,
+                                                       outside_sensor_id=None,
+                                                       threshold_temperature=24.0,
+                                                       switch_to_heating_0=[8, 100],
+                                                       switch_to_cooling_0=None))
 
     def test_ventilation_configurations(self):
         with mock.patch.object(self.ventilation_controller, 'load_ventilations',
@@ -428,4 +483,3 @@ class WebInterfaceTest(unittest.TestCase):
                                            'inverted0': True, 'inverted1': False, 'inverted2': False, 'inverted3': False, 'inverted4': False, 'inverted5': False, 'inverted6': False, 'inverted7': False, 'inverted8': False, 'inverted9': False, 'inverted10': False, 'inverted11': False,
                                            'sensor0': 4, 'sensor1': 2, 'sensor2': 2, 'sensor3': 3, 'sensor4': 2, 'sensor5': 2, 'sensor6': 2, 'sensor7': 2, 'sensor8': 2, 'sensor9': 2, 'sensor10': 2, 'sensor11': 2,
                                            'times0': '', 'times1': '', 'times2': '', 'times3': '', 'times4': '', 'times5': '', 'times6': '', 'times7': '', 'times8': '', 'times9': '', 'times10': '', 'times11': ''}]}, api_response)
-

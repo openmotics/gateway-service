@@ -404,7 +404,7 @@ class ThermostatControllerGateway(ThermostatController):
         orm_object = ThermostatGroup.get(number=0)  # type: ThermostatGroup
         changed = False
         if 'outside_sensor_id' in thermostat_group.loaded_fields:
-            sensor = None if thermostat_group.outside_sensor_id in (None, 240, 255) else \
+            sensor = None if thermostat_group.outside_sensor_id is None else \
                 Sensor.get(id=thermostat_group.outside_sensor_id)
             orm_object.sensor = sensor
             changed = True
@@ -429,7 +429,7 @@ class ThermostatControllerGateway(ThermostatController):
 
                 link = links.get(i)
                 data = getattr(thermostat_group, field)
-                if data in (None, 255):
+                if data is None:
                     if link is not None:
                         link.delete_instance()
                 else:

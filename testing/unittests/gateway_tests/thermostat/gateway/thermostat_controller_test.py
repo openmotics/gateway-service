@@ -249,7 +249,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                        valve_output_ids=[valve_2_output.id],
                                        room_id=None)], pump_groups)
 
-    def test_thermostat_group_crud(self):
+    def test_save_thermostat_group(self):
         events = []
 
         def handle_event(gateway_event):
@@ -308,9 +308,9 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertIn({'index': 0, 'value': 100, 'mode': 'cooling', 'output': 1}, links)
 
         new_thermostat_group_dto = ThermostatGroupDTO(id=0,
-                                                      outside_sensor_id=1,
                                                       pump_delay=60,
-                                                      threshold_temperature=10,
+                                                      outside_sensor_id=None,
+                                                      threshold_temperature=None,
                                                       switch_to_heating_0=(1, 50),
                                                       switch_to_heating_1=None,
                                                       switch_to_cooling_0=(2, 0),
@@ -320,7 +320,8 @@ class ThermostatControllerTest(unittest.TestCase):
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'HEATING'}, 'location': {}}), events)
         thermostat_group = ThermostatGroup.get(number=0)
-        self.assertEqual(10.0, thermostat_group.threshold_temperature)
+        self.assertIsNone(thermostat_group.sensor)
+        self.assertIsNone(thermostat_group.threshold_temperature)
         links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}
                  for link in (OutputToThermostatGroup.select()
                                                      .where(OutputToThermostatGroup.thermostat_group == thermostat_group))]
