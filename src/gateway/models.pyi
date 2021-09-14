@@ -256,7 +256,7 @@ class ThermostatGroup(BaseModel):
     number: MixedIntegerField
     name: MixedCharField
     on: bool
-    threshold_temperature: Optional[MixedFloatField]
+    threshold_temperature: Optional[float]
     sensor: Optional[SensorForeignKeyField]
     mode: Literal['heating', 'cooling']
 
@@ -299,7 +299,7 @@ class PumpForeignKeyField(Pump, ForeignKeyField): ...
 class Valve(BaseModel):
     id: MixedPrimaryKeyField
     name: MixedCharField
-    delay: MixedIntegerField
+    delay: int
     output: OutputForeignKeyField
 
     @property
