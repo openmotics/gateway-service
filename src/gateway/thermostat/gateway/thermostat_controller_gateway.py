@@ -71,7 +71,6 @@ class ThermostatControllerGateway(ThermostatController):
         if not self._running:
             self._running = True
 
-            self.refresh_config_from_db()
             self._pid_loop_thread = DaemonThread(name='thermostatpid',
                                                  target=self._pid_tick,
                                                  interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
