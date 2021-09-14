@@ -56,15 +56,15 @@ class ThermostatControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self.pubsub = PubSub()
-        output_controller = Mock(OutputController)
-        output_controller.get_output_status.return_value = OutputStatusDTO(id=0, status=False)
+        self.output_controller = Mock(OutputController)
+        self.output_controller.get_output_status.return_value = OutputStatusDTO(id=0, status=False)
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self.scheduling_controller = Mock(SchedulingController)
         self.scheduling_controller.load_schedules.return_value = []
         SetUpTestInjections(pubsub=self.pubsub,
                             scheduling_controller=self.scheduling_controller,
-                            output_controller=output_controller,
+                            output_controller=self.output_controller,
                             sensor_controller=sensor_controller)
         self._thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=self._thermostat_controller)
@@ -366,6 +366,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                  priority=0)
         self._thermostat_controller.refresh_config_from_db()
 
+        mode_output = Output.create(number=5)
+        OutputToThermostatGroup.create(thermostat_group=self._thermostat_group, output=mode_output, index=0, mode='heating', value=100)
+        OutputToThermostatGroup.create(thermostat_group=self._thermostat_group, output=mode_output, index=0, mode='cooling', value=0)
+
         expected = ThermostatGroupStatusDTO(id=0,
                                             on=True,
                                             setpoint=0,
@@ -430,6 +434,7 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].automatic = expected.automatic = False
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
 
+        self.output_controller.set_output_status.reset_mock()
         self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=True, cooling_on=True, automatic=False, setpoint=4)
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'COOLING'}, 'location': {}}), events)
@@ -437,10 +442,13 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
         expected.cooling = True
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=False, dimmer=0)
 
+        self.output_controller.set_output_status.reset_mock()
         self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=False, cooling_on=True, automatic=True)
         expected.statusses[0].setpoint_temperature = 16.0
         expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
         expected.statusses[0].automatic = expected.automatic = True
         expected.cooling = False
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=True, dimmer=100)
