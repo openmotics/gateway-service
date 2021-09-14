@@ -29,7 +29,7 @@ from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
 from gateway.migrations import RoomsMigrator, FeatureMigrator, InputMigrator, \
-    ScheduleMigrator, UserMigrator, ConfigMigrator, EnergyModulesMigrator
+    ScheduleMigrator, UserMigrator, ConfigMigrator, EnergyModulesMigrator, EsafeMigrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
@@ -183,6 +183,7 @@ class OpenmoticsService(object):
         UserMigrator.migrate()
         ConfigMigrator.migrate()
         EnergyModulesMigrator.migrate()
+        EsafeMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

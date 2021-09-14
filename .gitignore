@@ -24,6 +24,8 @@ run-tests.sh
 etc/
 etc**
 static/
+**.db
+**.db_BACKUP
 
 # Terms
 src/terms/

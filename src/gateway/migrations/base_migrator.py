@@ -27,6 +27,11 @@ class BaseMigrator(object):
     MIGRATION_KEY = None  # type: Optional[str]
 
     @classmethod
+    def migrate_log(cls, msg='', level=logging.INFO):
+        log_message = ' * [{}] {}'.format(cls.MIGRATION_KEY, msg)
+        logger.log(level=level, msg=log_message)
+
+    @classmethod
     def migrate(cls):  # type: () -> None
         try:
             if cls.MIGRATION_KEY is None:
