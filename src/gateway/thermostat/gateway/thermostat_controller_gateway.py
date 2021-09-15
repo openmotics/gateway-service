@@ -71,7 +71,6 @@ class ThermostatControllerGateway(ThermostatController):
         if not self._running:
             self._running = True
 
-            self.refresh_config_from_db()
             self._pid_loop_thread = DaemonThread(name='thermostatpid',
                                                  target=self._pid_tick,
                                                  interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
@@ -113,7 +112,7 @@ class ThermostatControllerGateway(ThermostatController):
         self._pump_valve_controller.refresh_from_db()
 
     def refresh_thermostats_from_db(self):  # type: () -> None
-        for thermostat in Thermostat.select():
+        for thermostat in list(Thermostat.select()):
             thermostat_pid = self.thermostat_pids.get(thermostat.number)
             if thermostat_pid is None:
                 thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
@@ -327,7 +326,7 @@ class ThermostatControllerGateway(ThermostatController):
         link_set = OutputToThermostatGroup.select() \
             .where((OutputToThermostatGroup.thermostat_group == thermostat_group) &
                    (OutputToThermostatGroup.mode == thermostat_group.mode))
-        for link in link_set:
+        for link in list(link_set):
             self._output_controller.set_output_status(link.output.number, link.value > 0, dimmer=link.value)
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
