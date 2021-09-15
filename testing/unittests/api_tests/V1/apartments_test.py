@@ -282,8 +282,8 @@ class ApiApartmentsTests(BaseCherryPyUnitTester):
         self.test_apartment_2.mailbox_rebus_id = apartment_to_update[1]['mailbox_rebus_id']
         self.test_apartment_2.doorbell_rebus_id = apartment_to_update[1]['doorbell_rebus_id']
 
-        with mock.patch.object(self.apartment_controller, 'update_apartment') as update_apartment_func:
-            update_apartment_func.side_effect = [self.test_apartment_1, self.test_apartment_2]
+        with mock.patch.object(self.apartment_controller, 'update_apartments') as update_apartment_func:
+            update_apartment_func.return_value = [self.test_apartment_1, self.test_apartment_2]
             status, headers, body = self.PUT('/api/v1/apartments', login_user=self.admin_user, body=json.dumps(apartment_to_update))
             resp_dict = json.loads(body)
             apartment_dto_response = ApartmentDTO(**resp_dict[0])

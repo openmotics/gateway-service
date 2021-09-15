@@ -120,7 +120,7 @@ class ApartmentController(object):
         if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
             raise RuntimeError('cannot update an apartment without the id being set')
         try:
-            apartment_orm = Apartment.select().where(Apartment.id == apartment_dto.id).first()
+            apartment_orm = Apartment.get_by_id(apartment_dto.id)
             loaded_apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
             for field in apartment_dto.loaded_fields:
                 if field == 'id':
@@ -137,7 +137,7 @@ class ApartmentController(object):
     def update_apartments(self, apartment_dtos):
         # type: (List[ApartmentDTO]) -> Optional[List[ApartmentDTO]]
         apartments = []
-        with Database.get_db().atomic() as transaction:
+        with Database.get_db().transaction() as transaction:
             try:
                 # First clear all the rebus fields in order to be able to swap 2 fields
                 for apartment in apartment_dtos:
@@ -148,10 +148,13 @@ class ApartmentController(object):
                         apartment_orm.doorbell_rebus_id = None
                     apartment_orm.save()
                 for apartment in apartment_dtos:
-                    apartments.append(self.update_apartment(apartment))
+                    updated = self.update_apartment(apartment)
+                    if updated is not None:
+                        apartments.append(updated)
             except Exception as ex:
-                logger.error('Could not update apartments: {}'.format(ex))
+                logger.error('Could not update apartments: {}: {}'.format(type(ex).__name__, ex))
                 transaction.rollback()
+                return None
         return apartments
 
 
