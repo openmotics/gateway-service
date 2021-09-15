@@ -639,19 +639,23 @@ class WebInterface(object):
         return self._module_controller.get_modules()
 
     @openmotics_api(auth=True, check=types(address=str, fields='json'))
-    def get_modules_information(self, address=None, fields=None, refresh=False):  # type: (Optional[str], Optional[List[str]], bool) -> Dict[str, Any]
+    def get_modules_information(self, source=None, address=None, fields=None, refresh=False):  # type: (Optional[str], Optional[str], Optional[List[str]], bool) -> Dict[str, Any]
         """
         Gets an overview of all modules and information
+        :param source: Optional source filter
         :param address: Optional address filter
         :param fields: The field of the module information to get, None if all
         :param refresh: Indicates whether data should be refreshed before returning it
         """
         if refresh:
             self._module_controller.run_sync_orm()
-        return {'modules': {'master': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
-                                       for module_dto in self._module_controller.load_master_modules(address)},
-                            'energy': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
-                                       for module_dto in self._module_controller.load_energy_modules(address)}}}
+        modules = {}  # type: Dict[str, Dict[str, Dict[str, Any]]]
+        for module_dto in self._module_controller.load_modules(source=source, address=address):
+            if module_dto.source not in modules:
+                modules[module_dto.source] = {}
+            modules[module_dto.source][module_dto.address] = ModuleSerializer.serialize(module_dto=module_dto,
+                                                                                        fields=fields)
+        return {'modules': modules}
 
     @openmotics_api(auth=True, check=types(old_address=str, new_address=str))
     def replace_module(self, old_address, new_address):  # type: (str, str) -> Dict[str, Any]
@@ -673,7 +677,8 @@ class WebInterface(object):
             'isolated_plugins',  # Plugins run in a separate process, so allow fine-graded control
             'websocket_maintenance',  # Maintenance over websockets
             'shutter_positions',  # Shutter positions
-            'ventilation',
+            'ventilation',  # Native ventilation
+            'modules_information',  # Clean module information
         ]
 
         master_version = self._module_controller.get_master_version()
@@ -724,7 +729,7 @@ class WebInterface(object):
 
     @openmotics_api(auth=True)
     def get_system_status(self):
-        return {'updates': {'status': UpdateController.get_update_state()}}
+        return {'updates': UpdateController.get_update_state()}
 
     @openmotics_api(auth=True)
     def get_input_status(self):

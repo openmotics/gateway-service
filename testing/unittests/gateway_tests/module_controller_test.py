@@ -15,7 +15,7 @@
 from __future__ import absolute_import
 
 import unittest
-
+import time
 import mock
 from peewee import SqliteDatabase
 
@@ -28,6 +28,7 @@ from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
 from gateway.energy_module_controller import EnergyModuleController
 from ioc import SetTestMode, SetUpTestInjections
+import fakesleep
 
 MODELS = [Module]
 
@@ -39,6 +40,7 @@ class ModuleControllerTest(unittest.TestCase):
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
+        fakesleep.monkey_patch()
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
@@ -59,6 +61,7 @@ class ModuleControllerTest(unittest.TestCase):
     def tearDown(self):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
+        fakesleep.monkey_restore()
 
     def test_module_sync(self):
         master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
@@ -68,20 +71,19 @@ class ModuleControllerTest(unittest.TestCase):
                                     firmware_version='3.1.0',
                                     hardware_version='4',
                                     order=0,
-                                    online=True)]
+                                    online=True,
+                                    last_online_update=int(time.time()))]
         energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                     module_type=ModuleType.ENERGY,
                                     address='2',
                                     hardware_type=HardwareType.PHYSICAL,
                                     firmware_version=None,
-                                    hardware_version=None,
-                                    order=None)]
+                                    hardware_version=None)]
         self.master_controller.get_modules_information.return_value = master_modules
         self.energy_module_controller.get_modules_information.return_value = []  # Empty, should not remove EM
         self.controller.run_sync_orm()
-        self.assertEqual(master_modules, self.controller.load_master_modules())
-        self.assertEqual(energy_modules, self.controller.load_energy_modules())
-        self.assertEqual([], self.controller.load_master_modules(address='000.000.000.000'))
+        self.assertEqual(energy_modules + master_modules, self.controller.load_modules())
+        self.assertEqual([], self.controller.load_modules(address='000.000.000.000'))
 
     def test_module_offline(self):
         dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
@@ -92,18 +94,19 @@ class ModuleControllerTest(unittest.TestCase):
                         hardware_version='4',
                         order=0)
         self.master_controller.get_modules_information.return_value = [dto]
+        self.energy_module_controller.get_modules_information.return_value = []
         self.controller.run_sync_orm()
-        received_dto = self.controller.load_master_modules()[0]
+        received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertIsNone(received_dto.firmware_version)
         self.assertIsNone(received_dto.hardware_version)
         dto.online = True
         self.controller.run_sync_orm()
-        received_dto = self.controller.load_master_modules()[0]
+        received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertEqual('3.1.0', received_dto.firmware_version)
         self.assertEqual('4', received_dto.hardware_version)
         dto.online = False
         self.controller.run_sync_orm()
-        received_dto = self.controller.load_master_modules()[0]
+        received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertEqual('3.1.0', received_dto.firmware_version)
         self.assertEqual('4', received_dto.hardware_version)
 
@@ -128,23 +131,24 @@ class ModuleControllerTest(unittest.TestCase):
                                   hardware_type=HardwareType.PHYSICAL,
                                   firmware_version='1.2.3',
                                   order=0)
-        self.assertEqual({'type': 'O',
-                          'module_nr': 0,
-                          'category': 'OUTPUT',
-                          'is_can': False,
-                          'is_virtual': False,
-                          'firmware': '3.1.0',
-                          'hardware': '4',
+        self.assertEqual({'source': 'master',
+                          'module_type': 'output',
+                          'firmware_version': '3.1.0',
                           'hardware_type': 'physical',
+                          'order': 0,
+                          'update_success': None,
                           'address': '079.000.000.001'}, ModuleSerializer.serialize(master_module, fields=None))
-        self.assertEqual({'type': 'O',
-                          'module_nr': 0,
-                          'category': 'OUTPUT',
-                          'is_can': False,
-                          'is_virtual': False,
+        self.assertEqual({'source': 'master',
+                          'module_type': 'output',
+                          'firmware_version': '3.1.0',
                           'hardware_type': 'internal',
+                          'order': 0,
+                          'update_success': None,
                           'address': '079.000.000.001'}, ModuleSerializer.serialize(master_module_internal, fields=None))
-        self.assertEqual({'type': 'E',
-                          'firmware': '1.2.3',
-                          'address': '2',
-                          'id': 0}, ModuleSerializer.serialize(energy_module, fields=None))
+        self.assertEqual({'source': 'gateway',
+                          'module_type': 'energy',
+                          'firmware_version': '1.2.3',
+                          'hardware_type': 'physical',
+                          'order': 0,
+                          'update_success': None,
+                          'address': '2'}, ModuleSerializer.serialize(energy_module, fields=None))

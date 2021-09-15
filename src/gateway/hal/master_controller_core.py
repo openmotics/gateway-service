@@ -1262,13 +1262,16 @@ class MasterCoreController(MasterController):
                                               device_nr=0))  # Power off
             logger.info('Powering down RS485 bus... Done')
         except Exception as ex:
-            logger.critical('Exception when changing bus power: {0}'.format(ex))
+            logger.critical('Exception when powering down RS485 bus: {0}'.format(ex))
         time.sleep(5)
-        logger.warning('Powering on RS485 bus...')
-        self._do_basic_action(BasicAction(action_type=253,
-                                          action=0,
-                                          device_nr=1))  # Power on
-        logger.info('Powering on RS485 bus... Done')
+        try:
+            logger.warning('Powering on RS485 bus...')
+            self._do_basic_action(BasicAction(action_type=253,
+                                              action=0,
+                                              device_nr=1))  # Power on
+            logger.info('Powering on RS485 bus... Done')
+        except Exception as ex:
+            logger.critical('Exception when powering on RS485 bus: {0}'.format(ex))
 
     def get_status(self):
         firmware_version = self._execute(CoreAPI.get_firmware_version(), {})['version']

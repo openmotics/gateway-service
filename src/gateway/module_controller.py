@@ -20,9 +20,9 @@ import logging
 import six
 import time
 from ioc import Injectable, Inject, INJECTED, Singleton
-from serial_utils import CommunicationTimedOutException
 from gateway.dto import ModuleDTO
 from gateway.enums import HardwareType, ModuleType
+from gateway.exceptions import CommunicationFailure
 from gateway.base_controller import BaseController
 from gateway.models import Module
 from gateway.mappers.module import ModuleMapper
@@ -94,7 +94,7 @@ class ModuleController(BaseController):
             logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
                 amounts[True], amounts[False], amounts[None]
             ))
-        except CommunicationTimedOutException as ex:
+        except CommunicationFailure as ex:
             logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
         except Exception as ex:
             logger.exception('ORM sync (Modules): Failed')
@@ -106,20 +106,18 @@ class ModuleController(BaseController):
     def get_modules(self):
         return self._master_controller.get_modules()
 
-    def load_master_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
-        return [ModuleMapper.orm_to_dto(module)
-                for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)
-                if address is None or module.address == address]
-
-    def load_energy_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
-        return [ModuleMapper.orm_to_dto(module)
-                for module in Module.select().where(Module.source == ModuleDTO.Source.GATEWAY)
-                if address is None or module.address == address]
+    def load_modules(self, source=None, address=None):  # type: (Optional[str], Optional[str]) -> List[ModuleDTO]
+        query = Module.select()
+        if source is not None:
+            query = query.where(Module.source == source)
+        if address is not None:
+            query = query.where(Module.address == address)
+        return [ModuleMapper.orm_to_dto(module) for module in query]
 
     def replace_module(self, old_address, new_address):
         if old_address == new_address:
             raise RuntimeError('Old and new address cannot be identical')
-        all_modules = {module.address: module for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)}  # type: Dict[str, Module]
+        all_modules = {module.address: module for module in Module.select()}  # type: Dict[str, Module]
         old_module = all_modules.get(old_address)
         new_module = all_modules.get(new_address)
         if old_module is None or new_module is None:

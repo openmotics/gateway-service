@@ -28,7 +28,7 @@ class ModuleDTO(BaseDTO):
         MASTER = 'master'
         GATEWAY = 'gateway'
 
-    def __init__(self, source, address, module_type, hardware_type, firmware_version=None, hardware_version=None, order=None, online=None):
+    def __init__(self, source, address, module_type, hardware_type, firmware_version=None, hardware_version=None, order=None, online=None, last_online_update=None, update_success=None):
         self.source = source  # type: str
         self.address = address  # type: str
         self.module_type = module_type  # type: Optional[str]
@@ -37,6 +37,8 @@ class ModuleDTO(BaseDTO):
         self.hardware_version = hardware_version  # type: Optional[str]
         self.order = order  # type: Optional[int]
         self.online = online  # type: Optional[bool]
+        self.last_online_update = last_online_update  # type: Optional[int]
+        self.update_success = update_success  # type: Optional[bool]
 
     def __eq__(self, other):
         if not isinstance(other, ModuleDTO):
@@ -47,4 +49,6 @@ class ModuleDTO(BaseDTO):
                 self.firmware_version == other.firmware_version and
                 self.hardware_version == other.hardware_version and
                 self.hardware_type == other.hardware_type and
-                self.order == other.order)
+                self.order == other.order and
+                self.last_online_update == other.last_online_update and
+                self.update_success == other.update_success)

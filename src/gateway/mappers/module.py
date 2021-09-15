@@ -34,7 +34,9 @@ class ModuleMapper(object):
                          hardware_type=orm_object.hardware_type,
                          firmware_version=orm_object.firmware_version,
                          hardware_version=orm_object.hardware_version,
-                         order=orm_object.order)
+                         order=orm_object.order,
+                         last_online_update=orm_object.last_online_update,
+                         update_success=orm_object.update_success)
 
     @staticmethod
     def dto_to_orm(module_dto):  # type: (ModuleDTO) -> Module

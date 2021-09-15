@@ -219,7 +219,7 @@ class UpdateController(object):
                     # Read failure report
                     failure_filename = UpdateController.SERVICE_BASE_TEMPLATE.format('{0}.failure'.format(target_version))
                     if os.path.exists(failure_filename):
-                        with open(failure_filename, 'w') as failure:
+                        with open(failure_filename, 'r') as failure:
                             failure_content = failure.read()
                         os.remove(failure_filename)
                         raise RuntimeError('Update failure reported: {0}'.format(failure_content))
@@ -652,7 +652,7 @@ class UpdateController(object):
 
     @staticmethod
     def get_update_state():
-        state = 2  # 0 = ERROR, 1 = UPDATING, 2 = OK
+        state_values = {}
         modules = {}  # type: Dict[str, List[Module]]
         for module in Module.select().where(Module.hardware_type == HardwareType.PHYSICAL):
             modules.setdefault(module.module_type, []).append(module)
@@ -662,29 +662,39 @@ class UpdateController(object):
             if target_version is None:
                 continue
             if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
-                if success is None:
-                    state = min(state, 1)  # Update in progress
-                if success is False:
-                    state = min(state, 0)  # Update failed
-                    break
+                state_values[firmware_type] = 1
+                if success is not None:
+                    state_values[firmware_type] = 2 if success else 0
             else:
+                if firmware_type not in state_values:
+                    state_values[firmware_type] = {}
                 for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
                     for module in modules.get(module_type, []):
                         if module.firmware_version == target_version:
-                            continue  # Up to date
-                        update_success = module.update_success
-                        if update_success is None:
-                            state = min(state, 1)  # Update in progress
-                        if update_success is False:
-                            state = min(state, 0)  # Update failed
-                            break
-                    if state == 0:
-                        break
-            if state == 0:
-                break
-        return {0: UpdateEnums.States.ERROR,
-                1: UpdateEnums.States.UPDATING,
-                2: UpdateEnums.States.OK}[state]
+                            state_values[firmware_type][module.address] = 2
+                        else:
+                            state_values[firmware_type][module.address] = 1
+                            update_success = module.update_success
+                            if update_success is not None:
+                                state_values[firmware_type][module.address] = 2 if update_success else 0
+        state_map = {0: UpdateEnums.States.ERROR,
+                     1: UpdateEnums.States.UPDATING,
+                     2: UpdateEnums.States.OK}
+        state = 2
+        states = {}
+        for firmware_type, state_value in state_values.items():
+            if isinstance(state_value, dict):
+                for address in list(state_value.keys()):
+                    state_value = state_values[firmware_type][address]
+                    state = min(state, state_value)
+                    if firmware_type not in states:
+                        states[firmware_type] = {}
+                    states[firmware_type][address] = state_map[state_value]
+            else:
+                state = min(state, state_value)
+                states[firmware_type] = state_map[state_value]
+        return {'status': state_map[state],
+                'status_detail': states}
 
     @staticmethod
     def _get_target_version_info(firmware_type):
