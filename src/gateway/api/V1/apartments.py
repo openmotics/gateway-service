@@ -139,10 +139,9 @@ class Apartments(RestAPIEndpoint):
                 raise WrongInputParametersException('The ID is needed to know which apartment to update.')
             apartments_to_update.append(apartment_dto)
 
-        updated_apartments = []
-        for apartment in apartments_to_update:
-            apartment_dto = self.apartment_controller.update_apartment(apartment)
-            updated_apartments.append(apartment_dto)
+        updated_apartments = self.apartment_controller.update_apartments(apartments_to_update)
+        if updated_apartments is None:
+            raise WrongInputParametersException('Could not save updated apartment configuration: The updated apartment configuration could not be updated in the database')
         return ApiResponse(body=[ApartmentSerializer.serialize(apartment_dto) for apartment_dto in updated_apartments])
 
     @openmotics_api_v1(auth=True, pass_role=False,
