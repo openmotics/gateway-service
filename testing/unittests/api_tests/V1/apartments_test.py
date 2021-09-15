@@ -258,6 +258,39 @@ class ApiApartmentsTests(BaseCherryPyUnitTester):
             status, headers, body = self.PUT('/api/v1/apartments/1', login_user=self.admin_user, body=None)
             self.assertTrue(WrongInputParametersException.bytes_message() in body)
 
+    def test_update_apartments(self):
+        apartment_to_update = [
+            {
+                'id': 1,
+                'name': 'Updated_name',
+                'mailbox_rebus_id': 37,
+                'doorbell_rebus_id': 38,
+            },
+            {
+                'id': 2,
+                'name': 'Updated_name_2',
+                'mailbox_rebus_id': 47,
+                'doorbell_rebus_id': 48,
+            }
+        ]
+        # Change the apartment so that it will be correctly loaded
+        self.test_apartment_1.name = apartment_to_update[0]['name']
+        self.test_apartment_1.mailbox_rebus_id = apartment_to_update[0]['mailbox_rebus_id']
+        self.test_apartment_1.doorbell_rebus_id = apartment_to_update[0]['doorbell_rebus_id']
+
+        self.test_apartment_2.name = apartment_to_update[1]['name']
+        self.test_apartment_2.mailbox_rebus_id = apartment_to_update[1]['mailbox_rebus_id']
+        self.test_apartment_2.doorbell_rebus_id = apartment_to_update[1]['doorbell_rebus_id']
+
+        with mock.patch.object(self.apartment_controller, 'update_apartment') as update_apartment_func:
+            update_apartment_func.side_effect = [self.test_apartment_1, self.test_apartment_2]
+            status, headers, body = self.PUT('/api/v1/apartments', login_user=self.admin_user, body=json.dumps(apartment_to_update))
+            resp_dict = json.loads(body)
+            apartment_dto_response = ApartmentDTO(**resp_dict[0])
+            self.assertEqual(self.test_apartment_1, apartment_dto_response)
+            apartment_dto_response = ApartmentDTO(**resp_dict[1])
+            self.assertEqual(self.test_apartment_2, apartment_dto_response)
+
     # ----------------------------------------------------------------
     # --- DELETE
     # ----------------------------------------------------------------

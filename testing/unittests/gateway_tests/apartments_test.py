@@ -23,6 +23,7 @@ import time
 import unittest
 import sqlite3
 import mock
+import logging
 
 import peewee
 from peewee import SqliteDatabase
@@ -32,6 +33,7 @@ from gateway.mappers import ApartmentMapper
 from gateway.models import Apartment
 from gateway.apartment_controller import ApartmentController
 from ioc import SetTestMode, SetUpTestInjections
+from logs import Logs
 
 MODELS = [Apartment]
 
@@ -42,6 +44,8 @@ class ApartmentControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         super(ApartmentControllerTest, cls).setUpClass()
+        Logs.setup_logger(log_level_override=logging.DEBUG)
+        Logs.set_service_loglevel(level=logging.DEBUG, namespace='peewee')
         SetTestMode()
         cls.test_db = SqliteDatabase(':memory:')
 
@@ -118,8 +122,32 @@ class ApartmentControllerTest(unittest.TestCase):
         # Set the id of apartment to id 1 to update the apartment with id 1
         self.test_apartment_2.id = 1
         result = self.controller.update_apartment(self.test_apartment_2)
+        self.assertEqual(result.id, self.test_apartment_2.id)
         loaded = self.controller.load_apartment(result.id)
         self.assertEqual(result, loaded)
+
+    def test_update_apartments(self):
+        """ Test the create apartment functionality """
+        apartment_1_dto = self.controller.save_apartment(self.test_apartment_1)
+        loaded = self.controller.load_apartment(apartment_1_dto.id)
+        self.assertEqual(apartment_1_dto, loaded)
+
+        apartment_2_dto = self.controller.save_apartment(self.test_apartment_2)
+        loaded = self.controller.load_apartment(apartment_2_dto.id)
+        self.assertEqual(apartment_2_dto, loaded)
+
+        # Switch the mailboxes arround to test if they actually get switched in the database
+        self.test_apartment_1.mailbox_rebus_id, self.test_apartment_2.mailbox_rebus_id = self.test_apartment_2.mailbox_rebus_id, self.test_apartment_1.mailbox_rebus_id
+        # Set the id
+        self.test_apartment_1.id = apartment_1_dto.id
+        self.test_apartment_2.id = apartment_2_dto.id
+        result = self.controller.update_apartments([self.test_apartment_1, self.test_apartment_2])
+        self.assertEqual(result[0].id, self.test_apartment_1.id)
+        self.assertEqual(result[1].id, self.test_apartment_2.id)
+        loaded = self.controller.load_apartment(result[0].id)
+        self.assertEqual(result[0], loaded)
+        loaded = self.controller.load_apartment(result[1].id)
+        self.assertEqual(result[1], loaded)
 
     def test_delete_apartment(self):
         """ Test the create apartment functionality """
