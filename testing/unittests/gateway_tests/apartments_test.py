@@ -47,7 +47,7 @@ class ApartmentControllerTest(unittest.TestCase):
         Logs.setup_logger(log_level_override=logging.DEBUG)
         Logs.set_service_loglevel(level=logging.DEBUG, namespace='peewee')
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:', pragmas={'foreign_keys': 1})
+        cls.test_db = SqliteDatabase(':memory:')
 
     @classmethod
     def tearDownClass(cls):
