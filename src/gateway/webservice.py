@@ -37,25 +37,27 @@ from peewee import DoesNotExist
 
 import constants
 import gateway
-from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
-    ModuleSerializer, OutputSerializer, OutputStateSerializer, InputStateSerializer, \
-    PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
-    SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatAircoStatusSerializer, PumpGroupSerializer, \
-    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
-    LegacyStartupActionSerializer, LegacyScheduleSerializer, \
-    DimmerConfigurationSerializer, SensorStatusSerializer, \
-    EnergyModuleSerializer
+from gateway.api.serializers import DimmerConfigurationSerializer, \
+    EnergyModuleSerializer, GlobalFeedbackSerializer, GlobalRTD10Serializer, \
+    GroupActionSerializer, InputSerializer, InputStateSerializer, \
+    LegacyScheduleSerializer, LegacyStartupActionSerializer, \
+    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
+    PulseCounterSerializer, PumpGroupSerializer, RoomSerializer, \
+    RTD10Serializer, ScheduleSerializer, SensorSerializer, \
+    SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
+    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
+    ThermostatGroupStatusSerializer, ThermostatSerializer, \
+    VentilationSerializer, VentilationStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
-from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
-    UserDTO, InputStatusDTO
-from gateway.enums import ShutterEnums, UserEnums, ModuleType
+from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
+    RoomDTO, ScheduleDTO, UserDTO
+from gateway.energy.energy_communicator import InAddressModeException
+from gateway.enums import ModuleType, ShutterEnums, UserEnums
 from gateway.events import BaseEvent
-from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
-    ItemDoesNotExistException, WrongInputParametersException, ParseException
-from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
+from gateway.exceptions import CommunicationFailure, \
+    FeatureUnavailableException, InMaintenanceModeException, \
+    ItemDoesNotExistException, ParseException, UnsupportedException, \
+    WrongInputParametersException
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.models import Config, Database, Feature, Schedule, User
 from gateway.uart_controller import UARTController
@@ -64,7 +66,6 @@ from gateway.websockets import EventsSocket, MaintenanceSocket, \
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
-from gateway.energy.energy_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -1477,9 +1478,12 @@ class WebInterface(object):
         Get all heating pump_group_configurations.
         :param fields: The field of the heating pump_group_configuration to get, None if all
         """
-        pump_group_dtos = self._thermostat_controller.load_heating_pump_groups()
-        return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
-                           for pump_group in pump_group_dtos]}
+        config = []  # type: List[Dict[str, Any]]
+        pump_group_dtos = {x.id: x for x in self._thermostat_controller.load_heating_pump_groups()}
+        for pump_group_id in set(list(pump_group_dtos.keys()) + list(range(8))):
+            pump_group_dto = pump_group_dtos.get(pump_group_id, PumpGroupDTO(pump_group_id))
+            config.append(PumpGroupSerializer.serialize(pump_group_dto, fields=fields))
+        return {'config': config}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
