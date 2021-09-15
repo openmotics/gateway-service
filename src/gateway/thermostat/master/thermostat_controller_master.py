@@ -505,9 +505,6 @@ class ThermostatControllerMaster(ThermostatController):
                                                                        mode=thermostat['mode'],
                                                                        automatic=thermostat['automatic'],
                                                                        setpoint=thermostat['setpoint'],
-                                                                       name=thermostat['name'],
-                                                                       sensor_id=thermostat['sensor_nr'],
-                                                                       airco=thermostat['airco'],
                                                                        output_0_level=thermostat['output0'],
                                                                        output_1_level=thermostat['output1'])
                                                    for thermostat in master_status['status']])

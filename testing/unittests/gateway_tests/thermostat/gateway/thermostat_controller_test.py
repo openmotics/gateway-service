@@ -382,17 +382,14 @@ class ThermostatControllerTest(unittest.TestCase):
                                             cooling=False,
                                             automatic=True,
                                             statusses=[ThermostatStatusDTO(id=1,
-                                                                           name='thermostat 1',
                                                                            automatic=True,
                                                                            setpoint=0,
-                                                                           sensor_id=sensor.id,
                                                                            actual_temperature=10.0,
                                                                            setpoint_temperature=14.0,
                                                                            outside_temperature=10.0,
                                                                            output_0_level=0,
                                                                            output_1_level=0,
-                                                                           mode=0,
-                                                                           airco=0)])
+                                                                           mode=0)])
         self.assertEqual(expected, self.controller.get_thermostat_status())
 
         self.controller.set_current_setpoint(thermostat_number=1, heating_temperature=15.0)
