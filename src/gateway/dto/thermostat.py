@@ -71,7 +71,7 @@ class ThermostatGroupDTO(BaseDTO):
                  switch_to_cooling_0=None, switch_to_cooling_1=None, switch_to_cooling_2=None, switch_to_cooling_3=None):
         self.id = id  # type: int
         self.outside_sensor_id = outside_sensor_id  # type: Optional[int]
-        self.pump_delay = pump_delay  # type: Optional[int]
+        self.pump_delay = 60 if pump_delay in (None, 255) else pump_delay  # type: int
         self.threshold_temperature = threshold_temperature  # type: Optional[float]
         self.switch_to_heating_0 = switch_to_heating_0  # type: Optional[Tuple[int, int]]
         self.switch_to_heating_1 = switch_to_heating_1  # type: Optional[Tuple[int, int]]

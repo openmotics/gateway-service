@@ -63,18 +63,9 @@ class Logs(object):
         else:
             openmotics_log_level = Logs._get_configured_loglevel(fallback=logging.INFO)
 
-        # Syslog handler, if needed
-        syslog_handler = None
-        if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-            syslog_handler = handlers.SysLogHandler(address='/dev/log')
-            syslog_handler.setLevel(openmotics_log_level)
-            syslog_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
-
         # Apply log level
         for namespace in Logs._get_service_namespaces():
-            for logger in Logs.set_loglevel(openmotics_log_level, namespace):
-                if syslog_handler is not None:
-                    logger.addHandler(syslog_handler)
+            Logs.set_loglevel(openmotics_log_level, namespace)
 
     @staticmethod
     def get_update_logger(name):  # type: (str) -> Logger

@@ -70,13 +70,14 @@ class UserDTO(BaseDTO):
             self._loaded_fields.remove('password')
 
     def set_password(self, password):
-        # type: (str) -> None
+        # type: (str) -> UserDTO
         """
         Sets the hashed password field of the UserDTO object, this way no clear-text passwords are used.
         """
         if password == '':
             raise ValueError("Password cannot be empty")
         self.hashed_password = UserDTO._hash_password(password)
+        return self
 
     def __eq__(self, other):
         # type: (Any) -> bool

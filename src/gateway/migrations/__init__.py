@@ -5,3 +5,4 @@ from gateway.migrations.schedules import ScheduleMigrator
 from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
 from gateway.migrations.energy_modules import EnergyModulesMigrator
+from gateway.migrations.esafe import EsafeMigrator

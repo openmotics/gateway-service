@@ -306,6 +306,7 @@ class ThermostatControllerGateway(ThermostatController):
             changed = True
         if global_thermosat.mode != mode:
             global_thermosat.mode = mode
+            self._set_mode_outputs(global_thermosat)
             changed = True
         if changed:
             global_thermosat.save()
@@ -321,6 +322,13 @@ class ThermostatControllerGateway(ThermostatController):
                     thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.AUTO)
                 thermostat_pid.update_thermostat(thermostat)
                 thermostat_pid.tick()
+
+    def _set_mode_outputs(self, thermostat_group):  # type: (ThermostatGroup) -> None
+        link_set = OutputToThermostatGroup.select() \
+            .where((OutputToThermostatGroup.thermostat_group == thermostat_group) &
+                   (OutputToThermostatGroup.mode == thermostat_group.mode))
+        for link in link_set:
+            self._output_controller.set_output_status(link.output.number, link.value > 0, dimmer=link.value)
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         mode = 'heating'  # type: Literal['heating']
@@ -404,10 +412,12 @@ class ThermostatControllerGateway(ThermostatController):
         orm_object = ThermostatGroup.get(number=0)  # type: ThermostatGroup
         changed = False
         if 'outside_sensor_id' in thermostat_group.loaded_fields:
-            orm_object.sensor = Sensor.get(id=thermostat_group.outside_sensor_id)
+            sensor = None if thermostat_group.outside_sensor_id is None else \
+                Sensor.get(id=thermostat_group.outside_sensor_id)
+            orm_object.sensor = sensor
             changed = True
         if 'threshold_temperature' in thermostat_group.loaded_fields:
-            orm_object.threshold_temperature = thermostat_group.threshold_temperature  # type: ignore
+            orm_object.threshold_temperature = thermostat_group.threshold_temperature
             changed = True
         if changed:
             orm_object.save()
@@ -448,7 +458,7 @@ class ThermostatControllerGateway(ThermostatController):
             # Set valve delay for all valves in this group
             for thermostat in orm_object.thermostats:
                 for valve in thermostat.valves:
-                    valve.delay = thermostat_group.pump_delay  # type: ignore
+                    valve.delay = thermostat_group.pump_delay
                     valve.save()
 
         self._thermostat_config_changed()
