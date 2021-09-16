@@ -713,7 +713,7 @@ class UpdateController(object):
     def _register_version_success(firmware_type, success):
         # type: (str, bool) -> None
         target_versions = Config.get_entry('firmware_target_versions', None)  # type: Optional[Dict[str, Dict[str, Any]]]
-        if target_versions is None:
+        if target_versions is None or firmware_type not in target_versions:
             return
         target_versions[firmware_type]['success'] = success
         Config.set_entry('firmware_target_versions', target_versions)
