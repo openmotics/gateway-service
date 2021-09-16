@@ -45,7 +45,7 @@ class ApartmentControllerTest(unittest.TestCase):
     def setUpClass(cls):
         super(ApartmentControllerTest, cls).setUpClass()
         Logs.setup_logger(log_level_override=logging.DEBUG)
-        Logs.set_service_loglevel(level=logging.DEBUG, namespace='peewee')
+        Logs.set_loglevel(level=logging.DEBUG, namespace='peewee')
         SetTestMode()
         cls.test_db = SqliteDatabase(':memory:')
 
