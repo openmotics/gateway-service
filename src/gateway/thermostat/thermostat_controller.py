@@ -22,6 +22,8 @@ if False:  # MYPY
 
 
 class ThermostatController(object):
+    GLOBAL_THERMOSTAT = 0
+
     def __init__(self, output_controller):
         # type: (OutputController) -> None
         self._output_controller = output_controller
@@ -55,10 +57,6 @@ class ThermostatController(object):
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         raise NotImplementedError()
 
-    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
-        raise NotImplementedError()
-
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         raise NotImplementedError()
 
@@ -72,13 +70,20 @@ class ThermostatController(object):
         # type: (int, bool, int) -> None
         raise NotImplementedError()
 
-    def load_thermostat_group(self):  # type: () -> ThermostatGroupDTO
+    def load_thermostat_groups(self):  # type: () -> List[ThermostatGroupDTO]
+        raise NotImplementedError()
+
+    def load_thermostat_group(self, thermostat_group_id):  # type: (int) -> ThermostatGroupDTO
         raise NotImplementedError()
 
     def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
         raise NotImplementedError()
 
-    def get_thermostat_status(self):  # type: () -> ThermostatGroupStatusDTO
+    def get_thermostat_group_status(self):  # type: () -> List[ThermostatGroupStatusDTO]
+        raise NotImplementedError()
+
+    def set_thermostat_group(self, thermostat_group_id, group_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (int, bool, bool, bool, Optional[bool], Optional[int]) -> None
         raise NotImplementedError()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
