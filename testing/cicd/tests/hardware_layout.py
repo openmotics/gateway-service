@@ -131,9 +131,9 @@ class Module(object):
         EMULATED = 'emulated'
         INTERNAL = 'internal'
 
-    def __init__(self, name, mtype, hardware_type, is_can=False, inputs=None, cts=None, outputs=None, temps=None, shutters=None):
+    def __init__(self, name, module_type, hardware_type, is_can=False, inputs=None, cts=None, outputs=None, temps=None, shutters=None):
         self.name = name
-        self.mtype = mtype
+        self.module_type = module_type
         self.hardware_type = hardware_type
         self.is_can = is_can
         self.inputs = []
@@ -160,7 +160,8 @@ class Module(object):
 
 _OUTPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='internal output module 0-7', mtype='o',
+        Module(name='internal output module 0-7',
+               module_type='output',
                hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=0, tester_input_id=16),
                         Output(output_id=1, tester_input_id=17),
@@ -170,7 +171,8 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=5, tester_input_id=21),
                         Output(output_id=6, tester_input_id=22),
                         Output(output_id=7, tester_input_id=23)]),
-        Module(name='internal output module 8-15', mtype='o',
+        Module(name='internal output module 8-15',
+               module_type='output',
                hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=8, tester_input_id=24),
                         Output(output_id=9, tester_input_id=25),
@@ -180,10 +182,12 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=13, tester_input_id=29),
                         Output(output_id=14, tester_input_id=30),
                         Output(output_id=15, tester_input_id=31)]),
-        Module(name='internal open collector module', mtype='l',
+        Module(name='internal open collector module',
+               module_type='open_collector',
                hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=23, tester_input_id=39)]),
-        Module(name='output module', mtype='O',
+        Module(name='output module',
+               module_type='output',
                hardware_type=Module.HardwareType.PHYSICAL,
                outputs=[Output(output_id=32, tester_input_id=40),
                         Output(output_id=33, tester_input_id=41),
@@ -195,7 +199,8 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=39, tester_input_id=47)]),
     ],
     TestPlatform.DEBIAN: [
-        Module(name='output module', mtype='O',
+        Module(name='output module',
+               module_type='output',
                hardware_type=Module.HardwareType.PHYSICAL,
                outputs=[Output(output_id=0, tester_input_id=8),
                         Output(output_id=1, tester_input_id=9),
@@ -205,10 +210,12 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=5, tester_input_id=13),
                         Output(output_id=6, tester_input_id=14),
                         Output(output_id=7, tester_input_id=15)]),
-        Module(name='dimmer module', mtype='D',
+        Module(name='dimmer module',
+               module_type='dim_control',
                hardware_type=Module.HardwareType.PHYSICAL,
                outputs=[]),
-        Module(name='virtual output', mtype='o',
+        Module(name='virtual output',
+               module_type='output',
                hardware_type=Module.HardwareType.VIRTUAL,
                outputs=[Output(output_id=16, tester_input_id=None),
                         Output(output_id=17, tester_input_id=None),
@@ -225,13 +232,15 @@ OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Modul
 _SHUTTER_MODULE_LAYOUT = {
     TestPlatform.CORE_PLUS: [
         # TODO: Change code to support flexible output/shutter changes
-        Module(name='internal output module 0-7 as shutter', mtype='r',
+        Module(name='internal output module 0-7 as shutter',
+               module_type='shutter',
                hardware_type=Module.HardwareType.INTERNAL,
                shutters=[Shutter(shutter_id=0, tester_input_id_up=16, tester_input_id_down=17),
                          Shutter(shutter_id=1, tester_input_id_up=18, tester_input_id_down=19),
                          Shutter(shutter_id=2, tester_input_id_up=20, tester_input_id_down=21),
                          Shutter(shutter_id=3, tester_input_id_up=22, tester_input_id_down=23)]),
-        Module(name='internal output module 8-15 as shutter', mtype='r',
+        Module(name='internal output module 8-15 as shutter',
+               module_type='shutter',
                hardware_type=Module.HardwareType.INTERNAL,
                shutters=[Shutter(shutter_id=4, tester_input_id_up=24, tester_input_id_down=25),
                          Shutter(shutter_id=5, tester_input_id_up=26, tester_input_id_down=27),
@@ -239,7 +248,8 @@ _SHUTTER_MODULE_LAYOUT = {
                          Shutter(shutter_id=7, tester_input_id_up=30, tester_input_id_down=31)]),
     ],
     TestPlatform.DEBIAN: [
-        Module(name='shutter module', mtype='R',
+        Module(name='shutter module',
+               module_type='shutter',
                hardware_type=Module.HardwareType.PHYSICAL,
                shutters=[Shutter(shutter_id=0, tester_input_id_up=0, tester_input_id_down=1),
                          Shutter(shutter_id=1, tester_input_id_up=2, tester_input_id_down=3),
@@ -251,14 +261,16 @@ SHUTTER_MODULE_LAYOUT = _SHUTTER_MODULE_LAYOUT[TEST_PLATFORM]  # type: List[Modu
 
 _INPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='internal input module', mtype='i',
+        Module(name='internal input module',
+               module_type='input',
                hardware_type=Module.HardwareType.INTERNAL,
                inputs=[Input(input_id=0, tester_output_id=40),
                        Input(input_id=1, tester_output_id=41),
                        Input(input_id=2, tester_output_id=42),
                        Input(input_id=3, tester_output_id=43),
                        Input(input_id=4, tester_output_id=44)]),
-        Module(name='input module', mtype='I',
+        Module(name='input module',
+               module_type='input',
                hardware_type=Module.HardwareType.PHYSICAL,
                inputs=[Input(input_id=8, tester_output_id=48),
                        Input(input_id=9, tester_output_id=49),
@@ -270,7 +282,8 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=15, tester_output_id=55)]),
     ],
     TestPlatform.DEBIAN: [
-        Module(name='input module', mtype='I',
+        Module(name='input module',
+               module_type='input',
                hardware_type=Module.HardwareType.PHYSICAL,
                inputs=[Input(input_id=0, tester_output_id=24),
                        Input(input_id=1, tester_output_id=25),
@@ -280,10 +293,12 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=5, tester_output_id=29),
                        Input(input_id=6, tester_output_id=30),
                        Input(input_id=7, tester_output_id=31)]),
-        Module(name='CC module', mtype='C',
+        Module(name='CC module',
+               module_type='input',
                hardware_type=Module.HardwareType.PHYSICAL,
                inputs=[]),
-        Module(name='CC emulated input module', mtype='I', is_can=True,
+        Module(name='CC emulated input module',
+               module_type='input', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                inputs=[Input(input_id=24, tester_output_id=16),
                        Input(input_id=25, tester_output_id=17),
@@ -298,10 +313,12 @@ INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 _TEMPERATURE_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [],
     TestPlatform.DEBIAN: [
-        Module(name='temperature module', mtype='T',
+        Module(name='temperature module',
+               module_type='temperature',
                hardware_type=Module.HardwareType.PHYSICAL,
                temps=[]),
-        Module(name='CC emulated temperature module', mtype='T', is_can=True,
+        Module(name='CC emulated temperature module',
+               module_type='temperature', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                temps=[]),
     ],
@@ -313,7 +330,8 @@ _ENERGY_MODULE_LAYOUTS = {
         # TODO: Add energy module to the Core+
     ],
     TestPlatform.DEBIAN: [
-        Module(name='energy_module', mtype='E',
+        Module(name='energy_module',
+               module_type='energy',
                hardware_type=Module.HardwareType.PHYSICAL,
                cts=[CT(module_id=2, ct_id=0),
                     CT(module_id=2, ct_id=1),

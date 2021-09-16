@@ -162,8 +162,12 @@ def test_factory_reset(toolbox, authorized_mode, factory_reset):
 
     data = toolbox.dut.get('/get_modules_information')
     modules = list(data['modules']['master'].values())
-    assert 'O' in set(x['type'] for x in modules)
-    assert 'I' in set(x['type'] for x in modules)
-    assert 'R' in set(x['type'] for x in modules)
+    assert 'output' in set(x['module_type'] for x in modules)
+    assert 'input' in set(x['module_type'] for x in modules)
+    assert 'shutter' in set(x['module_type'] for x in modules)
     # Filter out CAN inputs since those are expected to not have a firmware version.
-    assert None not in [x['firmware'] for x in modules if x['type'] in {'I', 'O', 'R', 'D', 'T'} and not x.get('is_can', False)]
+    assert None not in [x['firmware_version'] for x in modules
+                        if x['module_type'] in ['input', 'output',
+                                                'shutter', 'dim_control',
+                                                'temperature']
+                        and x['hardware_type'] != 'emulated']
