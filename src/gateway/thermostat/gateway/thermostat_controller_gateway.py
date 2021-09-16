@@ -466,16 +466,14 @@ class ThermostatControllerGateway(ThermostatController):
         pump = Pump.get(number=pump_group_id)
         return PumpGroupDTO(id=pump_group_id,
                             pump_output_id=pump.output.number,
-                            valve_output_ids=[valve.output.number for valve in pump.heating_valves],
-                            room_id=None)
+                            valve_output_ids=[valve.output.number for valve in pump.heating_valves])
 
     def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
         pump_groups = []
         for pump in Pump.select():
             pump_groups.append(PumpGroupDTO(id=pump.id,
                                             pump_output_id=pump.output.number,
-                                            valve_output_ids=[valve.output.number for valve in pump.heating_valves],
-                                            room_id=None))
+                                            valve_output_ids=[valve.output.number for valve in pump.heating_valves]))
         return pump_groups
 
     def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
@@ -485,16 +483,14 @@ class ThermostatControllerGateway(ThermostatController):
         pump = Pump.get(number=pump_group_id)
         return PumpGroupDTO(id=pump_group_id,
                             pump_output_id=pump.output.number,
-                            valve_output_ids=[valve.output.number for valve in pump.cooling_valves],
-                            room_id=None)
+                            valve_output_ids=[valve.output.number for valve in pump.cooling_valves])
 
     def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]
         pump_groups = []
         for pump in Pump.select():
             pump_groups.append(PumpGroupDTO(id=pump.id,
                                             pump_output_id=pump.output.number,
-                                            valve_output_ids=[valve.output.number for valve in pump.cooling_valves],
-                                            room_id=None))
+                                            valve_output_ids=[valve.output.number for valve in pump.cooling_valves]))
         return pump_groups
 
     def save_cooling_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
@@ -503,9 +499,9 @@ class ThermostatControllerGateway(ThermostatController):
     def _save_pump_groups(self, mode, pump_groups):  # type: (str, List[PumpGroupDTO]) -> None
         for pump_group_dto in pump_groups:
             if 'pump_output_id' in pump_group_dto.loaded_fields and 'valve_output_ids' in pump_group_dto.loaded_fields:
-                valve_output_ids = pump_group_dto.valve_output_ids
                 pump = Pump.get(id=pump_group_dto.id)  # type: Pump
                 pump.output = Output.get(number=pump_group_dto.pump_output_id)
+                pump.save()
 
                 links = {pump_to_valve.valve.output.number: pump_to_valve
                          for pump_to_valve
@@ -517,12 +513,12 @@ class ThermostatControllerGateway(ThermostatController):
                                        .where((ValveToThermostat.mode == mode) &
                                               (Pump.id == pump.id))}
                 for output_id in list(links.keys()):
-                    if output_id not in valve_output_ids:
+                    if output_id not in pump_group_dto.valve_output_ids:
                         pump_to_valve = links.pop(output_id)  # type: PumpToValve
                         pump_to_valve.delete_instance()
                     else:
-                        valve_output_ids.remove(output_id)
-                for output_id in valve_output_ids:
+                        pump_group_dto.valve_output_ids.remove(output_id)
+                for output_id in pump_group_dto.valve_output_ids:
                     output = Output.get(number=output_id)
                     valve = Valve.get_or_none(output=output)
                     if valve is None:
