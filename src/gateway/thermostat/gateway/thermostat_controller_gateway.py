@@ -35,7 +35,7 @@ from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Dict, List, Literal, Optional
+    from typing import Dict, List, Literal, Optional, Tuple
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
 
@@ -498,35 +498,44 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _save_pump_groups(self, mode, pump_groups):  # type: (str, List[PumpGroupDTO]) -> None
         for pump_group_dto in pump_groups:
-            if 'pump_output_id' in pump_group_dto.loaded_fields and 'valve_output_ids' in pump_group_dto.loaded_fields:
+            if 'pump_output_id' not in pump_group_dto.loaded_fields:
                 pump = Pump.get(id=pump_group_dto.id)  # type: Pump
-                pump.output = Output.get(number=pump_group_dto.pump_output_id)
-                pump.save()
+            if pump_group_dto.pump_output_id is None:
+                Pump.delete().where(Pump.id == pump_group_dto.id).execute()
+                continue
+            output = None if pump_group_dto.pump_output_id is None else \
+                Output.get(number=pump_group_dto.pump_output_id)
+            pump, _ = Pump.get_or_create(id=pump_group_dto.id,
+                                         defaults={'name': ''})
+            pump.output = output
+            pump.save()
 
-                links = {pump_to_valve.valve.output.number: pump_to_valve
-                         for pump_to_valve
-                         in PumpToValve.select(PumpToValve, Pump, Valve, Output)
-                                       .join_from(PumpToValve, Valve)
-                                       .join_from(PumpToValve, Pump)
-                                       .join_from(Valve, Output)
-                                       .join_from(Valve, ValveToThermostat)
-                                       .where((ValveToThermostat.mode == mode) &
-                                              (Pump.id == pump.id))}
-                for output_id in list(links.keys()):
-                    if output_id not in pump_group_dto.valve_output_ids:
-                        pump_to_valve = links.pop(output_id)  # type: PumpToValve
-                        pump_to_valve.delete_instance()
-                    else:
-                        pump_group_dto.valve_output_ids.remove(output_id)
-                for output_id in pump_group_dto.valve_output_ids:
-                    output = Output.get(number=output_id)
-                    valve = Valve.get_or_none(output=output)
-                    if valve is None:
-                        valve = Valve(name=output.name,
-                                      output=output)
-                        valve.save()
-                    PumpToValve.create(pump=pump,
-                                       valve=valve)
+            if 'valve_output_ids' not in pump_group_dto.loaded_fields:
+                continue
+            links = {pump_to_valve.valve.output.number: pump_to_valve
+                     for pump_to_valve
+                     in PumpToValve.select(PumpToValve, Pump, Valve, Output)
+                                   .join_from(PumpToValve, Valve)
+                                   .join_from(PumpToValve, Pump)
+                                   .join_from(Valve, Output)
+                                   .join_from(Valve, ValveToThermostat)
+                                   .where((Pump.id == pump.id) &
+                                          (ValveToThermostat.mode == mode))}
+            for output_id in list(links.keys()):
+                if output_id not in pump_group_dto.valve_output_ids:
+                    pump_to_valve = links.pop(output_id)  # type: PumpToValve
+                    pump_to_valve.delete_instance()
+                else:
+                    pump_group_dto.valve_output_ids.remove(output_id)
+            for output_id in pump_group_dto.valve_output_ids:
+                output = Output.get(number=output_id)
+                valve = Valve.get_or_none(output=output)
+                if valve is None:
+                    valve = Valve(name=output.name,
+                                  output=output)
+                    valve.save()
+                PumpToValve.create(pump=pump,
+                                   valve=valve)
         self._thermostat_config_changed()
 
     def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
