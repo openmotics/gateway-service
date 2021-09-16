@@ -65,7 +65,7 @@ class Output(object):
 
     def __str__(self):
         return 'Output({0}#{1})'.format(
-            '?' if self.module is None else self.module.mtype,
+            '?' if self.module is None else self.module.module_type,
             self.output_id
         )
 
@@ -82,7 +82,7 @@ class Shutter(object):
 
     def __str__(self):
         return 'Shutter({0}#{1})'.format(
-            '?' if self.module is None else self.module.mtype,
+            '?' if self.module is None else self.module.module_type,
             self.shutter_id
         )
 
@@ -99,7 +99,7 @@ class Input(object):
 
     def __str__(self):
         return 'Input({0}#{1}{2})'.format(
-            '?' if self.module is None else self.module.mtype,
+            '?' if self.module is None else self.module.module_type,
             self.input_id,
             ', ucan' if self.module.is_can else ''
         )
@@ -116,7 +116,7 @@ class CT(object):
 
     def __str__(self):
         return 'CT({0}#{1}.{2})'.format(
-            '?' if self.module is None else self.module.mtype,
+            '?' if self.module is None else self.module.module_type,
             self.module_id, self.ct_id
         )
 
