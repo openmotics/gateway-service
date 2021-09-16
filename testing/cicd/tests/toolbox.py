@@ -341,7 +341,7 @@ class Toolbox(object):
 
     def count_modules(self, source):
         modules = {}
-        for address, info in self.list_modules()[source].items():
+        for address, info in self.list_modules().get(source, {}).items():
             if info['module_type'] not in modules:
                 modules[info['module_type']] = 0
             modules[info['module_type']] += 1
@@ -351,7 +351,7 @@ class Toolbox(object):
         # type: (str, int) -> List[Dict[str, Any]]
         data = self.list_modules()
         modules = []
-        for address, info in data['master'].items():
+        for address, info in data.get('master', {}).items():
             if info['module_type'] != module_type:
                 continue
             modules.append(info)
@@ -362,7 +362,7 @@ class Toolbox(object):
         # type: (str, int) -> List[Dict[str, Any]]
         data = self.list_modules()
         modules = []
-        for address, info in data['gateway'].items():
+        for address, info in data.get('gateway', {}).items():
             if info['module_type'] != module_type or not info['firmware_version']:
                 continue
             modules.append(info)
