@@ -19,7 +19,7 @@ import logging
 
 from gateway.events import EsafeEvent, EventError
 from gateway.exceptions import ItemDoesNotExistException, StateException
-from gateway.models import Apartment
+from gateway.models import Apartment, Database
 from gateway.mappers import ApartmentMapper
 from gateway.dto import ApartmentDTO
 from gateway.pubsub import PubSub
@@ -120,17 +120,43 @@ class ApartmentController(object):
         if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
             raise RuntimeError('cannot update an apartment without the id being set')
         try:
-            apartment_orm = Apartment.select().where(Apartment.id == apartment_dto.id).first()
+            apartment_orm = Apartment.get_by_id(apartment_dto.id)
+            loaded_apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
             for field in apartment_dto.loaded_fields:
                 if field == 'id':
                     continue
-                if hasattr(apartment_orm, field):
-                    setattr(apartment_orm, field, getattr(apartment_dto, field))
+                if hasattr(apartment_dto, field):
+                    setattr(loaded_apartment_dto, field, getattr(apartment_dto, field))
+            apartment_orm = ApartmentMapper.dto_to_orm(loaded_apartment_dto)
             apartment_orm.save()
             ApartmentController.send_config_change_event('update')
         except Exception as e:
             raise RuntimeError('Could not update the user: {}'.format(e))
         return ApartmentController.load_apartment(apartment_dto.id)
+
+    def update_apartments(self, apartment_dtos):
+        # type: (List[ApartmentDTO]) -> Optional[List[ApartmentDTO]]
+        apartments = []
+        with Database.get_db().transaction() as transaction:
+            try:
+                # First clear all the rebus fields in order to be able to swap 2 fields
+                for apartment in apartment_dtos:
+                    apartment_orm = Apartment.get_by_id(apartment.id)  # type: Apartment
+                    if 'mailbox_rebus_id' in apartment.loaded_fields:
+                        apartment_orm.mailbox_rebus_id = None
+                    if 'doorbell_rebus_id' in apartment.loaded_fields:
+                        apartment_orm.doorbell_rebus_id = None
+                    apartment_orm.save()
+                for apartment in apartment_dtos:
+                    updated = self.update_apartment(apartment)
+                    if updated is not None:
+                        apartments.append(updated)
+            except Exception as ex:
+                logger.error('Could not update apartments: {}: {}'.format(type(ex).__name__, ex))
+                transaction.rollback()
+                return None
+        return apartments
+
 
     @staticmethod
     def delete_apartment(apartment_dto):

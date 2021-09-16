@@ -415,8 +415,8 @@ class DaySchedule(BaseModel):
 class Apartment(BaseModel):
     id: MixedPrimaryKeyField
     name: MixedCharField
-    mailbox_rebus_id: MixedIntegerField
-    doorbell_rebus_id: MixedIntegerField
+    mailbox_rebus_id: Optional[MixedIntegerField]
+    doorbell_rebus_id: Optional[MixedIntegerField]
 
 class ApartmentForeignKeyField(Apartment, ForeignKeyField): ...
 
