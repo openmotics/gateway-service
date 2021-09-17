@@ -25,7 +25,7 @@ from gateway.dto import DimmerConfigurationDTO, EnergyModuleDTO, \
     LegacyScheduleDTO, LegacyStartupActionDTO, ModuleDTO, OutputStatusDTO, \
     ScheduleDTO, SensorDTO, SensorSourceDTO, SensorStatusDTO, ThermostatDTO, \
     ThermostatGroupDTO, ThermostatStatusDTO, UserDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO
+    VentilationSourceDTO, VentilationStatusDTO, PumpGroupDTO
 from gateway.energy_module_controller import EnergyModuleController
 from gateway.enums import HardwareType, ModuleType
 from gateway.group_action_controller import GroupActionController
@@ -285,6 +285,42 @@ class WebInterfaceTest(unittest.TestCase):
                                                        threshold_temperature=24.0,
                                                        switch_to_heating_0=[8, 100],
                                                        switch_to_cooling_0=None))
+
+    def test_get_pump_group_configurations(self):
+        with mock.patch.object(self.thermostat_controller, 'load_heating_pump_groups',
+                               return_value=[PumpGroupDTO(0,
+                                                          pump_output_id=1,
+                                                          valve_output_ids=[8, 9, 10])]):
+            response = self.web.get_pump_group_configurations()
+            self.assertIn({
+                'id': 0,
+                'output': 1,
+                'outputs': '8,9,10',
+                'room': 255
+            }, json.loads(response)['config'])
+            self.assertIn({
+                'id': 1,
+                'output': 255,
+                'outputs': '',
+                'room': 255
+            }, json.loads(response)['config'])
+            self.assertEqual(len(json.loads(response)['config']), 8)
+
+    def test_set_pump_group_configurations(self):
+        with mock.patch.object(self.thermostat_controller, 'save_heating_pump_groups',
+                               return_value=None) as save:
+            response = self.web.set_pump_group_configurations([
+                {'id': 0,
+                 'output': 1,
+                 'outputs': '8,9,10'},
+                {'id': 1,
+                 'output': 255,
+                 'outputs': ''}
+            ])
+            save.assert_called_with([
+                PumpGroupDTO(0, pump_output_id=1, valve_output_ids=[8, 9, 10]),
+                PumpGroupDTO(0, pump_output_id=None, valve_output_ids=[])
+            ])
 
     def test_ventilation_configurations(self):
         with mock.patch.object(self.ventilation_controller, 'load_ventilations',

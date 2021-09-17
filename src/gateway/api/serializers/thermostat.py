@@ -194,5 +194,8 @@ class PumpGroupSerializer(object):
                      'rooom': ('room_id', PumpGroupSerializer.BYTE_MAX)}
         )
         if 'outputs' in api_data:
-            pump_group_dto.valve_output_ids = [int(output_id) for output_id in api_data['outputs'].split(',')]
+            if api_data['outputs'] == '':
+                pump_group_dto.valve_output_ids = []
+            else:
+                pump_group_dto.valve_output_ids = [int(output_id) for output_id in api_data['outputs'].split(',')]
         return pump_group_dto
