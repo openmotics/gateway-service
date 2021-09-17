@@ -161,7 +161,7 @@ def test_factory_reset(toolbox, authorized_mode, factory_reset):
     assert ['S'] == data['shutters']
 
     data = toolbox.dut.get('/get_modules_information')
-    modules = list(data['modules']['master'].values())
+    modules = list(data['modules'].get('master', {}).values())
     assert 'output' in set(x['module_type'] for x in modules)
     assert 'input' in set(x['module_type'] for x in modules)
     assert 'shutter' in set(x['module_type'] for x in modules)

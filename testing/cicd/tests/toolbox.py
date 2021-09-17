@@ -461,7 +461,7 @@ class Toolbox(object):
 
         while since > time.time() - timeout:
             data = self.dut.get('/get_modules_information')
-            synced_addresses = set(data['modules']['master'].keys())
+            synced_addresses = set(data['modules'].get('master', {}).keys())
             if new_module_addresses.issubset(synced_addresses):
                 return True
         raise AssertionError('Did not discover required modules')
@@ -474,8 +474,8 @@ class Toolbox(object):
         def _get_current_virtual_modules():
             virtual_modules = {}
             data = self.dut.get('/get_modules_information')
-            for entry in data['modules']['master'].values():
-                if entry['is_virtual']:
+            for entry in data['modules'].get('master', {}).values():
+                if entry['hardware_type'] == 'virtual':
                     virtual_modules.setdefault(entry['type'], set()).add(entry['address'])
             return virtual_modules
         previous_virtual_modules = _get_current_virtual_modules()
