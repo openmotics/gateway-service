@@ -18,9 +18,9 @@ import unittest
 import mock
 import xmlrunner
 
-import master.core.core_communicator
-from ioc import SetTestMode, SetUpTestInjections
-from master.core.core_communicator import Consumer, CoreCommunicator
+from ioc import SetTestMode
+from master.core.core_communicator import CoreCommunicator
+from master.core.core_api import CoreAPI
 
 
 class CoreCommunicatorTest(unittest.TestCase):
@@ -31,7 +31,7 @@ class CoreCommunicatorTest(unittest.TestCase):
     def test_do_command_exception_discard_cid(self):
         communicator = CoreCommunicator(controller_serial=mock.Mock())
         with mock.patch.object(communicator, 'discard_cid') as discard:
-            self.assertRaises(AttributeError, communicator.do_command, None, {})
+            self.assertRaises(ValueError, communicator.do_command, CoreAPI.basic_action(), {})
             discard.assert_called_with(3)
 
 

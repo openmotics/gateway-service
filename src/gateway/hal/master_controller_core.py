@@ -1036,8 +1036,10 @@ class MasterCoreController(MasterController):
             return value if value != 255 else default
 
         self._firmware_versions = {}
+        logger.info('Requesting firmware version for RS485 slaves')
         self._execute(command=CoreAPI.request_slave_firmware_versions(),
                       fields={})
+        logger.info('Requesting firmware version for uCANs')
         self._execute(command=CoreAPI.request_ucan_module_information(),
                       fields={})
 

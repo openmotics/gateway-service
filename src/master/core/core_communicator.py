@@ -219,12 +219,14 @@ class CoreCommunicator(object):
         :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
         """
         cid = self._get_cid()
-        consumer = Consumer(command, cid)
-        command = consumer.command
+        consumer = None  # type: Optional[Consumer]
+        if command.expects_response:
+            consumer = Consumer(command, cid)
 
         try:
             self._command_total_histogram.update({str(command.instruction): 1})
-            self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
+            if consumer is not None:
+                self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
             self._send_command(cid, command, fields)
         except Exception:
             self.discard_cid(cid)
@@ -232,7 +234,7 @@ class CoreCommunicator(object):
 
         try:
             result = None  # type: Any
-            if isinstance(consumer, Consumer) and timeout is not None:
+            if consumer is not None and isinstance(consumer, Consumer) and timeout is not None:
                 result = consumer.get(timeout)
             self._last_success = time.time()
             self._communication_stats['calls_succeeded'].append(time.time())
@@ -240,7 +242,8 @@ class CoreCommunicator(object):
             self._command_success_histogram.update({str(command.instruction): 1})
             return result
         except CommunicationTimedOutException:
-            self.unregister_consumer(consumer)
+            if consumer is not None:
+                self.unregister_consumer(consumer)
             self._communication_stats['calls_timedout'].append(time.time())
             self._communication_stats['calls_timedout'] = self._communication_stats['calls_timedout'][-50:]
             self._command_timeout_histogram.update({str(command.instruction): 1})
