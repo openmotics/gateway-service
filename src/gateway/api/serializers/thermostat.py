@@ -158,9 +158,6 @@ class ThermostatGroupStatusSerializer(object):
                             'mode': status.mode,
                             'automatic': status.automatic,
                             'setpoint': status.setpoint,
-                            'name': status.name,
-                            'sensor_nr': status.sensor_id,
-                            'airco': status.airco,
                             'output0': status.output_0_level,
                             'output1': status.output_1_level}
                            for status in thermostat_group_status_dto.statusses]}
