@@ -235,6 +235,8 @@ class ThermostatMapper(object):
         for field, preset_type in [('setp3', Preset.Types.AWAY),
                                    ('setp4', Preset.Types.VACATION),
                                    ('setp5', Preset.Types.PARTY)]:
+            if field not in thermostat_dto.loaded_fields:
+                continue
             if preset_type not in presets:
                 # Create default presets
                 preset = Preset(type=preset_type, thermostat=thermostat)
@@ -245,14 +247,13 @@ class ThermostatMapper(object):
                 if preset_type == Preset.Types.AUTO:
                     preset.active = True
                 preset.save()
-            if field not in thermostat_dto.loaded_fields:
-                continue
+            else:
+                preset = presets[preset_type]
             dto_data = getattr(thermostat_dto, field)
             try:
                 preset_value = float(dto_data)
             except (ValueError, TypeError):
                 continue
-            preset = presets[preset_type]
             setattr(preset, '{0}_setpoint'.format(mode), preset_value)
             preset.active = False
             preset.save()
