@@ -54,6 +54,9 @@ class ThermostatMapper(object):
             logger.warning('Only 2 outputs are supported in the old format. Total: {0} outputs.'.format(number_of_outputs))
 
         # Presets
+        dto.setp3 = Preset.DEFAULT_PRESETS[mode][Preset.Types.AWAY]
+        dto.setp4 = Preset.DEFAULT_PRESETS[mode][Preset.Types.VACATION]
+        dto.setp5 = Preset.DEFAULT_PRESETS[mode][Preset.Types.PARTY]
         for preset in orm_object.presets:
             setpoint = getattr(preset, '{0}_setpoint'.format(mode))
             if preset.type == Preset.Types.AWAY:
