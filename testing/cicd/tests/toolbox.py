@@ -270,10 +270,10 @@ class Toolbox(object):
         logger.info('Expected modules: {0}'.format(expected_modules))
 
         missing_modules = set()
-        modules = self.count_modules('master')
-        logger.info('Current modules: {0}'.format(modules))
+        modules = self.count_modules(source='master')
+        logger.info('Initial modules: {0}'.format(modules))
         for module_type, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-            if modules.get(module_type, 0) == 0:
+            if modules[Module.HardwareType.PHYSICAL].get(module_type, 0) == 0:
                 missing_modules.add(module_type)
         if missing_modules:
             logger.info('Discovering modules...')
@@ -286,16 +286,18 @@ class Toolbox(object):
                                   ucans='ucan' in missing_modules)
 
         modules = self.count_modules('master')
-        logger.info('Discovered modules: {0}'.format(modules))
+        logger.info('Post-discovery modules: {0}'.format(modules))
         for module_type in set(list(expected_modules[Module.HardwareType.PHYSICAL].keys()) +
                                list(expected_modules[Module.HardwareType.INTERNAL].keys())):
             expected_amount = (expected_modules[Module.HardwareType.PHYSICAL].get(module_type, 0) +
                                expected_modules[Module.HardwareType.INTERNAL].get(module_type, 0))
-            assert modules.get(module_type, 0) >= expected_amount, 'Expected {0} modules {1}'.format(expected_amount, module_type)
+            actual_amount = (modules[Module.HardwareType.PHYSICAL].get(module_type, 0) +
+                             modules[Module.HardwareType.INTERNAL].get(module_type, 0))
+            assert actual_amount >= expected_amount, 'Expected {0} modules {1}'.format(expected_amount, module_type)
 
         try:
             for module_type, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-                assert modules.get(module_type, 0) >= expected_amount
+                assert modules[Module.HardwareType.VIRTUAL].get(module_type, 0) >= expected_amount
         except Exception:
             logger.info('Adding virtual modules...')
             for module_type, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
@@ -304,9 +306,9 @@ class Toolbox(object):
                 self.add_virtual_modules(module_amounts={module_type: extra_needed_amount})
 
         modules = self.count_modules('master')
-        logger.info('Virtual modules: {0}'.format(modules))
+        logger.info('Post add virtual modules: {0}'.format(modules))
         for module_type, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-            assert modules.get(module_type, 0) >= expected_amount
+            assert modules[Module.HardwareType.VIRTUAL].get(module_type, 0) >= expected_amount
 
         # TODO ensure discovery synchonization finished.
         for module in OUTPUT_MODULE_LAYOUT:
@@ -335,34 +337,29 @@ class Toolbox(object):
         params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm, 'can': False}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
-    def list_modules(self):
+    def list_modules(self, source):
         # type: () -> Dict[str, Any]
-        return self.dut.get('/get_modules_information')['modules']
+        return self.dut.get('/get_modules_information')['modules'].get(source, {})
 
     def count_modules(self, source):
-        modules = {}
-        for address, info in self.list_modules().get(source, {}).items():
-            if info['module_type'] not in modules:
-                modules[info['module_type']] = 0
-            modules[info['module_type']] += 1
-        return modules
-
-    def assert_modules(self, module_type, min_modules=1):
-        # type: (str, int) -> List[Dict[str, Any]]
-        data = self.list_modules()
-        modules = []
-        for address, info in data.get('master', {}).items():
-            if info['module_type'] != module_type:
-                continue
-            modules.append(info)
-        assert len(modules) >= min_modules, 'Not enough modules of type \'{}\' available in {}'.format(module_type, data)
-        return modules
+        modules = self.list_modules(source=source)
+        counts = {Module.HardwareType.VIRTUAL: {},
+                  Module.HardwareType.PHYSICAL: {},
+                  Module.HardwareType.INTERNAL: {},
+                  Module.HardwareType.EMULATED: {}}
+        for module in modules.values():
+            hardware_type = module['hardware_type']
+            module_type = module['module_type']
+            if module_type not in counts[hardware_type]:
+                counts[hardware_type][module_type] = 0
+            counts[hardware_type][module_type] += 1
+        return counts
 
     def list_energy_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str, Any]]
-        data = self.list_modules()
+        data = self.list_modules(source='gateway')
         modules = []
-        for address, info in data.get('gateway', {}).items():
+        for address, info in data.items():
             if info['module_type'] != module_type or not info['firmware_version']:
                 continue
             modules.append(info)
