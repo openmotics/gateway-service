@@ -147,16 +147,21 @@ class EnergyModuleController(BaseController):
             return 0
         return self._energy_communicator.get_seconds_since_last_success()
 
-    def scan_bus(self):  # type: () -> Generator[Tuple[str, int, Tuple[str, Optional[str]]], None, None]
+    def scan_bus(self):  # type: () -> Generator[Tuple[str, int, str, Optional[str], None, None]
         if not self._enabled:
             return
         for address in range(256):
+            if address < 250:
+                continue
             for module_type, version in {'E/P': EnergyEnums.Version.ENERGY_MODULE,
                                          'C': EnergyEnums.Version.P1_CONCENTRATOR}.items():
                 try:
-                    yield module_type, address, self._energy_module_updater.get_module_firmware_version(address, version)
-                except Exception:
-                    pass
+                    firmware_version, hardware_version = self._energy_module_updater.get_module_firmware_version(address, version)
+                    yield module_type, address, firmware_version, hardware_version
+                except CommunicationTimedOutException:
+                    pass  # Expected
+                except Exception as ex:
+                    logger.error('Error scanning address {0} {1}: {2}'.format(module_type, address, ex))
 
     def update_module(self, module_version, module_address, firmware_filename, firmware_version):
         if not self._enabled:

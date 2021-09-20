@@ -45,8 +45,12 @@ class EnergyModuleUpdater(object):
     def get_module_firmware_version(self, module_address, module_version):  # type: (int, int) -> Tuple[str, Optional[str]]
         raw_version = self._energy_communicator.do_command(module_address, EnergyAPI.get_version(module_version))
         if module_version == EnergyEnums.Version.P1_CONCENTRATOR:
+            if len(raw_version) != 4:
+                raise RuntimeError('Unexpected response: {0}'.format(raw_version))
             return '{0}.{1}.{2}'.format(raw_version[1], raw_version[2], raw_version[3]), str(raw_version[0])
         else:
+            if len(raw_version) != 1:
+                raise RuntimeError('Unexpected response: {0}'.format(raw_version))
             cleaned_version = raw_version[0].split('\x00', 1)[0]
             parsed_version = cleaned_version.split('_')
             if len(parsed_version) != 4:

@@ -408,9 +408,11 @@ def setup_minimal_energy_platform():
     if energy_serial_port:
         Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
         Injectable.value(energy_communicator=EnergyCommunicator())
+        Injectable.value(energy_module_updater=EnergyModuleUpdater())
     else:
         Injectable.value(energy_communicator=None)
         Injectable.value(energy_serial=None)
+        Injectable.value(energy_module_updater=None)
     Injectable.value(master_controller=None)
     Injectable.value(maintenance_communicator=None)
     Injectable.value(maintenance_controller=None)
