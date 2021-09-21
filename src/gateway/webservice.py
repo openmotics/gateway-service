@@ -1566,8 +1566,12 @@ class WebInterface(object):
         Get all cooling pump_group_configurations.
         :param fields: The field of the cooling pump_group_configuration to get, None if all
         """
-        return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
-                           for pump_group in self._thermostat_controller.load_cooling_pump_groups()]}
+        config = []  # type: List[Dict[str, Any]]
+        pump_group_dtos = {x.id: x for x in self._thermostat_controller.load_cooling_pump_groups()}
+        for pump_group_id in set(list(pump_group_dtos.keys()) + list(range(8))):
+            pump_group_dto = pump_group_dtos.get(pump_group_id, PumpGroupDTO(pump_group_id))
+            config.append(PumpGroupSerializer.serialize(pump_group_dto, fields=fields))
+        return {'config': config}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_cooling_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
