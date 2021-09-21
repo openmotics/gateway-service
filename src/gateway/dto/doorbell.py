@@ -19,6 +19,7 @@ Doorbell DTO
 from gateway.dto.base import BaseDTO
 
 if False:  # mypy
+    from typing import Optional
     from gateway.dto.apartment import ApartmentDTO
 
 class DoorbellDTO(BaseDTO):
@@ -26,4 +27,4 @@ class DoorbellDTO(BaseDTO):
     def __init__(self, id=None, label=None, apartment=None):
         self.id = id  # type: int
         self.label = label  # type: str
-        self.apartment = apartment  # type: ApartmentDTO
+        self.apartment = apartment  # type: Optional[ApartmentDTO]
