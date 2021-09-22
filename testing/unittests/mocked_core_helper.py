@@ -73,7 +73,7 @@ class MockedCore(object):
         elif instruction == 'BA':
             if fields['type'] == 200 and fields['action'] == 1:
                 # Send EEPROM_ACTIVATE event
-                self.memory_file._handle_event({'type': 248, 'action': 0, 'device_nr': 0, 'data': bytearray([0, 0])})
+                self.memory_file._handle_event({'type': 248, 'action': 0, 'device_nr': 0, 'data': bytearray([1, 0])})
         elif instruction in self.return_data:
             return self.return_data[instruction]
         else:

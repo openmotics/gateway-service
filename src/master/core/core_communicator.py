@@ -24,24 +24,29 @@ import select
 import struct
 import time
 import six
-from threading import Lock
+from threading import Lock, Event, Timer
 from collections import Counter
 from six.moves.queue import Empty, Queue
 from gateway.daemon_thread import BaseThread
+from gateway.exceptions import MasterUnavailable
 from ioc import INJECTED, Inject
-from master.core.core_api import CoreAPI
 from master.core.core_command import CoreCommandSpec
 from master.core.fields import WordField
 from master.core.toolbox import Toolbox
 from serial_utils import CommunicationTimedOutException, Printable
 
 if False:  # MYPY
-    from master.core.basic_action import BasicAction
     from typing import Dict, Any, Optional, TypeVar, Union, Callable, Set, List
     from serial import Serial
     T_co = TypeVar('T_co', bound=None, covariant=True)
 
 logger = logging.getLogger(__name__)
+
+
+class CommunicationBlocker(object):
+    RESTART = 'RESTART'
+    UPDATE = 'UPDATE'
+    VERSION_SCAN = 'VERSION_SCAN'
 
 
 class CoreCommunicator(object):
@@ -55,6 +60,17 @@ class CoreCommunicator(object):
     END_OF_REQUEST = bytearray(b'\r\n\r\n')
     START_OF_REPLY = bytearray(b'RTR')
     END_OF_REPLY = bytearray(b'\r\n')
+
+    BLOCKER_TIMEOUTS = {CommunicationBlocker.RESTART: 15.0,
+                        CommunicationBlocker.UPDATE: 600.0,
+                        CommunicationBlocker.VERSION_SCAN: 5.0}
+    BLOCKER_ABORT = [CommunicationBlocker.UPDATE]
+    BLOCKER_REASONS = {CommunicationBlocker.RESTART: 'Master restart',
+                       CommunicationBlocker.UPDATE: 'Master update',
+                       CommunicationBlocker.VERSION_SCAN: 'Version scan'}
+    BLOCKERS = [CommunicationBlocker.RESTART,
+                CommunicationBlocker.UPDATE,
+                CommunicationBlocker.VERSION_SCAN]
 
     @Inject
     def __init__(self, controller_serial=INJECTED):
@@ -86,6 +102,12 @@ class CoreCommunicator(object):
         self._debug_buffer = {'read': {},
                               'write': {}}  # type: Dict[str, Dict[float, bytearray]]
         self._debug_buffer_duration = 300
+
+        self._blockages = {}  # type: Dict[str, Dict[str, Any]]
+        for blocker in CoreCommunicator.BLOCKERS:
+            event = Event()
+            event.set()
+            self._blockages[blocker] = {'timer': None, 'event': event}
 
     def start(self):
         """ Start the CoreComunicator, this starts the background read thread. """
@@ -136,6 +158,34 @@ class CoreCommunicator(object):
             return 0.0  # No communication - return 0 sec since last success
         else:
             return time.time() - self._last_success
+
+    def report_blockage(self, blocker, active):
+        if blocker not in CoreCommunicator.BLOCKERS:
+            return
+
+        reason = CoreCommunicator.BLOCKER_REASONS[blocker]
+        timeout = CoreCommunicator.BLOCKER_TIMEOUTS[blocker] + 1.0
+        timer = self._blockages[blocker]['timer']  # type: Timer
+        event = self._blockages[blocker]['event']  # type: Event
+
+        def _timeout_release():
+            logger.warning('{0} holding window expired, releasing'.format(reason))
+            self.report_blockage(blocker=blocker, active=False)
+
+        if active:
+            logger.warning('{0} announced, holding further communications'.format(reason))
+            event.clear()
+            if timer is not None:
+                timer.cancel()
+            timer = Timer(timeout, _timeout_release)
+            timer.start()
+            self._blockages[blocker]['timer'] = timer
+        else:
+            if not event.is_set():
+                logger.info('{0} cleared, releasing held communications'.format(reason))
+            event.set()
+            if timer is not None:
+                timer.cancel()
 
     def _get_cid(self):  # type: () -> int
         """ Get a communication id. 0 and 1 are reserved. """
@@ -208,8 +258,8 @@ class CoreCommunicator(object):
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
 
-    def do_command(self, command, fields, timeout=2):
-        # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
+    def do_command(self, command, fields, timeout=2, bypass_blockers=None):
+        # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int], Optional[List]) -> Union[T_co, Dict[str, Any]]
         """
         Send a command over the serial port and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
@@ -217,7 +267,25 @@ class CoreCommunicator(object):
         :param command: specification of the command to execute
         :param fields: A dictionary with the command input field values
         :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
+        :param bypass_blockers: Indicate which blockers can be bypassed
         """
+        for blocker in CoreCommunicator.BLOCKERS:
+            event = self._blockages[blocker]['event']
+            reason = CoreCommunicator.BLOCKER_REASONS[blocker]
+            if bypass_blockers is not None and blocker in bypass_blockers:
+                if not event.is_set():
+                    logger.info('{0} active, but bypass allowed'.format(reason))
+                continue
+            abort = blocker in CoreCommunicator.BLOCKER_ABORT
+            block_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[blocker]
+            if not event.is_set():
+                if abort:
+                    raise MasterUnavailable('{0} in progress'.format(reason))
+                logger.info('{0} active, holding call'.format(reason))
+            if not event.wait(timeout=block_timeout):
+                logger.warning('{0} holding window expired'.format(reason))
+                raise CommunicationTimedOutException()
+
         cid = self._get_cid()
         consumer = None  # type: Optional[Consumer]
         if command.expects_response:

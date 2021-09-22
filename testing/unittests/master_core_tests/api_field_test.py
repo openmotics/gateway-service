@@ -21,6 +21,7 @@ import unittest
 import xmlrunner
 import logging
 from master.core.fields import *
+from master.core.serial_number import SerialNumber
 from logs import Logs
 
 
@@ -30,6 +31,16 @@ class APIFieldsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         Logs.setup_logger(log_level_override=logging.DEBUG)
+
+    # Every test validates a given field instance against a list of scenarios.
+    # A scenario is a list of 2 or 3 values:
+    # * The first value will be a value that will be encoded
+    # * This encoded value will be compared against the second value;
+    #   * This is either an exception that will be raised while encoding
+    #   * Or a bytearray, the encoded value
+    # * This encoded value will be decoded again and will be compared
+    #   * To the third value
+    #   * To the first value, if only 2 values are provided
 
     def test_byte_field(self):
         self._test_field(ByteField('x'), [[-1, ValueError],
@@ -104,6 +115,10 @@ class APIFieldsTest(unittest.TestCase):
                                                   [[0, 0, 256], bytearray([0, 0, 0, 0, 1, 0])],
                                                   [[65536, 0, 0], ValueError],
                                                   [[0, 0], ValueError]])
+
+    def test_serial_number_field(self):
+        self._test_field(SerialNumberField('x'), [['foo', ValueError],
+                                                  [SerialNumber(2021, 9, 1, 0, 65536), bytearray([21, 9, 1, 0, 1, 0, 0])]])
 
     def test_address_field(self):
         self._test_field(AddressField('x'), [['-1.0.0.0', ValueError],

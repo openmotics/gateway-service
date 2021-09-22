@@ -24,7 +24,7 @@ from intelhex import IntelHex
 from ioc import Inject, INJECTED, Singleton, Injectable
 from threading import Event as ThreadingEvent
 from master.core.events import Event as MasterCoreEvent
-from master.core.core_communicator import CoreCommunicator, BackgroundConsumer
+from master.core.core_communicator import CoreCommunicator, BackgroundConsumer, CommunicationBlocker
 from master.core.core_api import CoreAPI
 from master.maintenance_communicator import MaintenanceCommunicator
 from logs import Logs
@@ -81,7 +81,9 @@ class CoreUpdater(object):
 
         current_version = None  # type: Optional[str]
         try:
-            current_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+            current_version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
+                                                                   fields={},
+                                                                   bypass_blockers=[CommunicationBlocker.UPDATE])['version']
             component_logger.info('Current firmware version: {0}'.format(current_version))
         except Exception as ex:
             component_logger.warning('Could not load current firmware version: {0}'.format(ex))
@@ -117,12 +119,21 @@ class CoreUpdater(object):
         component_logger.info('Flashing...')
         amount_lines = len(hex_lines)
         for index, line in enumerate(hex_lines):
-            self._cli_serial.write(bytearray(ord(c) for c in line))
-            response = self._read_line(logger=component_logger)
-            if response.startswith('nok'):
-                raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
-            if not response.startswith('ok'):
-                raise RuntimeError('Unexpected answer while flashing: {0}'.format(response))
+            tries = 0
+            while True:
+                tries += 1
+                try:
+                    self._cli_serial.write(bytearray(ord(c) for c in line))
+                    response = self._read_line(logger=component_logger)
+                    if response.startswith('nok'):
+                        raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
+                    if not response.startswith('ok'):
+                        raise RuntimeError('Unexpected answer while flashing: {0}'.format(response))
+                    break
+                except RuntimeError as ex:
+                    component_logger.warning('Flashing... Line {0}/{1} failed: {2}'.format(index, amount_lines, ex))
+                    if tries >= 3:
+                        raise
             if index % (amount_lines // 10) == 0 and index != 0:
                 component_logger.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
         component_logger.info('Flashing... Done')
@@ -146,7 +157,9 @@ class CoreUpdater(object):
 
         current_version = None
         try:
-            current_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+            current_version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
+                                                                   fields={},
+                                                                   bypass_blockers=[CommunicationBlocker.UPDATE])['version']
             component_logger.info('Post-update firmware version: {0}'.format(current_version))
         except Exception as ex:
             component_logger.warning('Could not load post-update firmware version: {0}'.format(ex))

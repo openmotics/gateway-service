@@ -17,11 +17,12 @@ Module for communicating with the Master
 """
 from __future__ import absolute_import
 
+import copy
 import logging
 import struct
 import time
 from datetime import datetime
-from threading import Timer, Event as ThreadingEvent, Lock
+from threading import Timer, Lock
 
 from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
@@ -33,7 +34,7 @@ from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, HardwareT
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
-from gateway.exceptions import CommunicationFailure, MasterUnavailable
+from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -41,7 +42,8 @@ from ioc import INJECTED, Inject
 from master.core.basic_action import BasicAction
 from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
-from master.core.core_communicator import BackgroundConsumer, CoreCommunicator, CoreCommandSpec
+from master.core.core_communicator import BackgroundConsumer, CoreCommunicator, \
+    CoreCommandSpec, CommunicationBlocker
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.group_action import GroupActionController
@@ -99,13 +101,8 @@ class MasterCoreController(MasterController):
         self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
         self._discovery_log = []  # type: List[Dict[str, Any]]
         self._discovery_log_lock = Lock()
-
-        self._master_restarting = ThreadingEvent()
-        self._master_restarting.set()
-        self._master_restarting_timer = None  # type: Optional[Timer]
-        self._master_updating = ThreadingEvent()
-        self._master_updating.set()
-        self._master_updating_timer = None  # type: Optional[Timer]
+        self._last_health_warning = 0
+        self._last_health_warning_timestamp = 0.0
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
@@ -159,57 +156,72 @@ class MasterCoreController(MasterController):
         self._process_event(MasterCoreEvent(data))
 
     def _process_event(self, core_event):
-        if core_event.type not in [MasterCoreEvent.Types.LED_BLINK,
+        log_event = True
+        try:
+            if core_event.type in [MasterCoreEvent.Types.LED_BLINK,
                                    MasterCoreEvent.Types.LED_ON,
                                    MasterCoreEvent.Types.BUTTON_PRESS]:
-            # Interesting for debug purposes, but not for everything
-            logger.info('Got master event: {0}'.format(core_event))
-        if core_event.type == MasterCoreEvent.Types.OUTPUT:
-            output_id = core_event.data['output']
-            if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
-                # Update internal state cache
-                state_dto = OutputStatusDTO(id=output_id,
-                                            status=core_event.data['status'],
-                                            dimmer=core_event.data['dimmer_value'],
-                                            ctimer=core_event.data['timer'])
-            else:  # elif core_event.data['type'] == MasterCoreEvent.IOEventTypes.LOCKING:
-                state_dto = OutputStatusDTO(id=output_id,
-                                            locked=core_event.data['locked'])
-            self._handle_output_state(output_id, state_dto)
-        elif core_event.type == MasterCoreEvent.Types.INPUT:
-            if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
-                master_event = self._input_state.handle_event(core_event)
-                self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
-            # TODO: Implement input locking
-        elif core_event.type == MasterCoreEvent.Types.SENSOR:
-            sensor_id = core_event.data['sensor']
-            if sensor_id not in self._sensor_states:
-                return
-            for value in core_event.data['values']:
-                master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data={'sensor': sensor_id,
-                                                                                 'type': value['type'],
-                                                                                 'value': value['value']})
-                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
-                self._sensor_states[sensor_id][value['type']] = value['value']
-        elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
-            self._handle_execute_event(action=core_event.data['action'],
-                                       device_nr=core_event.data['device_nr'],
-                                       extra_parameter=core_event.data['extra_parameter'])
-        elif core_event.type == MasterCoreEvent.Types.RESET_ACTION:
-            if core_event.data.get('type') == MasterCoreEvent.ResetTypes.HEALTH_CHECK:
-                self._master_restarting_change(restarting=True)
-        elif core_event.type == MasterCoreEvent.Types.SYSTEM:
-            if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
-                self._master_restarting_change(restarting=False)
-        elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
-            # TODO: Add partial EEPROM invalidation to speed things up
-            address_letter = chr(int(core_event.data['address'].split('.')[0]))
-            entry = {'code': core_event.data['discovery_type'],
-                     'module_nr': 0, 'category': '',  # Legacy, not used anymore
-                     'module_type': address_letter,
-                     'address': core_event.data['address']}
-            with self._discovery_log_lock:
-                self._discovery_log.append(entry)
+                log_event = False
+            if core_event.type == MasterCoreEvent.Types.OUTPUT:
+                output_id = core_event.data['output']
+                if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
+                    # Update internal state cache
+                    state_dto = OutputStatusDTO(id=output_id,
+                                                status=core_event.data['status'],
+                                                dimmer=core_event.data['dimmer_value'],
+                                                ctimer=core_event.data['timer'])
+                else:  # elif core_event.data['type'] == MasterCoreEvent.IOEventTypes.LOCKING:
+                    state_dto = OutputStatusDTO(id=output_id,
+                                                locked=core_event.data['locked'])
+                self._handle_output_state(output_id, state_dto)
+            elif core_event.type == MasterCoreEvent.Types.INPUT:
+                if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
+                    master_event = self._input_state.handle_event(core_event)
+                    self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+                # TODO: Implement input locking
+            elif core_event.type == MasterCoreEvent.Types.SENSOR:
+                sensor_id = core_event.data['sensor']
+                if sensor_id not in self._sensor_states:
+                    return
+                for value in core_event.data['values']:
+                    master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data={'sensor': sensor_id,
+                                                                                     'type': value['type'],
+                                                                                     'value': value['value']})
+                    self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+                    self._sensor_states[sensor_id][value['type']] = value['value']
+            elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
+                self._handle_execute_event(action=core_event.data['action'],
+                                           device_nr=core_event.data['device_nr'],
+                                           extra_parameter=core_event.data['extra_parameter'])
+            elif core_event.type == MasterCoreEvent.Types.RESET_ACTION:
+                if core_event.data.get('type') == MasterCoreEvent.ResetTypes.HEALTH_CHECK:
+                    self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
+                                                              active=True)
+            elif core_event.type == MasterCoreEvent.Types.SYSTEM:
+                if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
+                    self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
+                                                              active=False)
+            elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
+                # TODO: Add partial EEPROM invalidation to speed things up
+                address_letter = chr(int(core_event.data['address'].split('.')[0]))
+                entry = {'code': core_event.data['discovery_type'],
+                         'module_nr': 0, 'category': '',  # Legacy, not used anymore
+                         'module_type': address_letter,
+                         'address': core_event.data['address']}
+                with self._discovery_log_lock:
+                    self._discovery_log.append(entry)
+            elif core_event.type == MasterCoreEvent.Types.MODULE_NOT_RESPONDING:
+                address = core_event.data['address']
+                if '.000.000.' in address:
+                    log_event = False  # Don't log MODULE_NOT_RESPONDING events for internal modules
+                    logger.info('Got firmware information: {0} (internal module)'.format(address))
+                else:
+                    logger.info('Got firmware information: {0} (timeout)'.format(address))
+                self._firmware_versions[address] = None
+        finally:
+            if log_event:
+                # Log events, if appropriate
+                logger.info('Processed master event: {0}'.format(core_event))
 
     def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
         if action == 0:
@@ -271,48 +283,6 @@ class MasterCoreController(MasterController):
         master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
         self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
 
-    def _master_restarting_change(self, restarting):
-        def _timeout_release():
-            logger.warning('Restart holding window expired, releasing')
-            self._master_restarting_change(restarting=False)
-
-        if restarting:
-            logger.warning('Master reset announced, holding further communications')
-            self._master_restarting.clear()
-            if self._master_restarting_timer is not None:
-                self._master_restarting_timer.cancel()
-            self._master_restarting_timer = Timer(MasterCoreController.MASTER_RESTARTING_TIMEOUT,
-                                                  _timeout_release)
-            self._master_restarting_timer.start()
-        else:
-            if not self._master_restarting.is_set():
-                logger.info('Master back online, releasing held communications')
-            self._master_restarting.set()
-            if self._master_restarting_timer is not None:
-                self._master_restarting_timer.cancel()
-
-    def _master_updating_change(self, updating):
-        individual_logger = Logs.get_update_logger('master_coreplus')
-
-        def _timeout_release():
-            individual_logger.warning('Update holding window expired, releasing')
-            self._master_updating_change(updating=False)
-
-        if updating:
-            individual_logger.warning('Master update announced, blocking further communications')
-            self._master_updating.clear()
-            if self._master_updating_timer is not None:
-                self._master_updating_timer.cancel()
-            self._master_updating_timer = Timer(MasterCoreController.MASTER_UPDATING_TIMEOUT,
-                                                _timeout_release)
-            self._master_updating_timer.start()
-        else:
-            if not self._master_updating.is_set():
-                individual_logger.info('Master update finished, release communications block')
-            self._master_updating.set()
-            if self._master_updating_timer is not None:
-                self._master_updating_timer.cancel()
-
     def _synchronize(self):
         # type: () -> None
         try:
@@ -335,28 +305,15 @@ class MasterCoreController(MasterController):
             # This is an expected situation
             raise DaemonThreadWait()
 
-    def _execute(self, command, fields, timeout=2):
-        # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
-        if not self._master_restarting.is_set():
-            logger.info('Master might be restarting, holding call')
-        if not self._master_restarting.wait(timeout=MasterCoreController.MASTER_RESTARTING_TIMEOUT):
-            logger.warning('Holding window expired')
-            raise CommunicationTimedOutException()
-        if not self._master_updating.is_set():
-            raise MasterUnavailable('Update in progress')
-        return self._master_communicator.do_command(command=command,
-                                                    fields=fields,
-                                                    timeout=timeout)
-
     def _do_basic_action(self, basic_action, timeout=2):
         # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
         logger.info('BA: Executing {0}'.format(basic_action))
-        return self._execute(CoreAPI.basic_action(),
-                             {'type': basic_action.action_type,
-                              'action': basic_action.action,
-                              'device_nr': basic_action.device_nr,
-                              'extra_parameter': basic_action.extra_parameter},
-                             timeout=timeout)
+        return self._master_communicator.do_command(command=CoreAPI.basic_action(),
+                                                    fields={'type': basic_action.action_type,
+                                                            'action': basic_action.action,
+                                                            'device_nr': basic_action.device_nr,
+                                                            'extra_parameter': basic_action.extra_parameter},
+                                                    timeout=timeout)
 
     def _set_master_state(self, online):
         if online != self._master_online:
@@ -364,12 +321,14 @@ class MasterCoreController(MasterController):
 
     def _enumerate_io_modules(self, module_type, amount_per_module=8):
         cmd = CoreAPI.general_configuration_number_of_modules()
-        module_count = self._execute(cmd, {})[module_type]
+        module_count = self._master_communicator.do_command(command=cmd,
+                                                            fields={})[module_type]
         return range(module_count * amount_per_module)
 
     def _check_master_time(self):
         # type: () -> None
-        date_time = self._execute(CoreAPI.get_date_time(), {})
+        date_time = self._master_communicator.do_command(command=CoreAPI.get_date_time(),
+                                                         fields={})
         if date_time is None:
             return
         try:
@@ -429,7 +388,8 @@ class MasterCoreController(MasterController):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        max_specs = self._execute(CoreAPI.general_configuration_max_specs(), {})
+        max_specs = self._master_communicator.do_command(command=CoreAPI.general_configuration_max_specs(),
+                                                         fields={})
         global_configuration = GlobalConfiguration()
         logger.info('General core information:')
         logger.info('* Modules:')
@@ -478,50 +438,64 @@ class MasterCoreController(MasterController):
         calls_succeeded = [call for call in stats['calls_succeeded']]
         all_calls = sorted(calls_timedout + calls_succeeded)
 
+        def _log(instruction, message, message_type):
+            now = time.time()
+            long_ago = self._last_health_warning_timestamp < now - 900.0
+            new_message = message_type != self._last_health_warning
+            should_log = ((message_type == 0 and new_message) or
+                          (message_type != 0 and (new_message or long_ago)))
+            if should_log:
+                instruction(message)
+                self._last_health_warning = message_type
+                self._last_health_warning_timestamp = now
+
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
+            _log(logger.info, 'Master communication normalized', 0)
             return CommunicationStatus.SUCCESS
 
         if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
-            logger.warning('Observed master communication failures, but not enough calls')
+            _log(logger.warning, 'Observed master communication failures, but not enough calls', 1)
             return CommunicationStatus.UNSTABLE
 
         calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
         if len(calls_last_x_minutes) <= 5:
             # Not enough calls in the last 3 minutes to have a decent view on what's going on
-            logger.warning('Observed master communication failures, but not recent enough')
+            _log(logger.warning, 'Observed master communication failures, but not recent enough', 2)
             return CommunicationStatus.UNSTABLE
 
         if len(all_calls) >= 30 and not any(t in calls_timedout for t in all_calls[-30:]):
             # The last 30 calls are successfull, consider "recoverd"
+            _log(logger.info, 'Master communication normalized', 0)
             return CommunicationStatus.SUCCESS
         if not any(t in calls_timedout for t in all_calls[-10:]):
             # The last 10 calls are successfull, consider "recovering"
-            logger.warning('Observed master communication failures, but recovering')
+            _log(logger.warning, 'Observed master communication failures, but recovering', 3)
             return CommunicationStatus.UNSTABLE
 
         ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
         if ratio < 0.25:
             # Less than 25% of the calls fail, let's assume everything is just "fine"
-            logger.warning('Observed master communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
+            _log(logger.warning, 'Observed master communication failures, but the failure ratio is reasonable', 4)
             return CommunicationStatus.UNSTABLE
 
+        _log(logger.warning, 'Observed master communication failures', 5)
         return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
-        version = self._execute(CoreAPI.get_firmware_version(), {})['version']
+        version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
+                                                       fields={})['version']
         return tuple(version.split('.'))
 
     def sync_time(self):
         # type: () -> None
         logger.info('Setting the time on the core.')
         now = datetime.now()
-        self._execute(
-            CoreAPI.set_date_time(),
-            {'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
-             'weekday': now.isoweekday(), 'day': now.day, 'month': now.month, 'year': now.year % 100}
-        )
+        self._master_communicator.do_command(command=CoreAPI.set_date_time(),
+                                             fields={'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
+                                                     'weekday': now.isoweekday(),
+                                                     'day': now.day, 'month': now.month, 'year': now.year % 100})
 
     # Input
 
@@ -555,7 +529,7 @@ class MasterCoreController(MasterController):
         refresh = self._input_state.should_refresh()
         if refresh:
             cmd = CoreAPI.device_information_list_inputs()
-            data = self._execute(cmd, {})
+            data = self._master_communicator.do_command(command=cmd, fields={})
             if data is not None:
                 for master_event in self._input_state.refresh(data['information']):
                     self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
@@ -623,7 +597,8 @@ class MasterCoreController(MasterController):
         # type: () -> List[OutputStatusDTO]
         output_status = []
         for i in self._enumerate_io_modules('output'):
-            data = self._execute(CoreAPI.output_detail(), {'device_nr': i})
+            data = self._master_communicator.do_command(command=CoreAPI.output_detail(),
+                                                        fields={'device_nr': i})
             timer = SVTTimer.event_timer_type_to_seconds(data['timer_type'], data['timer'])
             output = OutputConfiguration(i)
             output_status.append(OutputStatusDTO(id=i,
@@ -796,7 +771,8 @@ class MasterCoreController(MasterController):
         return self._sensor_states.get(sensor_id, {}).get('TEMPERATURE')
 
     def get_sensors_temperature(self):
-        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
+                                                                     fields={})['sensor']
         temperatures = []
         for sensor_id in range(amount_sensor_modules * 8):
             temperatures.append(self.get_sensor_temperature(sensor_id))
@@ -806,7 +782,8 @@ class MasterCoreController(MasterController):
         return self._sensor_states.get(sensor_id, {}).get('HUMIDITY')
 
     def get_sensors_humidity(self):
-        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
+                                                                     fields={})['sensor']
         humidities = []
         for sensor_id in range(amount_sensor_modules * 8):
             humidities.append(self.get_sensor_humidity(sensor_id))
@@ -820,7 +797,8 @@ class MasterCoreController(MasterController):
         return int(float(brightness) / 65535.0 * 100)
 
     def get_sensors_brightness(self):
-        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
+                                                                     fields={})['sensor']
         brightnesses = []
         for sensor_id in range(amount_sensor_modules * 8):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
@@ -843,11 +821,15 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     def _refresh_sensor_states(self):
-        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
+                                                                     fields={})['sensor']
         for module_nr in range(amount_sensor_modules):
-            temperature_values = self._execute(CoreAPI.sensor_temperature_values(), {'module_nr': module_nr})['values']
-            brightness_values = self._execute(CoreAPI.sensor_brightness_values(), {'module_nr': module_nr})['values']
-            humidity_values = self._execute(CoreAPI.sensor_humidity_values(), {'module_nr': module_nr})['values']
+            temperature_values = self._master_communicator.do_command(command=CoreAPI.sensor_temperature_values(),
+                                                                      fields={'module_nr': module_nr})['values']
+            brightness_values = self._master_communicator.do_command(command=CoreAPI.sensor_brightness_values(),
+                                                                     fields={'module_nr': module_nr})['values']
+            humidity_values = self._master_communicator.do_command(command=CoreAPI.sensor_humidity_values(),
+                                                                   fields={'module_nr': module_nr})['values']
             for i in range(8):
                 sensor_id = module_nr * 8 + i
                 self._sensor_states[sensor_id] = {'TEMPERATURE': temperature_values[i],
@@ -1029,25 +1011,46 @@ class MasterCoreController(MasterController):
         # C/E = Physical/internal CAN Control
         return {'outputs': outputs, 'inputs': inputs, 'shutters': [], 'can_inputs': can_inputs}
 
+    def _request_firmware_versions(self, bus, timeout=4.0):
+        try:
+            self._master_communicator.report_blockage(blocker=CommunicationBlocker.VERSION_SCAN,
+                                                      active=True)
+            self._firmware_versions = {}
+            amount = 0
+            threshold = time.time() + timeout
+            if bus == MasterCoreEvent.Bus.CAN:
+                logger.info('Requesting firmware version for uCANs')
+                amount += self._master_communicator.do_command(command=CoreAPI.request_ucan_module_information(),
+                                                               fields={},
+                                                               bypass_blockers=[CommunicationBlocker.VERSION_SCAN])['amount_of_ucans']
+                logger.info('Information for {0} uCANs expected'.format(amount))
+            elif bus == MasterCoreEvent.Bus.RS485:
+                logger.info('Requesting firmware version for RS485 slaves')
+                response = self._master_communicator.do_command(command=CoreAPI.request_slave_firmware_versions(),
+                                                                fields={},
+                                                                bypass_blockers=[CommunicationBlocker.VERSION_SCAN])
+                amount = (response['amount_output_modules'] + response['amount_input_modules'] +
+                          response['amount_sensor_modules'] + response['amount_can_control_modules'])
+                logger.info('Information for {0} RS485 slaves expected'.format(amount))
+            while len(self._firmware_versions) < amount and time.time() < threshold:
+                time.sleep(0.1)
+            return copy.copy(self._firmware_versions)
+        finally:
+            self._master_communicator.report_blockage(blocker=CommunicationBlocker.VERSION_SCAN,
+                                                      active=False)
+
     def get_modules_information(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
         """ Gets module information """
 
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        self._firmware_versions = {}
-        logger.info('Requesting firmware version for RS485 slaves')
-        self._execute(command=CoreAPI.request_slave_firmware_versions(),
-                      fields={})
-        logger.info('Requesting firmware version for uCANs')
-        self._execute(command=CoreAPI.request_ucan_module_information(),
-                      fields={})
+        local_firmware_version = {}
+        local_firmware_version.update(self._request_firmware_versions(bus=MasterCoreEvent.Bus.RS485))
+        local_firmware_version.update(self._request_firmware_versions(bus=MasterCoreEvent.Bus.CAN))
 
-        def _wait_for_version(address_, timeout=3):
-            threshold = time.time() + timeout
-            while address_ not in self._firmware_versions and time.time() < threshold:
-                time.sleep(0.1)
-            version_info = self._firmware_versions.get(address_)
+        def _get_version(address_):
+            version_info = local_firmware_version.get(address_)
             if version_info is None:
                 return False, None, None
             return True, None, version_info
@@ -1082,7 +1085,7 @@ class MasterCoreController(MasterController):
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(input_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _get_version(input_module_info.address)
             information.append(dto)
 
         nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
@@ -1106,7 +1109,7 @@ class MasterCoreController(MasterController):
                                     hardware_type=hardware_type,
                                     order=module_id)
             if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _get_version(output_module_info.address)
                 shutter_dto.online = dto.online
                 shutter_dto.hardware_version = dto.hardware_version
                 shutter_dto.firmware_version = dto.firmware_version
@@ -1129,7 +1132,7 @@ class MasterCoreController(MasterController):
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(sensor_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _get_version(sensor_module_info.address)
             information.append(dto)
 
         nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
@@ -1145,7 +1148,7 @@ class MasterCoreController(MasterController):
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(can_control_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _get_version(can_control_module_info.address)
             information.append(dto)
 
         nr_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
@@ -1156,7 +1159,7 @@ class MasterCoreController(MasterController):
                             module_type=ModuleType.MICRO_CAN,
                             hardware_type=HardwareType.PHYSICAL,
                             order=module_id)
-            dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(ucan_configuration.address)
+            dto.online, dto.hardware_version, dto.firmware_version = _get_version(ucan_configuration.address)
             information.append(dto)
 
         return information
@@ -1169,7 +1172,7 @@ class MasterCoreController(MasterController):
 
     def _handle_ucan_information(self, information):  # type: (Dict[str, str]) -> None
         address, version = information['ucan_address'], information['version']
-        logger.info('Got ucan firmware information: {0} = {1}'.format(address, version))
+        logger.info('Got firmware information: {0} = {1}'.format(address, version))
         self._firmware_versions[address] = version
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
@@ -1276,9 +1279,12 @@ class MasterCoreController(MasterController):
             logger.critical('Exception when powering on RS485 bus: {0}'.format(ex))
 
     def get_status(self):
-        firmware_version = self._execute(CoreAPI.get_firmware_version(), {})['version']
-        rs485_mode = self._execute(CoreAPI.get_master_modes(), {})['rs485_mode']
-        date_time = self._execute(CoreAPI.get_date_time(), {})
+        firmware_version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
+                                                                fields={})['version']
+        rs485_mode = self._master_communicator.do_command(command=CoreAPI.get_master_modes(),
+                                                          fields={})['rs485_mode']
+        date_time = self._master_communicator.do_command(command=CoreAPI.get_date_time(),
+                                                         fields={})
         return {'time': '{0:02}:{1:02}'.format(date_time['hours'], date_time['minutes']),
                 'date': '{0:02}/{1:02}/20{2:02}'.format(date_time['day'], date_time['month'], date_time['year']),
                 'mode': {CoreAPI.SlaveBusMode.INIT: 'I',
@@ -1304,11 +1310,13 @@ class MasterCoreController(MasterController):
     def update_master(self, hex_filename, version):
         # type: (str, str) -> None
         try:
-            self._master_updating_change(updating=True)
+            self._master_communicator.report_blockage(blocker=CommunicationBlocker.UPDATE,
+                                                      active=True)
             self._core_updater.update(hex_filename=hex_filename,
                                       version=version)
         finally:
-            self._master_updating_change(updating=False)
+            self._master_communicator.report_blockage(blocker=CommunicationBlocker.UPDATE,
+                                                      active=False)
 
     def update_slave_module(self, firmware_type, address, hex_filename, version):
         # type: (str, str, str, str) -> Optional[str]
@@ -1417,9 +1425,10 @@ class MasterCoreController(MasterController):
                                                   action=ba_action,
                                                   device_nr=chunk_output_ids[0]))
             else:
-                self._execute(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
-                              fields={'type': 0, 'action': ba_action, 'extra_parameter': 0,
-                                      'device_nrs': chunk_output_ids})
+                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
+                                                     fields={'type': 0, 'action': ba_action,
+                                                             'extra_parameter': 0,
+                                                             'device_nrs': chunk_output_ids})
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement

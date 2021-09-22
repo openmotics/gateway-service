@@ -20,7 +20,7 @@ from __future__ import absolute_import
 from master.core.core_command import CoreCommandSpec
 from master.core.fields import (ByteField, WordField, ByteArrayField, WordArrayField, LiteralBytesField,
                                 AddressField, CharField, PaddingField, VersionField, TemperatureArrayField,
-                                HumidityArrayField, RawByteArrayField, Field)
+                                HumidityArrayField, RawByteArrayField, SerialNumberField, Field)
 
 
 class CoreAPI(object):
@@ -137,7 +137,9 @@ class CoreAPI(object):
         """ Requests the slave firmware versions, which will be send to the GW in separate FW calls """
         return CoreCommandSpec(instruction='ST',
                                request_fields=[LiteralBytesField(2)],
-                               response_fields=[ByteField('info_type'), PaddingField(2)])
+                               response_fields=[ByteField('info_type'),
+                                                ByteField('amount_output_modules'), ByteField('amount_input_modules'),
+                                                ByteField('amount_sensor_modules'), ByteField('amount_can_control_modules')])
 
     @staticmethod
     def get_date_time():  # type: () -> CoreCommandSpec
@@ -281,7 +283,8 @@ class CoreAPI(object):
     def request_ucan_module_information():  # type: () -> CoreCommandSpec
         """ Requests information for all uCAN modules """
         return CoreCommandSpec(instruction='CD',
-                               request_fields=[LiteralBytesField(0)])
+                               request_fields=[LiteralBytesField(0)],
+                               response_fields=[PaddingField(1), ByteField('amount_of_ucans')])
 
     @staticmethod
     def ucan_module_information():  # type: () -> CoreCommandSpec
@@ -290,4 +293,6 @@ class CoreAPI(object):
                                response_fields=[AddressField('ucan_address', 3), WordArrayField('input_links', 6),
                                                 ByteArrayField('sensor_links', 2), ByteField('sensor_type'), VersionField('version'),
                                                 ByteField('bootloader'), CharField('new_indicator'),
-                                                ByteField('min_led_brightness'), ByteField('max_led_brightness')])
+                                                ByteField('min_led_brightness'), ByteField('max_led_brightness'),
+                                                ByteField('hardware_revision'), SerialNumberField('serial_number'),
+                                                WordField('dc_voltage'), ByteArrayField('can_speed_parameters', 5)])

@@ -448,6 +448,7 @@ class Toolbox(object):
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
             if can_controls or ucans:
                 self.tester.toggle_output(TESTER.Button.can, delay=0.5)
+                # TODO: Fix these hardcoded values.
                 module_amounts = {'C': 1}
                 if ucans:
                     module_amounts.update({'I': 1, 'T': 1})
@@ -461,7 +462,7 @@ class Toolbox(object):
             synced_addresses = set(data['modules'].get('master', {}).keys())
             if new_module_addresses.issubset(synced_addresses):
                 return True
-        raise AssertionError('Did not discover required modules')
+        raise AssertionError('Discovered modules did not correctly sync')
 
     def add_virtual_modules(self, module_amounts, timeout=120):
         since = time.time()

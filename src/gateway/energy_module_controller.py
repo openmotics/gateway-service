@@ -147,7 +147,7 @@ class EnergyModuleController(BaseController):
             return 0
         return self._energy_communicator.get_seconds_since_last_success()
 
-    def scan_bus(self):  # type: () -> Generator[Tuple[str, int, str, Optional[str], None, None]
+    def scan_bus(self):  # type: () -> Generator[Tuple[str, int, str, Optional[str]], None, None]
         if not self._enabled:
             return
         for address in range(256):

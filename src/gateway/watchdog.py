@@ -83,9 +83,7 @@ class Watchdog(object):
             Config.remove_entry('communication_recovery_{0}'.format(name))
             # Cleanup legacy
             Config.remove_entry('communication_recovery')
-        elif status == CommunicationStatus.UNSTABLE:
-            logger.warning('Observed unstable communication for %s', name)
-        else:
+        elif status != CommunicationStatus.UNSTABLE:
             reset_action = self._get_reset_action(name, controller)
             if reset_action is not None:
                 device_reset()
