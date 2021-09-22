@@ -91,6 +91,8 @@ class DummyRebusController(RebusControllerInterface):
     def get_mailboxes(self, rebus_id=None):
         # type: (Optional[int]) -> List[MailBoxDTO]
         logger.debug('Getting mailboxes')
+        for mailbox in self.mailboxes.values():
+            mailbox.apartment = ApartmentController.load_apartment_by_mailbox_id(mailbox.id)
         if rebus_id is None:
             return list(self.mailboxes.values())
         return [self.mailboxes[rebus_id]]
@@ -146,6 +148,9 @@ class DummyRebusController(RebusControllerInterface):
     # Doorbells
 
     def get_doorbells(self):
+        # Renew the apartments linked to the doorbell
+        for doorbell in self.doorbells.values():
+            doorbell.apartment = ApartmentController.load_apartment_by_doorbell_id(doorbell.id)
         return list(self.doorbells.values())
 
     def ring_doorbell(self, doorbell_id):

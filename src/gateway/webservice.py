@@ -58,6 +58,7 @@ from gateway.exceptions import CommunicationFailure, \
     WrongInputParametersException
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.models import Config, Database, Feature, Schedule, User, Module
+from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool, WebSocketEncoding
@@ -87,7 +88,6 @@ if False:  # MYPY
     from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
     from gateway.system_controller import SystemController
-    from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.user_controller import UserController
     from gateway.ventilation_controller import VentilationController
     from plugins.base import PluginController
@@ -925,10 +925,78 @@ class WebInterface(object):
 
     # Thermostats
 
-    @openmotics_api(auth=True)
+    @openmotics_api(auth=True, check=types(fields='json'))
+    def get_thermostat_group_configurations(self, fields=None):
+        """
+        Get the thermostat_group_configurations.
+        """
+        config = self._thermostat_controller.load_thermostat_groups()
+        return {'config': [ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
+                                                               fields=fields)
+                           for thermostat_group_dto in config]}
+
+    @openmotics_api(auth=True, check=types(id=int, fields='json'))
+    def get_thermostat_group_configuration(self, id, fields=None):
+        """
+        Get the thermostat_group_configuration.
+        """
+        thermostat_group_dto = self._thermostat_controller.load_thermostat_group(id)
+        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
+                                                              fields=fields)}
+
+    @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
+    def get_thermostat_group_status(self):  # type: () -> Dict[str, Any]
+        """ Get the status of the thermostats groups. """
+        status = self._thermostat_controller.get_thermostat_group_status()
+        return {'status': [ThermostatGroupStatusSerializer.serialize(status_dto)
+                           for status_dto in status]}
+
+    @openmotics_api(auth=True, check=types(fields='json'), deprecated='get_thermostat_group_configuration')
+    def get_global_thermostat_configuration(self, fields=None):
+        """
+        Get the global_thermostat_configuration.
+        :param fields: The field of the cooling_configuration to get, None if all
+        """
+        thermostat_group_dto = self._thermostat_controller.load_thermostat_group(ThermostatController.GLOBAL_THERMOSTAT)
+        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
+                                                              fields=fields)}
+
+    @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configuration')
+    def set_global_thermostat_configuration(self, config):
+        """ Set the global_thermostat_configuration. """
+        data = ThermostatGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_thermostat_group(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(id=int, group_on=bool, mode=str))
+    def set_thermostat_group(self, id, group_on=True, mode=None):
+        """
+        Set the global mode of the thermostats. Thermostats can be on or off (thermostat_on),
+        can be in cooling or heating (cooling_mode), cooling can be turned on or off (cooling_on).
+        The automatic and setpoint parameters are here for backwards compatibility and will be
+        applied to all thermostats. To control the automatic and setpoint parameters per thermostat
+        use the set_per_thermostat_mode call instead.
+        """
+        self._thermostat_controller.set_thermostat_group(id, group_on, mode == 'cooling')
+        return {}
+
+    @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
     def get_thermostat_status(self):  # type: () -> Dict[str, Any]
         """ Get the status of the thermostats. """
-        return ThermostatGroupStatusSerializer.serialize(thermostat_group_status_dto=self._thermostat_controller.get_thermostat_status())
+        status = self._thermostat_controller.get_thermostat_group_status()
+        return ThermostatGroupStatusSerializer.serialize(status[0])
+
+    @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool), deprecated='set_thermostat_group')
+    def set_thermostat_mode(self, thermostat_on, automatic=None, setpoint=None, cooling_mode=False, cooling_on=False):
+        """
+        Set the global mode of the thermostats. Thermostats can be on or off (thermostat_on),
+        can be in cooling or heating (cooling_mode), cooling can be turned on or off (cooling_on).
+        The automatic and setpoint parameters are here for backwards compatibility and will be
+        applied to all thermostats. To control the automatic and setpoint parameters per thermostat
+        use the set_per_thermostat_mode call instead.
+        """
+        self._thermostat_controller.set_thermostat_group(ThermostatController.GLOBAL_THERMOSTAT, thermostat_on, cooling_mode, cooling_on, automatic, setpoint)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))
     def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
@@ -943,18 +1011,6 @@ class WebInterface(object):
         self._thermostat_controller.set_setpoint_from_scheduler(thermostat,
                                                                 heating_temperature=heating_temperature,
                                                                 cooling_temperature=cooling_temperature)
-        return {'status': 'OK'}
-
-    @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool))
-    def set_thermostat_mode(self, thermostat_on, automatic=None, setpoint=None, cooling_mode=False, cooling_on=False):
-        """
-        Set the global mode of the thermostats. Thermostats can be on or off (thermostat_on),
-        can be in cooling or heating (cooling_mode), cooling can be turned on or off (cooling_on).
-        The automatic and setpoint parameters are here for backwards compatibility and will be
-        applied to all thermostats. To control the automatic and setpoint parameters per thermostat
-        use the set_per_thermostat_mode call instead.
-        """
-        self._thermostat_controller.set_thermostat_mode(thermostat_on, cooling_mode, cooling_on, automatic, setpoint)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int))
@@ -1575,8 +1631,12 @@ class WebInterface(object):
         Get all cooling pump_group_configurations.
         :param fields: The field of the cooling pump_group_configuration to get, None if all
         """
-        return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
-                           for pump_group in self._thermostat_controller.load_cooling_pump_groups()]}
+        config = []  # type: List[Dict[str, Any]]
+        pump_group_dtos = {x.id: x for x in self._thermostat_controller.load_cooling_pump_groups()}
+        for pump_group_id in set(list(pump_group_dtos.keys()) + list(range(8))):
+            pump_group_dto = pump_group_dtos.get(pump_group_id, PumpGroupDTO(pump_group_id))
+            config.append(PumpGroupSerializer.serialize(pump_group_dto, fields=fields))
+        return {'config': config}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_cooling_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
@@ -1837,23 +1897,6 @@ class WebInterface(object):
         """ Set the dimmer_configuration. """
         data = DimmerConfigurationSerializer.deserialize(config)
         self._output_controller.save_dimmer_configuration(data)
-        return {}
-
-    @openmotics_api(auth=True, check=types(fields='json'))
-    def get_global_thermostat_configuration(self, fields=None):
-        """
-        Get the global_thermostat_configuration.
-        :param fields: The field of the cooling_configuration to get, None if all
-        """
-        thermostat_group_dto = self._thermostat_controller.load_thermostat_group()
-        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
-                                                              fields=fields)}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_global_thermostat_configuration(self, config):
-        """ Set the global_thermostat_configuration. """
-        data = ThermostatGroupSerializer.deserialize(config)
-        self._thermostat_controller.save_thermostat_group(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))

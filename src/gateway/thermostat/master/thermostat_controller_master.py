@@ -48,7 +48,6 @@ class ThermostatControllerMaster(ThermostatController):
     DEFAULT_TEMPS_HEATING = [20.0, 21.0, 16.0]
     DEFAULT_TEMPS_COOLING = [24.0, 23.0, 25.0]
 
-
     @Inject
     def __init__(self, output_controller=INJECTED, master_controller=INJECTED, pubsub=INJECTED):
         # type: (OutputController, MasterClassicController, PubSub) -> None
@@ -292,8 +291,11 @@ class ThermostatControllerMaster(ThermostatController):
     def save_cooling_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         self._master_controller.save_cooling_rtd10s(rtd10s)
 
-    def load_thermostat_group(self):
-        # type: () -> ThermostatGroupDTO
+    def load_thermostat_group(self, thermostat_group_id):
+        # type: (int) -> ThermostatGroupDTO
+        if thermostat_group_id != self.GLOBAL_THERMOSTAT:
+            raise NotImplementedError('Thermostat groups not supported')
+
         return self._master_controller.load_thermostat_group()
 
     def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
@@ -309,10 +311,11 @@ class ThermostatControllerMaster(ThermostatController):
     def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         self._master_controller.save_heating_pump_groups(pump_groups)
 
-    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
+    def set_thermostat_group(self, thermostat_group_id, group_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (int, bool, bool, bool, Optional[bool], Optional[int]) -> None
         """ Set the mode of the thermostats. """
-        _ = thermostat_on  # Still accept `thermostat_on` for backwards compatibility
+        if thermostat_group_id != self.GLOBAL_THERMOSTAT:
+            raise NotImplementedError('Thermostat groups not supported')
 
         # Figure out whether the system should be on or off
         set_on = False
@@ -320,7 +323,7 @@ class ThermostatControllerMaster(ThermostatController):
             set_on = True
         if cooling_mode is False:
             # Heating means threshold based
-            thermostat_group = self.load_thermostat_group()
+            thermostat_group = self.load_thermostat_group(self.GLOBAL_THERMOSTAT)
             outside_sensor = Toolbox.denonify(thermostat_group.outside_sensor_id, 255)
             current_temperatures = self._master_controller.get_sensors_temperature()[:32]
             if len(current_temperatures) < 32:
@@ -488,27 +491,24 @@ class ThermostatControllerMaster(ThermostatController):
                                              'status': thermostats})
         self._thermostats_last_updated = time.time()
 
-    def get_thermostat_status(self):
-        # type: () -> ThermostatGroupStatusDTO
+    def get_thermostat_group_status(self):
+        # type: () -> List[ThermostatGroupStatusDTO]
         """ Returns thermostat information """
         self._refresh_thermostats()  # Always return the latest information
         master_status = self._thermostat_status.get_thermostats()
-        return ThermostatGroupStatusDTO(id=0,
-                                        on=master_status['thermostats_on'],
-                                        automatic=master_status['automatic'],
-                                        setpoint=master_status['setpoint'],
-                                        cooling=master_status['cooling'],
-                                        statusses=[ThermostatStatusDTO(id=thermostat['id'],
-                                                                       actual_temperature=thermostat['act'],
-                                                                       setpoint_temperature=thermostat['csetp'],
-                                                                       outside_temperature=thermostat['outside'],
-                                                                       mode=thermostat['mode'],
-                                                                       automatic=thermostat['automatic'],
-                                                                       setpoint=thermostat['setpoint'],
-                                                                       name=thermostat['name'],
-                                                                       sensor_id=thermostat['sensor_nr'],
-                                                                       airco=thermostat['airco'],
-                                                                       output_0_level=thermostat['output0'],
-                                                                       output_1_level=thermostat['output1'])
-                                                   for thermostat in master_status['status']])
-        return self._thermostat_status.get_thermostats()
+        statusses = [ThermostatStatusDTO(id=thermostat['id'],
+                                         actual_temperature=thermostat['act'],
+                                         setpoint_temperature=thermostat['csetp'],
+                                         outside_temperature=thermostat['outside'],
+                                         mode=thermostat['mode'],
+                                         automatic=thermostat['automatic'],
+                                         setpoint=thermostat['setpoint'],
+                                         output_0_level=thermostat['output0'],
+                                         output_1_level=thermostat['output1'])
+                     for thermostat in master_status['status']]
+        return [ThermostatGroupStatusDTO(id=0,
+                                         on=master_status['thermostats_on'],
+                                         automatic=master_status['automatic'],
+                                         setpoint=master_status['setpoint'],
+                                         cooling=master_status['cooling'],
+                                         statusses=statusses)]
