@@ -27,9 +27,9 @@ from constants import OPENMOTICS_PREFIX
 from ioc import Injectable, Inject, INJECTED, Singleton
 from serial_utils import CommunicationTimedOutException
 from gateway.dto import ModuleDTO
-from gateway.enums import HardwareType, ModuleType
+from gateway.enums import HardwareType, ModuleType, IndicateType
 from gateway.base_controller import BaseController
-from gateway.models import Module
+from gateway.models import Module, Sensor
 from gateway.mappers.module import ModuleMapper
 from six.moves.urllib.parse import urlparse, urlunparse
 from platform_utils import Platform
@@ -265,6 +265,12 @@ class ModuleController(BaseController):
         self._master_controller.sync_time()
 
     def flash_leds(self, led_type, led_id):
+        if led_type == IndicateType.SENSOR:
+            sensor = Sensor.select().where((Sensor.id == led_id) &
+                                           (Sensor.source == 'master')).first()
+            if sensor is None:
+                return
+            led_id = int(sensor.external_id)
         return self._master_controller.flash_leds(led_type, led_id)
 
     def master_error_list(self):
