@@ -118,7 +118,7 @@ class APIFieldsTest(unittest.TestCase):
 
     def test_serial_number_field(self):
         self._test_field(SerialNumberField('x'), [['foo', ValueError],
-                                                  [SerialNumber(2021, 9, 1, 0, 65536), bytearray([21, 9, 1, 0, 1, 0, 0])]])
+                                                  [SerialNumber(21, 9, 1, 0, 65536), bytearray([21, 9, 1, 0, 1, 0, 0])]])
 
     def test_address_field(self):
         self._test_field(AddressField('x'), [['-1.0.0.0', ValueError],
