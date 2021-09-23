@@ -150,3 +150,5 @@ def toolbox(toolbox_session, software_update, firmware_updates):
         yield toolbox
     finally:
         toolbox.print_logs()
+        # # TODO: Only print the buffer when a test fails - this will print the buffer after every test
+        # logger.debug(toolbox.dut.get('/get_master_debug_buffer'))

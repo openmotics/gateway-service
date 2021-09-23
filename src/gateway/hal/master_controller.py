@@ -65,8 +65,8 @@ class MasterController(object):
         # type: () -> HEALTH
         raise NotImplementedError()
 
-    def get_debug_buffer(self):
-        return self._master_communicator.get_debug_buffer()
+    def get_debug_buffer(self, amount):
+        return self._master_communicator.get_debug_buffer(amount)
 
     # TODO: Currently the objects returned here are classic-format dicts. This needs to be changed to intermediate transport objects
 

@@ -558,6 +558,10 @@ class WebInterface(object):
         usernames = [user.username for user in users]
         return {'usernames': usernames}
 
+    @openmotics_api(auth=True, check=types(amount=int))
+    def get_master_debug_buffer(self, amount=10):
+        return self._module_controller.get_master_debug_buffer(amount)
+
     @openmotics_api(plugin_exposed=False)
     def remove_user(self, username):
         """

@@ -170,13 +170,22 @@ class MasterCommunicator(object):
         self.__command_success_histogram.clear()
         self.__command_timeout_histogram.clear()
 
-    def get_debug_buffer(self):
-        # type: () -> Dict[str,Dict[float,str]]
+    def get_debug_buffer(self, amount):
+        # type: (int, bool) -> Dict[str,Dict[float,str]]
         def process(buffer):
-            return {k: str(Printable(v)) for k, v in six.iteritems(buffer)}
-
-        return {'read': process(self.__debug_buffer['read']),
-                'write': process(self.__debug_buffer['write'])}
+            formatted_buffer = {}
+            for key in list(buffer.keys())[-amount:]:
+                raw_value = buffer.get(key)
+                if raw_value is not None:
+                    raw_string = str(Printable(raw_value))
+                    if 'WE' in raw_string:
+                        formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
+                    elif 'BA' in raw_string:
+                        formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
+                    elif 'RE' in raw_string:
+                        formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
+            return formatted_buffer
+        return {'write': process(self.__debug_buffer['write'])}
 
     def get_seconds_since_last_success(self):
         """ Get the number of seconds since the last successful communication. """

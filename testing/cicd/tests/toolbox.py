@@ -708,6 +708,9 @@ class Toolbox(object):
                                            input_status=status,
                                            between=between):
             return
+        logger.debug('### Debug Buffer DUT')
+        # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 400}))
+        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0}))  # amount 0 will dump the whole buffer
         raise AssertionError('expected event {} status={}'.format(output, status))
 
     def assert_output_status(self, output, status, timeout=5):
