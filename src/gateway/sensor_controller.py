@@ -28,7 +28,7 @@ from gateway.dto import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.mappers.sensor import SensorMapper
-from gateway.models import Plugin, Room, Sensor
+from gateway.models import Room, Sensor
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
@@ -43,7 +43,6 @@ logger = logging.getLogger(__name__)
 @Singleton
 class SensorController(BaseController):
     SYNC_STRUCTURES = [SyncStructure(Sensor, 'sensor')]
-    STATUS_EXIPRE = 360.0
 
     MASTER_TYPES = {MasterEvent.SensorType.TEMPERATURE: Sensor.PhysicalQuantities.TEMPERATURE,
                     MasterEvent.SensorType.HUMIDITY: Sensor.PhysicalQuantities.HUMIDITY,
@@ -54,8 +53,8 @@ class SensorController(BaseController):
         # type: (MasterController, PubSub) -> None
         super(SensorController, self).__init__(master_controller, sync_interval=600)
         self._pubsub = pubsub
-        self._master_cache = {}  # type: Dict[Tuple[str,int],SensorDTO]
-        self._status = {}  # type: Dict[int,SensorStatusDTO]
+        self._master_cache = {}  # type: Dict[Tuple[str, int],SensorDTO]
+        self._status = {}  # type: Dict[int, SensorStatusDTO]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.SENSOR, self._handle_master_event)
 
@@ -66,14 +65,14 @@ class SensorController(BaseController):
 
     def _handle_status(self, status_dto):
         # type: (SensorStatusDTO) -> None
-        event_data = {'id': status_dto.id,
-                      'value': status_dto.value}
-        gateway_event = GatewayEvent(GatewayEvent.Types.SENSOR_CHANGE, event_data)
         if not (status_dto == self._status.get(status_dto.id)):
+            event_data = {'id': status_dto.id,
+                          'value': status_dto.value}
+            gateway_event = GatewayEvent(GatewayEvent.Types.SENSOR_CHANGE, event_data)
             logger.debug('Sensor value changed %s', gateway_event)
             self._status[status_dto.id] = status_dto
             self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
-        self._status[status_dto.id].last_value = time.time()
+        self._status[status_dto.id].value_last_updated = time.time()
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
@@ -99,11 +98,11 @@ class SensorController(BaseController):
                     continue
                 master_orm_mapping[dto.id] = dto
             ids = set()
-            brighness = self._master_controller.get_sensors_brightness()
-            humidity = self._master_controller.get_sensors_humidity()
             temperature = self._master_controller.get_sensors_temperature()
             ids |= self._sync_orm_master(Sensor.PhysicalQuantities.TEMPERATURE, 'celcius', temperature, master_orm_mapping)
+            humidity = self._master_controller.get_sensors_humidity()
             ids |= self._sync_orm_master(Sensor.PhysicalQuantities.HUMIDITY, 'percent', humidity, master_orm_mapping)
+            brighness = self._master_controller.get_sensors_brightness()
             ids |= self._sync_orm_master(Sensor.PhysicalQuantities.BRIGHTNESS, 'percent', brighness, master_orm_mapping)
             count = Sensor.delete() \
                 .where(Sensor.source == Sensor.Sources.MASTER) \
@@ -118,7 +117,6 @@ class SensorController(BaseController):
         # type: (str, str, List[Optional[float]], Dict[int,MasterSensorDTO]) -> Set[str]
         source = SensorSourceDTO(Sensor.Sources.MASTER)
         ids = set()
-        now = time.time()
         for i, value in enumerate(values):
             if i not in master_orm_mapping:
                 continue
@@ -135,7 +133,7 @@ class SensorController(BaseController):
                                    physical_quantity=physical_quantity,
                                    unit=unit,
                                    name=master_sensor_dto.name)
-            sensor, _ = self._create_or_update_sensor(sensor_dto)
+            sensor, _ = SensorController._create_or_update_sensor(sensor_dto)
 
             sensor_dto.id = sensor.id
             self._master_cache[(physical_quantity, i)] = sensor_dto
@@ -171,7 +169,9 @@ class SensorController(BaseController):
             .join_from(Sensor, Room, join_type=JOIN.LEFT_OUTER) \
             .where(~Sensor.physical_quantity.is_null())
         for sensor in list(query):
-            source_name = None if sensor.plugin is None else sensor.plugin.name
+            source_name = None
+            if sensor.plugin is not None:
+                source_name = sensor.plugin.name
             room = sensor.room.number if sensor.room is not None else None
             sensor_dto = SensorDTO(id=sensor.id,
                                    source=SensorSourceDTO(sensor.source, name=source_name),
@@ -192,13 +192,15 @@ class SensorController(BaseController):
         publish = False
         master_sensors = []
         for sensor_dto in sensors:
-            sensor, changed = self._create_or_update_sensor(sensor_dto)
+            sensor, changed = SensorController._create_or_update_sensor(sensor_dto)
             publish |= changed
 
             sensor_dto.id = sensor.id
             sensor_dto.external_id = sensor.external_id
             if sensor_dto.source is None:
-                source_name = None if sensor.plugin is None else sensor.plugin.name
+                source_name = None
+                if sensor.plugin is not None:
+                    source_name = sensor.plugin.name
                 sensor_dto.source = SensorSourceDTO(sensor.source, name=source_name)
 
             master_dto = SensorMapper.dto_to_master_dto(sensor_dto)
@@ -210,7 +212,8 @@ class SensorController(BaseController):
             self._publish_config()
         return sensors
 
-    def _create_or_update_sensor(self, sensor_dto):  # type: (SensorDTO) -> Tuple[Sensor, bool]
+    @staticmethod
+    def _create_or_update_sensor(sensor_dto):  # type: (SensorDTO) -> Tuple[Sensor, bool]
         changed = False
         sensor = SensorMapper.dto_to_orm(sensor_dto)
         if sensor.id is None:
@@ -238,26 +241,12 @@ class SensorController(BaseController):
     def get_sensors_status(self):  # type: () -> List[SensorStatusDTO]
         """ Get the current status of all sensors.
         """
-        now = time.time()
-        status = []
-        for status_dto in list(self._status.values()):
-            if status_dto.last_value is None or status_dto.last_value < now - self.STATUS_EXIPRE:
-                self._status.pop(status_dto.id)
-                continue
-            status.append(status_dto)
-        return status
+        return list(self._status.values())
 
     def get_sensor_status(self, sensor_id):  # type: (int) -> Optional[SensorStatusDTO]
         """ Get the current status of a sensor.
         """
-        now = time.time()
-        status_dto = None
-        if sensor_id in self._status:
-            status_dto = self._status[sensor_id]
-            if status_dto.last_value is None or status_dto.last_value < now - self.STATUS_EXIPRE:
-                self._status.pop(sensor_id)
-                status_dto = None
-        return status_dto
+        return self._status.get(sensor_id)
 
     def set_sensor_status(self, status_dto):  # type: (SensorStatusDTO) -> SensorStatusDTO
         """ Update the current status of a (non master) sensor.
@@ -279,16 +268,10 @@ class SensorController(BaseController):
             sensor_count = max(s.id for s in sensors) + 1
         except ValueError:
             sensor_count = 0
-        now = time.time()
         values = [None] * sensor_count  # type: List[Optional[float]]
         for sensor in sensors:
             status_dto = self._status.get(sensor.id)
-            if status_dto:
-                if status_dto.last_value is None or status_dto.last_value < now - self.STATUS_EXIPRE:
-                    self._status.pop(sensor.id)
-                    status_dto = None
-            if status_dto:
-                values[sensor.id] = status_dto.value
+            values[sensor.id] = status_dto.value if status_dto is not None else None
         return values
 
     def get_temperature_status(self):  # type: () -> List[Optional[float]]
