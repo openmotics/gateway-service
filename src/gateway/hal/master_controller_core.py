@@ -211,9 +211,9 @@ class MasterCoreController(MasterController):
                 with self._discovery_log_lock:
                     self._discovery_log.append(entry)
             elif core_event.type == MasterCoreEvent.Types.MODULE_NOT_RESPONDING:
+                log_event = False  # Don't log MODULE_NOT_RESPONDING separately
                 address = core_event.data['address']
                 if '.000.000.' in address:
-                    log_event = False  # Don't log MODULE_NOT_RESPONDING events for internal modules
                     logger.info('Got firmware information: {0} (internal module)'.format(address))
                 else:
                     logger.info('Got firmware information: {0} (timeout)'.format(address))

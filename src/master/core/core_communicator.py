@@ -186,6 +186,7 @@ class CoreCommunicator(object):
             event.set()
             if timer is not None:
                 timer.cancel()
+            time.sleep(1.0)  # Wait a brief moment, so any waiting processes can release properly
 
     def _get_cid(self):  # type: () -> int
         """ Get a communication id. 0 and 1 are reserved. """

@@ -27,11 +27,9 @@ if False:  # MYPY
 class SerialNumber(object):
     def __init__(self, year, month, day, company, serial):  # type: (int, int, int, int, int) -> None
         self._uint32_helper = UInt32Field('')
-        self._year = year if year < 100 else year - 2000
-        if not (0 <= self._year <= 99):
-            raise ValueError('Value `year` should be a number, where 2000 <= year <= 2099')
-        self._month = month
-        self._day = day
+        self._year = year if 0 <= year <= 99 else 0
+        self._month = month if 1 <= month <= 12 else 0
+        self._day = day if 1 <= day <= 31 else 0
         self._company = company
         self._serial = serial
 
