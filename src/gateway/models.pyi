@@ -137,9 +137,9 @@ class Sensor(BaseModel):
     id: MixedPrimaryKeyField
     source: str
     plugin: PluginForeignKeyField
-    external_id: str
-    physical_quantity: Optional[str]
-    unit: Optional[str]
+    external_id: MixedCharField
+    physical_quantity: MixedCharField
+    unit: MixedCharField
     name: str
     room: RoomForeignKeyField
 
