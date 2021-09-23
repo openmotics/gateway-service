@@ -135,8 +135,13 @@ class ShutterGroup(BaseModel):
 
 class Sensor(BaseModel):
     id: MixedPrimaryKeyField
-    number: MixedIntegerField
-    room: Any
+    source: str
+    plugin: PluginForeignKeyField
+    external_id: MixedCharField
+    physical_quantity: MixedCharField
+    unit: MixedCharField
+    name: str
+    room: RoomForeignKeyField
 
 
 class SensorForeignKeyField(Sensor, ForeignKeyField): ...
