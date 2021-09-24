@@ -72,7 +72,6 @@ class SensorController(BaseController):
             logger.debug('Sensor value changed %s', gateway_event)
             self._status[status_dto.id] = status_dto
             self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
-        self._status[status_dto.id].value_last_updated = time.time()
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
