@@ -30,6 +30,7 @@ from threading import Timer
 from six.moves.configparser import ConfigParser
 
 import constants
+from bus.om_bus_events import OMBusEvents
 from gateway.base_controller import BaseController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
@@ -38,6 +39,7 @@ if False:  # MYPY
     from typing import Dict, Any, List, Optional, Iterable
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
+    from bus.om_bus_client import MessageClient
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +49,10 @@ logger = logging.getLogger(__name__)
 class SystemController(BaseController):
 
     @Inject
-    def __init__(self, master_controller=INJECTED, module_controller=INJECTED):
+    def __init__(self, master_controller=INJECTED, module_controller=INJECTED, message_client=INJECTED):
         super(SystemController, self).__init__(master_controller)
         self._module_controller = module_controller  # type: ModuleController
+        self._message_client = message_client  # type: MessageClient
 
     # Time related
 
@@ -61,8 +64,26 @@ class SystemController(BaseController):
         if os.path.exists(constants.get_timezone_file()):
             os.remove(constants.get_timezone_file())
         os.symlink(timezone_file_path, constants.get_timezone_file())
+        # Make sure python refreshes the timezone information
+        time.tzset()
+        if self._message_client is not None:
+            self._message_client.send_event(OMBusEvents.TIME_CHANGED, {})
 
     def get_timezone(self):
+        try:
+            path = os.path.realpath(constants.get_timezone_file())
+            if not path.startswith('/usr/share/zoneinfo/'):
+                # Reset timezone to default setting
+                self.set_timezone('UTC')
+                return 'UTC'
+            if path.startswith('/usr/share/zoneinfo/posix'):
+                # As seen on the buildroot os, the timezone info is all located in the posix folder within zoneinfo.
+                return path[26:]
+            return path[20:]
+        except Exception:
+            return 'UTC'
+
+    def get_python_timezone(self):
         return time.tzname[0]
 
     def get_main_version(self):
