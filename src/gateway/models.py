@@ -99,6 +99,8 @@ class Feature(BaseModel):
     name = CharField(unique=True)
     enabled = BooleanField()
 
+    THERMOSTATS_GATEWAY = 'thermostats_gateway'
+
 
 class Output(BaseModel):
     id = AutoField()
@@ -485,6 +487,7 @@ class Thermostat(BaseModel):
                                                (ValveToThermostat.mode == mode))
                                         .order_by(ValveToThermostat.priority)]
 
+    @property
     def heating_schedules(self):  # type: () -> List[DaySchedule]
         return [schedule for schedule in
                 DaySchedule.select()
@@ -492,6 +495,7 @@ class Thermostat(BaseModel):
                                   (DaySchedule.mode == ThermostatGroup.Modes.HEATING))
                            .order_by(DaySchedule.index)]
 
+    @property
     def cooling_schedules(self):  # type: () -> List[DaySchedule]
         return [x for x in
                 DaySchedule.select()

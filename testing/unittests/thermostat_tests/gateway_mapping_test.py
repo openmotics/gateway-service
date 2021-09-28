@@ -139,7 +139,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        auto_sat=schedule_dto,
                                        auto_sun=schedule_dto), dto)
 
-        day_schedule = next(x for x in thermostat.heating_schedules() if x.index == 3)  # type: DaySchedule
+        day_schedule = next(x for x in thermostat.heating_schedules if x.index == 3)  # type: DaySchedule
         day_schedule.schedule_data = {0: 5.0,
                                       120: 5.5,   # 120 and 1200 are selected because 120 < 1200,
                                       1200: 6.0,  # but str(120) > str(1200)

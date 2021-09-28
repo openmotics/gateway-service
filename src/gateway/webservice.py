@@ -685,7 +685,7 @@ class WebInterface(object):
         if master_version >= (3, 143, 88):
             features.append('input_states')
 
-        for name in ('thermostats_gateway',):
+        for name in (Feature.THERMOSTATS_GATEWAY,):
             feature = Feature.get_or_none(name=name)
             if feature and feature.enabled:
                 features.append(name)

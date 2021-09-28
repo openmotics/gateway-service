@@ -68,7 +68,7 @@ class ThermostatMapper(object):
 
         # Schedules
         day_schedules = {schedule.index: schedule
-                         for schedule in getattr(orm_object, '{0}_schedules'.format(mode))()}
+                         for schedule in getattr(orm_object, '{0}_schedules'.format(mode))}
         start_day_of_week = (orm_object.start / 86400 - 4) % 7  # 0: Monday, 1: Tuesday, ...
         for day_index, key in [(0, 'auto_mon'),
                                (1, 'auto_tue'),
