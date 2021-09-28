@@ -297,9 +297,11 @@ class ThermostatControllerGateway(ThermostatController):
         return statuses
 
     def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        self.set_thermostat_group(thermostat_group_id=0,
-                                  state=ThermostatState.ON if thermostat_on or cooling_on else ThermostatState.OFF,
-                                  mode=ThermostatMode.COOLING if cooling_mode or cooling_on else ThermostatMode.HEATING)
+        mode = ThermostatMode.COOLING if cooling_on else ThermostatMode.HEATING
+        state = ThermostatState.ON if thermostat_on else ThermostatState.OFF
+        if mode == ThermostatMode.COOLING:
+            state = state and cooling_on
+        self.set_thermostat_group(thermostat_group_id=0, state=state, mode=mode)
 
     def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
         # type: (int, Optional[str], Optional[str]) -> None
