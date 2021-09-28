@@ -52,11 +52,10 @@ class SensorSourceDTO(BaseDTO):
 
 
 class SensorStatusDTO(BaseDTO):
-    def __init__(self, id, value=None, last_value=None):
-        # type: (int, Optional[float], Optional[float]) -> None
+    def __init__(self, id, value=None):
+        # type: (int, Optional[float]) -> None
         self.id = id
-        self.value = float(value) if value else None
-        self.last_value = last_value
+        self.value = float(value) if value is not None else None
 
     def __eq__(self, other):
         # type: (Any) -> bool

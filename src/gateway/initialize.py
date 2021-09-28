@@ -27,7 +27,6 @@ import time
 from contextlib import contextmanager
 from threading import Lock
 
-from peewee_migrate import Router
 from serial import Serial
 from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
@@ -100,6 +99,7 @@ def lock_file(file):
 
 def apply_migrations():
     # type: () -> None
+    from peewee_migrate import Router
     logger.info('Applying migrations')
     # Run all unapplied migrations
     db = Database.get_db()

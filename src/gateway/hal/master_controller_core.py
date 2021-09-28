@@ -184,6 +184,8 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             for value in core_event.data['values']:
+                if value['type'] == MasterEvent.SensorType.BRIGHTNESS:
+                    value['value'] = MasterCoreController._lux_to_legacy_brightness(value['value'])
                 master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data={'sensor': sensor_id,
                                                                                  'type': value['type'],
                                                                                  'value': value['value']})
@@ -812,11 +814,7 @@ class MasterCoreController(MasterController):
         return humidities
 
     def get_sensor_brightness(self, sensor_id):
-        # TODO: This is a lux value and must somehow be converted to legacy percentage
-        brightness = self._sensor_states.get(sensor_id, {}).get('BRIGHTNESS')
-        if brightness is None or brightness in [65535]:
-            return None
-        return int(float(brightness) / 65535.0 * 100)
+        return self._sensor_states.get(sensor_id, {}).get('BRIGHTNESS')
 
     def get_sensors_brightness(self):
         amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
@@ -849,8 +847,9 @@ class MasterCoreController(MasterController):
             humidity_values = self._execute(CoreAPI.sensor_humidity_values(), {'module_nr': module_nr})['values']
             for i in range(8):
                 sensor_id = module_nr * 8 + i
+                brightness = MasterCoreController._lux_to_legacy_brightness(brightness_values[i])
                 self._sensor_states[sensor_id] = {'TEMPERATURE': temperature_values[i],
-                                                  'BRIGHTNESS': brightness_values[i],
+                                                  'BRIGHTNESS': brightness,
                                                   'HUMIDITY': humidity_values[i]}
         self._sensor_last_updated = time.time()
 
@@ -864,11 +863,24 @@ class MasterCoreController(MasterController):
         self._do_basic_action(BasicAction(action_type=4,
                                           action=sensor_id,
                                           device_nr=Humidity.humidity_to_system_value(humidity)))
+        lux = MasterCoreController._legacy_brightness_to_lux(brightness)
         self._do_basic_action(BasicAction(action_type=5,
                                           action=sensor_id,
-                                          device_nr=brightness if brightness is not None else (2 ** 16 - 1),
-                                          extra_parameter=3))  # Store full word-size brightness value
+                                          device_nr=lux if lux is not None else (2 ** 16 - 1),
+                                          extra_parameter=3))  # Store full word-size lux value
         self._refresh_sensor_states()
+
+    @staticmethod
+    def _lux_to_legacy_brightness(lux):  # type: (Optional[int]) -> Optional[int]
+        if lux is None or lux in [65535]:
+            return None
+        return int(float(lux) / 65535.0 * 100)
+
+    @staticmethod
+    def _legacy_brightness_to_lux(brightness):
+        if brightness is None or not (0 <= brightness <= 100):
+            return None
+        return int(float(brightness) / 100.0 * 65535)
 
     # PulseCounters
 

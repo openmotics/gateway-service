@@ -94,10 +94,10 @@ class Deliveries(RestAPIEndpoint):
         return ApiResponse(body=deliveries_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True,
-                       check={'user_id': int, 'before_id': int, 'pagesize': int}, check_for_missing=False)
-    def get_delivery_history(self, auth_token, before_id=None, pagesize=100, user_id=None):
-        # type: (AuthenticationToken, int, int, int) -> ApiResponse
-        deliveries = self.delivery_controller.load_deliveries(user_id=user_id, history=True, before_id=before_id, limit=pagesize)
+                       check={'user_id': int, 'before_id': int, 'pagesize': int, 'delivery_type': str}, check_for_missing=False)
+    def get_delivery_history(self, auth_token, before_id=None, pagesize=100, user_id=None, delivery_type=None):
+        # type: (AuthenticationToken, int, int, int, str) -> ApiResponse
+        deliveries = self.delivery_controller.load_deliveries(user_id=user_id, history=True, before_id=before_id, limit=pagesize, delivery_type=delivery_type)
         # filter the deliveries for only the user id when they are not technician or admin
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             deliveries = [delivery for delivery in deliveries if auth_token.user.id in [delivery.user_id_delivery, delivery.user_id_pickup]]

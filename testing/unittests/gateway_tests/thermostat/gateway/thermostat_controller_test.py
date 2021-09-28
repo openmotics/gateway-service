@@ -66,8 +66,8 @@ class ThermostatControllerTest(unittest.TestCase):
                             scheduling_controller=self.scheduling_controller,
                             output_controller=self.output_controller,
                             sensor_controller=sensor_controller)
-        self._thermostat_controller = ThermostatControllerGateway()
-        SetUpTestInjections(thermostat_controller=self._thermostat_controller)
+        self.controller = ThermostatControllerGateway()
+        SetUpTestInjections(thermostat_controller=self.controller)
         sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')
         self._thermostat_group = ThermostatGroup.create(number=0,
                                                         name='thermostat group',
@@ -97,10 +97,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                        start=0,
                                        valve_config='equal',
                                        thermostat_group=self._thermostat_group)
-        self._thermostat_controller.save_heating_thermostats([
+        self.controller.save_heating_thermostats([
             ThermostatDTO(id=thermostat.id, sensor=None, room=2)
         ])
-        thermostats = self._thermostat_controller.load_heating_thermostats()
+        thermostats = self.controller.load_heating_thermostats()
         self.assertEqual(len(thermostats), 1)
         self.assertEqual(thermostats[0].name, 'thermostat 1')
         self.assertEqual(thermostats[0].sensor, None)
@@ -126,7 +126,7 @@ class ThermostatControllerTest(unittest.TestCase):
             ScheduleDTO(id=10, external_id='1.0', start=0, action='LOCAL_API', name='T1 day 0 00:00'),
             ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
         ]
-        self._thermostat_controller._sync_thread = Mock()
+        self.controller._sync_thread = Mock()
         schedule_dto = ThermostatScheduleDTO(temp_day_1=22.0,
                                              start_day_1='06:30',
                                              end_day_1='10:00',
@@ -134,7 +134,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                              start_day_2='16:00',
                                              end_day_2='23:00',
                                              temp_night=16.5)
-        self._thermostat_controller.save_heating_thermostats([
+        self.controller.save_heating_thermostats([
             ThermostatDTO(id=thermostat.id,
                           auto_mon=schedule_dto,
                           auto_tue=schedule_dto,
@@ -144,8 +144,8 @@ class ThermostatControllerTest(unittest.TestCase):
                           auto_sat=schedule_dto,
                           auto_sun=schedule_dto)
         ])
-        self._thermostat_controller._sync_thread.request_single_run.assert_called_with()
-        self._thermostat_controller.refresh_thermostats_from_db()
+        self.controller._sync_thread.request_single_run.assert_called_with()
+        self.controller.refresh_thermostats_from_db()
 
         schedules = self.scheduling_controller.save_schedules.call_args_list[0][0][0]
         self.assertEqual(len(schedules), 5 * 7, [x.external_id for x in schedules])
@@ -211,43 +211,48 @@ class ThermostatControllerTest(unittest.TestCase):
                       active=True,
                       thermostat=thermostat)
         pump_output = Output.create(number=4)
-        pump = Pump.create(name='pump 1',
-                           output=pump_output)
 
-        heating_pump_groups = self._thermostat_controller.load_heating_pump_groups()
-        self.assertEqual([PumpGroupDTO(id=pump.id,
-                                       pump_output_id=pump_output.id,
-                                       valve_output_ids=[],
-                                       room_id=None)], heating_pump_groups)
+        heating_pump_groups = self.controller.load_heating_pump_groups()
+        self.assertEqual([], heating_pump_groups)
 
-        PumpToValve.create(pump=pump, valve=valve_1)
-        PumpToValve.create(pump=pump, valve=valve_2)
+        self.controller.save_heating_pump_groups([PumpGroupDTO(id=0,
+                                                               pump_output_id=pump_output.id,
+                                                               valve_output_ids=[valve_1_output.id])])
+        self.controller.save_cooling_pump_groups([PumpGroupDTO(id=0,
+                                                               pump_output_id=pump_output.id,
+                                                               valve_output_ids=[valve_2_output.id])])
 
-        pump_groups = self._thermostat_controller.load_heating_pump_groups()
-        self.assertEqual([PumpGroupDTO(id=pump.id,
+        pump_groups = self.controller.load_heating_pump_groups()
+        self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=pump_output.id,
-                                       valve_output_ids=[valve_1_output.id],
-                                       room_id=None)], pump_groups)
-        pump_groups = self._thermostat_controller.load_cooling_pump_groups()
-        self.assertEqual([PumpGroupDTO(id=pump.id,
+                                       valve_output_ids=[valve_1_output.id])], pump_groups)
+        pump_groups = self.controller.load_cooling_pump_groups()
+        self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=pump_output.id,
-                                       valve_output_ids=[valve_2_output.id],
-                                       room_id=None)], pump_groups)
+                                       valve_output_ids=[valve_2_output.id])], pump_groups)
 
-        self._thermostat_controller._save_pump_groups(ThermostatGroup.Modes.HEATING,
-                                                      [PumpGroupDTO(id=pump.id,
-                                                                    pump_output_id=pump_output.id,
-                                                                    valve_output_ids=[valve_1_output.id, valve_3_output.id])])
-        pump_groups = self._thermostat_controller.load_heating_pump_groups()
-        self.assertEqual([PumpGroupDTO(id=pump.id,
+        pump_output = Output.create(number=5)
+        self.controller.save_heating_pump_groups([
+            PumpGroupDTO(id=0,
+                         pump_output_id=pump_output.id,
+                         valve_output_ids=[valve_1_output.id, valve_3_output.id])
+        ])
+        pump_groups = self.controller.load_heating_pump_groups()
+        self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=pump_output.id,
-                                       valve_output_ids=[valve_1_output.id, valve_3_output.id],
-                                       room_id=None)], pump_groups)
-        pump_groups = self._thermostat_controller.load_cooling_pump_groups()
-        self.assertEqual([PumpGroupDTO(id=pump.id,
-                                       pump_output_id=pump_output.id,
-                                       valve_output_ids=[valve_2_output.id],
-                                       room_id=None)], pump_groups)
+                                       valve_output_ids=[valve_1_output.id, valve_3_output.id])], pump_groups)
+        # pump_groups = self.controller.load_cooling_pump_groups()
+        # self.assertEqual([PumpGroupDTO(id=0,
+        #                                pump_output_id=pump_output.id,
+        #                                valve_output_ids=[valve_2_output.id])], pump_groups)
+
+        self.controller.save_heating_pump_groups([
+            PumpGroupDTO(id=0,
+                         pump_output_id=None,
+                         valve_output_ids=[])
+        ])
+        pump_groups = self.controller.load_heating_pump_groups()
+        self.assertEqual([], pump_groups)
 
     def test_save_thermostat_group(self):
         events = []
@@ -288,7 +293,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(0, OutputToThermostatGroup.select()
                                                    .where(OutputToThermostatGroup.thermostat_group == thermostat_group)
                                                    .count())
-        self._thermostat_controller.save_thermostat_group(ThermostatGroupDTO(id=0,
+        self.controller.save_thermostat_group(ThermostatGroupDTO(id=0,
                                                                              outside_sensor_id=1,
                                                                              pump_delay=30,
                                                                              threshold_temperature=15,
@@ -315,7 +320,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                                       switch_to_heating_1=None,
                                                       switch_to_cooling_0=(2, 0),
                                                       switch_to_cooling_1=None)
-        self._thermostat_controller.save_thermostat_group(new_thermostat_group_dto)
+        self.controller.save_thermostat_group(new_thermostat_group_dto)
 
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'HEATING'}, 'location': {}}), events)
@@ -329,7 +334,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertIn({'index': 0, 'value': 50, 'mode': 'heating', 'output': 1}, links)
         self.assertIn({'index': 0, 'value': 0, 'mode': 'cooling', 'output': 2}, links)
 
-        self.assertEqual(new_thermostat_group_dto, self._thermostat_controller.load_thermostat_group())
+        self.assertEqual(new_thermostat_group_dto, self.controller.load_thermostat_group(0))
 
     def test_thermostat_control(self):
         events = []
@@ -365,7 +370,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                  valve=valve,
                                  mode=ThermostatGroup.Modes.HEATING,
                                  priority=0)
-        self._thermostat_controller.refresh_config_from_db()
+        self.controller.refresh_config_from_db()
 
         mode_output = Output.create(number=5)
         OutputToThermostatGroup.create(thermostat_group=self._thermostat_group, output=mode_output, index=0, mode='heating', value=100)
@@ -377,24 +382,21 @@ class ThermostatControllerTest(unittest.TestCase):
                                             cooling=False,
                                             automatic=True,
                                             statusses=[ThermostatStatusDTO(id=1,
-                                                                           name='thermostat 1',
                                                                            automatic=True,
                                                                            setpoint=0,
-                                                                           sensor_id=sensor.id,
                                                                            actual_temperature=10.0,
                                                                            setpoint_temperature=14.0,
                                                                            outside_temperature=10.0,
                                                                            output_0_level=0,
                                                                            output_1_level=0,
-                                                                           mode=0,
-                                                                           airco=0)])
-        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+                                                                           mode=0)])
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        self._thermostat_controller.set_current_setpoint(thermostat_number=1, heating_temperature=15.0)
+        self.controller.set_current_setpoint(thermostat_number=1, heating_temperature=15.0)
         expected.statusses[0].setpoint_temperature = 15.0
-        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        self._thermostat_controller.set_per_thermostat_mode(thermostat_number=1,
+        self.controller.set_per_thermostat_mode(thermostat_number=1,
                                                             automatic=False,
                                                             setpoint=3)
         self.pubsub._publish_all_events(blocking=False)
@@ -405,9 +407,9 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].automatic = False
         expected.automatic = False
         expected.setpoint = 3
-        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        self._thermostat_controller.set_per_thermostat_mode(thermostat_number=1,
+        self.controller.set_per_thermostat_mode(thermostat_number=1,
                                                             automatic=True,
                                                             setpoint=3)
         self.pubsub._publish_all_events(blocking=False)
@@ -418,38 +420,38 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].automatic = True
         expected.automatic = True
         expected.setpoint = 0
-        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        self._thermostat_controller.set_current_setpoint(thermostat_number=1,
+        self.controller.set_current_setpoint(thermostat_number=1,
                                                          heating_temperature=16.0)
 
-        preset = self._thermostat_controller.get_current_preset(thermostat_number=1)
+        preset = self.controller.get_current_preset(thermostat_number=1)
         self.assertTrue(preset.active)
         self.assertEqual(30.0, preset.cooling_setpoint)
         self.assertEqual(16.0, preset.heating_setpoint)
         self.assertEqual(Preset.Types.AUTO, preset.type)
 
-        self._thermostat_controller.set_current_preset(thermostat_number=1, preset_type=Preset.Types.PARTY)
+        self.controller.set_current_preset(thermostat_number=1, preset_type=Preset.Types.PARTY)
         expected.statusses[0].setpoint_temperature = 22.0
         expected.statusses[0].setpoint = expected.setpoint = 5  # PARTY = legacy `5` setpoint
         expected.statusses[0].automatic = expected.automatic = False
-        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
         self.output_controller.set_output_status.reset_mock()
-        self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=True, cooling_on=True, automatic=False, setpoint=4)
+        self.controller.set_thermostat_group(0, group_on=True, cooling_mode=True, cooling_on=True, automatic=False, setpoint=4)
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'COOLING'}, 'location': {}}), events)
         expected.statusses[0].setpoint_temperature = 38.0
         expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
         expected.cooling = True
-        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=False, dimmer=0)
 
         self.output_controller.set_output_status.reset_mock()
-        self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=False, cooling_on=True, automatic=True)
+        self.controller.set_thermostat_group(0, group_on=True, cooling_mode=False, cooling_on=True, automatic=True)
         expected.statusses[0].setpoint_temperature = 16.0
         expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
         expected.statusses[0].automatic = expected.automatic = True
         expected.cooling = False
-        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=True, dimmer=100)

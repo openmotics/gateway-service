@@ -158,9 +158,6 @@ class ThermostatGroupStatusSerializer(object):
                             'mode': status.mode,
                             'automatic': status.automatic,
                             'setpoint': status.setpoint,
-                            'name': status.name,
-                            'sensor_nr': status.sensor_id,
-                            'airco': status.airco,
                             'output0': status.output_0_level,
                             'output1': status.output_1_level}
                            for status in thermostat_group_status_dto.statusses]}
@@ -194,5 +191,8 @@ class PumpGroupSerializer(object):
                      'rooom': ('room_id', PumpGroupSerializer.BYTE_MAX)}
         )
         if 'outputs' in api_data:
-            pump_group_dto.valve_output_ids = [int(output_id) for output_id in api_data['outputs'].split(',')]
+            if api_data['outputs'] == '':
+                pump_group_dto.valve_output_ids = []
+            else:
+                pump_group_dto.valve_output_ids = [int(output_id) for output_id in api_data['outputs'].split(',')]
         return pump_group_dto
