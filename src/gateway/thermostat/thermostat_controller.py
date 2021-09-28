@@ -82,8 +82,12 @@ class ThermostatController(object):
     def get_thermostat_group_status(self):  # type: () -> List[ThermostatGroupStatusDTO]
         raise NotImplementedError()
 
-    def set_thermostat_group(self, thermostat_group_id, group_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (int, bool, bool, bool, Optional[bool], Optional[int]) -> None
+    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
+        # type: (int, Optional[str], Optional[str]) -> None
+        raise NotImplementedError()
+
+    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
         raise NotImplementedError()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
