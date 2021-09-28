@@ -297,7 +297,7 @@ class ThermostatControllerGateway(ThermostatController):
         return statuses
 
     def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        mode = ThermostatMode.COOLING if cooling_on else ThermostatMode.HEATING
+        mode = ThermostatMode.COOLING if cooling_mode else ThermostatMode.HEATING
         state = ThermostatState.ON if thermostat_on else ThermostatState.OFF
         if mode == ThermostatMode.COOLING:
             state = state and cooling_on
