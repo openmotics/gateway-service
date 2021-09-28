@@ -517,12 +517,12 @@ class ThermostatControllerMaster(ThermostatController):
         # type: () -> List[ThermostatGroupStatusDTO]
         """ Returns thermostat information """
         if not self._enabled:
-            return ThermostatGroupStatusDTO(id=0,
-                                            on=False,
-                                            automatic=False,
-                                            setpoint=None,
-                                            cooling=False,
-                                            statusses=[])
+            return [ThermostatGroupStatusDTO(id=0,
+                                             on=False,
+                                             automatic=False,
+                                             setpoint=None,
+                                             cooling=False,
+                                             statusses=[])]
 
         self._refresh_thermostats()  # Always return the latest information
         master_status = self._thermostat_status.get_thermostats()
