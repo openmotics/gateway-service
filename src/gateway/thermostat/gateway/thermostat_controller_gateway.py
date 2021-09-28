@@ -305,8 +305,9 @@ class ThermostatControllerGateway(ThermostatController):
         # type: (int, Optional[str], Optional[str]) -> None
         thermostat_group = ThermostatGroup.get(number=thermostat_group_id)
         changed = False
-        if thermostat_group.on != state == ThermostatState.ON:
-            thermostat_group.on = state
+        group_on = state == ThermostatState.ON
+        if thermostat_group.on != group_on:
+            thermostat_group.on = group_on
             changed = True
         if thermostat_group.mode != mode:
             thermostat_group.mode = mode
