@@ -30,9 +30,9 @@ DEFAULT_OUTPUT_CONFIG = {'timer': 2**16 - 1}
 DEFAULT_INPUT_CONFIG = {'invert': 255}
 
 
-# @pytest.mark.smoke
-@pytest.mark.slow
-@hypothesis.settings(max_examples=5)
+@pytest.mark.smoke
+# @pytest.mark.slow
+# @hypothesis.settings(max_examples=5)
 @hypothesis.given(inputs(), outputs(), booleans())
 def test_actions(toolbox, _input, output, to_status):
     from_status = not to_status
@@ -43,14 +43,14 @@ def test_actions(toolbox, _input, output, to_status):
     input_config = {'id': _input.input_id, 'action': output.output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-    time.sleep(3) # Allow time for the EEPROM activate to settle
+    time.sleep(60) # Allow time for the EEPROM activate to settle
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
     toolbox.press_input(_input)
     # TODO: Couldn't we also just do an /get_last_inputs on the tester i.s.o. using the event observer plugin?
-    toolbox.assert_output_changed(output, to_status)
+    toolbox.assert_output_changed(output, to_status, between=(0, 10))
 
 
 @pytest.mark.slow

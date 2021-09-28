@@ -323,6 +323,19 @@ class Toolbox(object):
             if module.shutters:
                 self.ensure_shutter_exists(module.shutters[-1], timeout=300)
 
+        # Make sure the eeprom cache of the gateway is filled
+        # self.dut.get('/get_input_configurations')
+        # self.dut.get('/get_output_configurations')
+        # self.dut.get('/get_shutter_configurations')
+        # self.dut.get('/get_shutter_group_configurations')
+        # self.dut.get('/get_ventilation_configurations')
+        # self.dut.get('/get_scheduled_action_configurations')
+        # self.dut.get('/get_group_action_configurations')
+        # self.dut.get('/get_cooling_configurations')
+        # self.dut.get('/get_sensor_configurations')
+        # self.dut.get('/get_thermostat_configurations')
+        # time.sleep(60)  # Give the master some additional rest before testing begins
+
     def print_logs(self):
         # type: () -> None
         try:
@@ -462,6 +475,8 @@ class Toolbox(object):
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
             self.module_discover_stop()
+            # time.sleep(60)  # Give time for the master to clear the eeprom cache
+
 
         while since > time.time() - timeout:
             data = self.dut.get('/get_modules_information')
