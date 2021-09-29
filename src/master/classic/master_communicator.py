@@ -19,6 +19,7 @@ Module to communicate with the master.
 from __future__ import absolute_import
 
 import logging
+import json
 import select
 import time
 from threading import Event, Lock, Thread
@@ -174,18 +175,23 @@ class MasterCommunicator(object):
         # type: (int, bool) -> Dict[str,Dict[float,str]]
         def process(buffer):
             formatted_buffer = {}
-            for key in list(buffer.keys())[-amount:]:
+            now = time.time()
+            for key in sorted(list(buffer.keys())[-amount:]):
+                # if int(key) > now - 120:
                 raw_value = buffer.get(key)
                 if raw_value is not None:
                     raw_string = str(Printable(raw_value))
+                    # if 'EL' not in raw_string:
+                    #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
                     if 'WE' in raw_string:
                         formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-                    elif 'BA' in raw_string:
-                        formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-                    elif 'RE' in raw_string:
-                        formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-            return formatted_buffer
-        return {'write': process(self.__debug_buffer['write'])}
+                    # elif 'BA' in raw_string:
+                    #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
+                    # elif 'RE' in raw_string:
+                    #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
+            return json.dumps(formatted_buffer, sort_keys=True)
+        return {'read':  process(self.__debug_buffer['read']),
+                'write': process(self.__debug_buffer['write'])}
 
     def get_seconds_since_last_success(self):
         """ Get the number of seconds since the last successful communication. """

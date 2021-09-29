@@ -475,7 +475,7 @@ class Toolbox(object):
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
             self.module_discover_stop()
-            # time.sleep(60)  # Give time for the master to clear the eeprom cache
+            time.sleep(60)  # Give time for the master to clear the eeprom cache
 
 
         while since > time.time() - timeout:
@@ -725,7 +725,34 @@ class Toolbox(object):
             return
         logger.debug('### Debug Buffer DUT')
         # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 400}))
-        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0}))  # amount 0 will dump the whole buffer
+        # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0}))  # amount 0 will dump the whole buffer
+        # json.dumps(mydict, indent=4, sort_keys=True)
+        logger.debug('### READ')
+        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['read'])
+        time.sleep(5)
+        logger.debug('### WRITE')
+        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['write'])
+        time.sleep(5)
+        # logger.debug(json.dumps(self.dut.get('/get_master_debug_buffer', {'amount': 0})['read'], sort_keys=True))
+        # logger.debug(json.dumps(self.dut.get('/get_master_debug_buffer', {'amount': 0})['write'], sort_keys=True))
+
+        #  raw_dict has the following format: {'read': {'timestr': raw_str}, 'write': {'timestr': raw_str}}
+        # raw_strings_read = []
+        # raw_strings_write = []
+        # for key in sorted(list(raw_dict['read'].keys())):
+        #     raw_string = raw_dict['read'].get(key)
+        #     raw_strings_read.append(key, raw_string)
+        #     # Tuple (timestr, raw_data_string)
+        # for key in sorted(list(raw_dict['write'].keys())):
+        #     raw_string = raw_dict['write'].get(key)
+        #     raw_strings_read.append(key, raw_string)
+        #     # Tuple (timestr, raw_data_string)
+        # logger.debug(raw_strings_read)
+        # logger.debug(raw_strings_write)
+        # For some reason logger.debug to print a tuple does not do anything
+
+
+
         raise AssertionError('expected event {} status={}'.format(output, status))
 
     def assert_output_status(self, output, status, timeout=5):
