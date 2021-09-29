@@ -21,7 +21,7 @@ from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
     ThermostatAircoStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
     ThermostatGroupStatusDTO, ThermostatScheduleDTO, ThermostatStatusDTO
 from gateway.events import GatewayEvent
-from gateway.exceptions import CommunicationFailure
+from gateway.exceptions import CommunicationFailure, FeatureUnavailableException
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Sensor
 from gateway.pubsub import PubSub
@@ -328,11 +328,13 @@ class ThermostatControllerMaster(ThermostatController):
     def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         self._master_controller.save_heating_pump_groups(pump_groups)
 
-    def set_thermostat_group(self, thermostat_group_id, group_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (int, bool, bool, bool, Optional[bool], Optional[int]) -> None
+    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
+        # type: (int, Optional[str], Optional[str]) -> None
+        raise FeatureUnavailableException()
+
+    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
         """ Set the mode of the thermostats. """
-        if thermostat_group_id != self.GLOBAL_THERMOSTAT:
-            raise NotImplementedError('Thermostat groups not supported')
 
         # Figure out whether the system should be on or off
         set_on = False

@@ -959,16 +959,12 @@ class WebInterface(object):
         self._thermostat_controller.save_thermostat_group(data)
         return {}
 
-    @openmotics_api(auth=True, check=types(id=int, group_on=bool, mode=str))
-    def set_thermostat_group(self, id, group_on=True, mode=None):
+    @openmotics_api(auth=True, check=types(id=int, state=str, mode=str))
+    def set_thermostat_group(self, id, state=None, mode=None):
         """
-        Set the global mode of the thermostats. Thermostats can be on or off (thermostat_on),
-        can be in cooling or heating (cooling_mode), cooling can be turned on or off (cooling_on).
-        The automatic and setpoint parameters are here for backwards compatibility and will be
-        applied to all thermostats. To control the automatic and setpoint parameters per thermostat
-        use the set_per_thermostat_mode call instead.
+        Sets a thermsotat group on a given state (e.g. on or off) and/or mode (e.g. cooling or heating)
         """
-        self._thermostat_controller.set_thermostat_group(id, group_on, mode == 'cooling')
+        self._thermostat_controller.set_thermostat_group(id, state, mode)
         return {}
 
     @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
@@ -986,7 +982,11 @@ class WebInterface(object):
         applied to all thermostats. To control the automatic and setpoint parameters per thermostat
         use the set_per_thermostat_mode call instead.
         """
-        self._thermostat_controller.set_thermostat_group(ThermostatController.GLOBAL_THERMOSTAT, thermostat_on, cooling_mode, cooling_on, automatic, setpoint)
+        self._thermostat_controller.set_thermostat_mode(thermostat_on=thermostat_on,
+                                                        cooling_mode=cooling_mode,
+                                                        cooling_on=cooling_on,
+                                                        automatic=automatic,
+                                                        setpoint=setpoint)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))

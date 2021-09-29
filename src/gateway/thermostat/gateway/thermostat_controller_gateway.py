@@ -19,7 +19,7 @@ from gateway.daemon_thread import DaemonThread
 from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, ScheduleDTO, \
     ThermostatDTO, ThermostatGroupDTO, ThermostatGroupStatusDTO, \
     ThermostatStatusDTO
-from gateway.enums import ThermostatMode
+from gateway.enums import ThermostatMode, ThermostatState
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
 from gateway.mappers import ThermostatMapper
@@ -146,7 +146,7 @@ class ThermostatControllerGateway(ThermostatController):
                     m, _ = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     mode = 'H' if schedule.mode == 'heating' else 'C'
-                    temperature_field = 'heating_temperature' if schedule.mode == 'heating' else 'cooling_temperature'
+                    temperature_field = 'heating_temperature' if schedule.mode == ThermostatMode.HEATING else 'cooling_temperature'
                     external_id = '{}.{}'.format(schedule.id, i)
                     if external_id in schedule_mapping:
                         thermostat_schedule = schedule_mapping.pop(external_id)
@@ -259,8 +259,9 @@ class ThermostatControllerGateway(ThermostatController):
 
             outside_temperature = get_temperature_from_sensor(thermostat_group.sensor)
 
+            thermostat_statusses = []
             for thermostat in thermostat_group.thermostats:
-                valves = thermostat.cooling_valves if thermostat_group.mode == 'cooling' else thermostat.heating_valves
+                valves = thermostat.cooling_valves if thermostat_group.mode == ThermostatMode.COOLING else thermostat.heating_valves
                 db_outputs = [valve.output.number for valve in valves]
 
                 number_of_outputs = len(db_outputs)
@@ -276,15 +277,17 @@ class ThermostatControllerGateway(ThermostatController):
                 else:
                     setpoint_temperature = active_preset.heating_setpoint
 
-                group_status.statusses.append(ThermostatStatusDTO(id=thermostat.number,
-                                                                  actual_temperature=get_temperature_from_sensor(thermostat.sensor),
-                                                                  setpoint_temperature=setpoint_temperature,
-                                                                  outside_temperature=outside_temperature,
-                                                                  mode=0,  # TODO: Need to be fixed
-                                                                  automatic=active_preset.type == Preset.Types.AUTO,
-                                                                  setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
-                                                                  output_0_level=get_output_level(output0),
-                                                                  output_1_level=get_output_level(output1)))
+                thermostat_statusses.append(ThermostatStatusDTO(id=thermostat.number,
+                                                                actual_temperature=get_temperature_from_sensor(thermostat.sensor),
+                                                                setpoint_temperature=setpoint_temperature,
+                                                                outside_temperature=outside_temperature,
+                                                                mode=0,  # TODO: Need to be fixed
+                                                                automatic=active_preset.type == Preset.Types.AUTO,
+                                                                setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
+                                                                output_0_level=get_output_level(output0),
+                                                                output_1_level=get_output_level(output1)))
+
+            group_status.statusses = thermostat_statusses
 
             # Update global references
             group_status.automatic = all(status.automatic for status in group_status.statusses)
@@ -293,11 +296,18 @@ class ThermostatControllerGateway(ThermostatController):
             statuses.append(group_status)
         return statuses
 
-    def set_thermostat_group(self, thermostat_group_id, group_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (int, bool, bool, bool, Optional[bool], Optional[int]) -> None
-        mode = ThermostatMode.COOLING if cooling_mode else ThermostatMode.HEATING  # type: Literal['cooling', 'heating']
+    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        mode = ThermostatMode.COOLING if cooling_mode else ThermostatMode.HEATING
+        state = ThermostatState.ON if thermostat_on else ThermostatState.OFF
+        if mode == ThermostatMode.COOLING:
+            state = state and cooling_on
+        self.set_thermostat_group(thermostat_group_id=0, state=state, mode=mode)
+
+    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
+        # type: (int, Optional[str], Optional[str]) -> None
         thermostat_group = ThermostatGroup.get(number=thermostat_group_id)
         changed = False
+        group_on = state == ThermostatState.ON
         if thermostat_group.on != group_on:
             thermostat_group.on = group_on
             changed = True
@@ -308,17 +318,12 @@ class ThermostatControllerGateway(ThermostatController):
         if changed:
             thermostat_group.save()
             self._thermostat_group_changed(thermostat_group)
-
-        for thermostat_number, thermostat_pid in self.thermostat_pids.items():
-            thermostat = Thermostat.get(number=thermostat_number)
-            if thermostat is not None:
-                if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-                    preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.AUTO))
-                    thermostat.active_preset = preset
-                else:
+            for thermostat_number, thermostat_pid in self.thermostat_pids.items():
+                thermostat = Thermostat.get(number=thermostat_number)
+                if thermostat is not None:
                     thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.AUTO)
-                thermostat_pid.update_thermostat(thermostat)
-                thermostat_pid.tick()
+                    thermostat_pid.update_thermostat(thermostat)
+                    thermostat_pid.tick()
 
     def _set_mode_outputs(self, thermostat_group):  # type: (ThermostatGroup) -> None
         link_set = OutputToThermostatGroup.select() \
@@ -348,17 +353,17 @@ class ThermostatControllerGateway(ThermostatController):
             self._sync_thread.request_single_run()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        mode = 'cooling'  # type: Literal['cooling']
+        mode = ThermostatMode.COOLING
         thermostat = Thermostat.get(number=thermostat_id)
         return ThermostatMapper.orm_to_dto(thermostat, mode)
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        mode = 'cooling'  # type: Literal['cooling']
+        mode = ThermostatMode.COOLING
         return [ThermostatMapper.orm_to_dto(thermostat, mode)
                 for thermostat in Thermostat.select()]
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
-        mode = 'cooling'  # type: Literal['cooling']
+        mode = ThermostatMode.COOLING
         for thermostat_dto in thermostats:
             # TODO: mappers should only transform data, not save models
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
@@ -445,7 +450,7 @@ class ThermostatControllerGateway(ThermostatController):
             self._thermostat_group_changed(orm_object)
 
         # Link configuration outputs to global thermostat config
-        for mode in ['cooling', 'heating']:
+        for mode in [ThermostatMode.COOLING, ThermostatMode.HEATING]:
             links = {link.index: link
                      for link in OutputToThermostatGroup
                          .select()
