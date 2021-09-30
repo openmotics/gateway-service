@@ -53,8 +53,8 @@ class DummyRebusController(RebusControllerInterface):
         self.parcelboxes = {}  # type: Dict[int, ParcelBoxDTO]
         self.doorbells = {}  # type: Dict[int, DoorbellDTO]
         self._lock_status = {}  # type: Dict[int, int]  # int counter to check how many ticks it stays open
-        self._lock_open_ticks = 2
-        self.lock_tick_thread = DaemonThread(name='fake lock tick', target=self._lock_close_tick_check, interval=2, delay=2)
+        self._lock_open_ticks = 1
+        self.lock_tick_thread = DaemonThread(name='fake lock tick', target=self._lock_close_tick_check, interval=1, delay=2)
 
         self.current_path = os.path.dirname(os.path.abspath(__file__))
         self.dummy_rebus_json_file = os.path.join(self.current_path, "dummy_rebus_devices.json")
@@ -99,7 +99,7 @@ class DummyRebusController(RebusControllerInterface):
 
     # ParcelBox Functions
 
-    def get_parcelboxes(self, rebus_id=None, size=None, available=False):
+    def get_parcelboxes(self, rebus_id=None, size=None, available=None):
         # type: (Optional[int], Optional[str], Optional[bool]) -> List[ParcelBoxDTO]
         logger.debug('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
         # if no rebus id is given, get all the parcelboxes
@@ -115,6 +115,9 @@ class DummyRebusController(RebusControllerInterface):
             size = size.lower()
             parcelboxes = [parcelbox for parcelbox in parcelboxes if parcelbox.size.name.lower() == size]
 
+        for parcelbox in parcelboxes:
+            box_available = self.delivery_controller.parcel_id_available(parcelbox.id)
+            parcelbox.available = box_available
         # filter out the available packages
         if available is True:
             parcelboxes = [box for box in parcelboxes if box.available]
