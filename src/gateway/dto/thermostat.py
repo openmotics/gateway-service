@@ -84,25 +84,26 @@ class ThermostatGroupDTO(BaseDTO):
 
 
 class ThermostatStatusDTO(BaseDTO):
-    def __init__(self, id, actual_temperature, setpoint_temperature, automatic, setpoint, mode,
-                 outside_temperature=None, output_0_level=None, output_1_level=None):
-        # type: (int, Optional[float], float, bool, int, int, Optional[float], Optional[int], Optional[int]) -> None
+    def __init__(self, id, actual_temperature, setpoint_temperature, automatic, setpoint, mode, state,
+                 outside_temperature=None, output_0_level=None, output_1_level=None, steering_power=None):
+        # type: (int, Optional[float], float, bool, int, int, str, Optional[float], Optional[int], Optional[int], Optional[int]) -> None
         self.id = id
         self.actual_temperature = actual_temperature
         self.setpoint_temperature = setpoint_temperature
         self.automatic = automatic
         self.setpoint = setpoint
         self.mode = mode
+        self.state = state
         self.outside_temperature = outside_temperature
         self.output_0_level = output_0_level
         self.output_1_level = output_1_level
+        self.steering_power = steering_power
 
 
 class ThermostatGroupStatusDTO(BaseDTO):
-    def __init__(self, id, on, automatic, cooling, setpoint=None, statusses=None):
-        # type: (int, bool, bool, bool, Optional[int], Optional[List[ThermostatStatusDTO]]) -> None
+    def __init__(self, id, automatic, cooling, setpoint=None, statusses=None):
+        # type: (int, bool, bool, Optional[int], Optional[List[ThermostatStatusDTO]]) -> None
         self.id = id
-        self.on = on
         self.automatic = automatic
         self.cooling = cooling
         self.setpoint = setpoint if setpoint is not None else 0  # type: int

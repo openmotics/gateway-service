@@ -328,7 +328,6 @@ class ThermostatGroup(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
-    on = BooleanField(default=True)
     threshold_temperature = FloatField(null=True, default=None)
     sensor = ForeignKeyField(Sensor, null=True, backref='thermostat_groups', on_delete='SET NULL')
     mode = CharField(default=Modes.HEATING)  # Options: 'heating' or 'cooling'
@@ -410,6 +409,7 @@ class Thermostat(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(default='Thermostat')
+    state = CharField(default='on')
     sensor = ForeignKeyField(Sensor, null=True, backref='thermostats', on_delete='SET NULL')
     pid_heating_p = FloatField(default=120)
     pid_heating_i = FloatField(default=0)

@@ -960,11 +960,11 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, state=str, mode=str))
-    def set_thermostat_group(self, id, state=None, mode=None):
+    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
         """
-        Sets a thermsotat group on a given state (e.g. on or off) and/or mode (e.g. cooling or heating)
+        Sets a thermsotat group on a given mode (e.g. cooling or heating) and/or all child thermostats on a given state (e.g. on or off)
         """
-        self._thermostat_controller.set_thermostat_group(id, state, mode)
+        self._thermostat_controller.set_thermostat_group(thermostat_group_id, state, mode)
         return {}
 
     @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
@@ -1004,7 +1004,7 @@ class WebInterface(object):
                                                                 cooling_temperature=cooling_temperature)
         return {'status': 'OK'}
 
-    @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int))
+    @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int), deprecated='set_thermostat')
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
         # type: (int, bool, int) -> Dict[str,Any]
         """
@@ -1012,6 +1012,15 @@ class WebInterface(object):
         manual, in case of manual a setpoint (0 to 5) can be provided.
         """
         self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(thermostat_id=int, preset=str, state=str, setpoint=float))
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> Dict[str, str]
+        self._thermostat_controller.set_thermostat(thermostat_id=thermostat_id,
+                                                   preset=preset,
+                                                   state=state,
+                                                   temperature=temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)

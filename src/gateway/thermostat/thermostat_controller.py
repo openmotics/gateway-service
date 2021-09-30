@@ -70,6 +70,10 @@ class ThermostatController(object):
         # type: (int, bool, int) -> None
         raise NotImplementedError()
 
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> None
+        raise NotImplementedError()
+
     def load_thermostat_groups(self):  # type: () -> List[ThermostatGroupDTO]
         raise NotImplementedError()
 

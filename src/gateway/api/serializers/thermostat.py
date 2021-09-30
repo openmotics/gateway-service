@@ -147,20 +147,24 @@ class ThermostatGroupSerializer(object):
 class ThermostatGroupStatusSerializer(object):
     @staticmethod
     def serialize(thermostat_group_status_dto):  # type: (ThermostatGroupStatusDTO) -> Dict[str, Any]
-        return {'thermostats_on': thermostat_group_status_dto.on,
-                'automatic': thermostat_group_status_dto.automatic,
+        group_on = False
+        data = {'automatic': thermostat_group_status_dto.automatic,
                 'setpoint': thermostat_group_status_dto.setpoint,
                 'cooling': thermostat_group_status_dto.cooling,
-                'status': [{'id': status.id,
-                            'act': status.actual_temperature,
-                            'csetp': status.setpoint_temperature,
-                            'outside': status.outside_temperature,
-                            'mode': status.mode,
-                            'automatic': status.automatic,
-                            'setpoint': status.setpoint,
-                            'output0': status.output_0_level,
-                            'output1': status.output_1_level}
-                           for status in thermostat_group_status_dto.statusses]}
+                'status': []}  # type: Dict[str, Any]
+        for status in thermostat_group_status_dto.statusses:
+            data['status'].append({'id': status.id,
+                                   'act': status.actual_temperature,
+                                   'csetp': status.setpoint_temperature,
+                                   'outside': status.outside_temperature,
+                                   'mode': status.mode,
+                                   'automatic': status.automatic,
+                                   'setpoint': status.setpoint,
+                                   'output0': status.output_0_level,
+                                   'output1': status.output_1_level})
+            group_on = group_on or status.state == 'on'
+        data['thermostat_on'] = group_on
+        return data
 
 
 class ThermostatAircoStatusSerializer(object):

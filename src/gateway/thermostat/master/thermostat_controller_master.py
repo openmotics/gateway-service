@@ -398,6 +398,10 @@ class ThermostatControllerMaster(ThermostatController):
         self.invalidate_cache(THERMOSTATS)
         self.increase_interval(THERMOSTATS, interval=2, window=10)
 
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> None
+        raise FeatureUnavailableException()
+
     def set_airco_status(self, thermostat_id, airco_on):
         # type: (int, bool) -> None
         """ Set the mode of the airco attached to a given thermostat. """
@@ -520,7 +524,6 @@ class ThermostatControllerMaster(ThermostatController):
         """ Returns thermostat information """
         if not self._enabled:
             return [ThermostatGroupStatusDTO(id=0,
-                                             on=False,
                                              automatic=False,
                                              setpoint=None,
                                              cooling=False,
@@ -533,13 +536,14 @@ class ThermostatControllerMaster(ThermostatController):
                                          setpoint_temperature=thermostat['csetp'],
                                          outside_temperature=thermostat['outside'],
                                          mode=thermostat['mode'],
+                                         state=thermostat['state'],
                                          automatic=thermostat['automatic'],
                                          setpoint=thermostat['setpoint'],
                                          output_0_level=thermostat['output0'],
-                                         output_1_level=thermostat['output1'])
+                                         output_1_level=thermostat['output1'],
+                                         steering_power=(thermostat['output0'] + thermostat['output1']) // 2)
                      for thermostat in master_status['status']]
         return [ThermostatGroupStatusDTO(id=0,
-                                         on=master_status['thermostats_on'],
                                          automatic=master_status['automatic'],
                                          setpoint=master_status['setpoint'],
                                          cooling=master_status['cooling'],

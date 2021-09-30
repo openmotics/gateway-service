@@ -294,12 +294,12 @@ class ThermostatControllerTest(unittest.TestCase):
                                                    .where(OutputToThermostatGroup.thermostat_group == thermostat_group)
                                                    .count())
         self.controller.save_thermostat_group(ThermostatGroupDTO(id=0,
-                                                                             outside_sensor_id=1,
-                                                                             pump_delay=30,
-                                                                             threshold_temperature=15,
-                                                                             switch_to_heating_0=(1, 0),
-                                                                             switch_to_heating_1=(2, 100),
-                                                                             switch_to_cooling_0=(1, 100)))
+                                                                 outside_sensor_id=1,
+                                                                 pump_delay=30,
+                                                                 threshold_temperature=15,
+                                                                 switch_to_heating_0=(1, 0),
+                                                                 switch_to_heating_1=(2, 100),
+                                                                 switch_to_cooling_0=(1, 100)))
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'HEATING'}, 'location': {}}), events)
         thermostat_group = ThermostatGroup.get(number=0)
@@ -377,18 +377,19 @@ class ThermostatControllerTest(unittest.TestCase):
         OutputToThermostatGroup.create(thermostat_group=self._thermostat_group, output=mode_output, index=0, mode='cooling', value=0)
 
         expected = ThermostatGroupStatusDTO(id=0,
-                                            on=True,
                                             setpoint=0,
                                             cooling=False,
                                             automatic=True,
                                             statusses=[ThermostatStatusDTO(id=1,
                                                                            automatic=True,
                                                                            setpoint=0,
+                                                                           state='on',
                                                                            actual_temperature=10.0,
                                                                            setpoint_temperature=14.0,
                                                                            outside_temperature=10.0,
-                                                                           output_0_level=0,
+                                                                           output_0_level=0,  # Valve drivers are not active
                                                                            output_1_level=0,
+                                                                           steering_power=100,  # PID active
                                                                            mode=0)])
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
@@ -396,11 +397,19 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint_temperature = 15.0
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        self.controller.set_per_thermostat_mode(thermostat_number=1,
+        self.controller.set_per_thermostat_mode(thermostat_id=1,
                                                 automatic=False,
                                                 setpoint=3)
         self.pubsub._publish_all_events(blocking=False)
-        event_data = {'id': 1, 'status': {'preset': 'AWAY', 'current_setpoint': 16.0, 'actual_temperature': 10.0, 'output_0': 100, 'output_1': None}, 'location': {}}
+        event_data = {'id': 1,
+                      'status': {'state': 'ON',
+                                 'preset': 'AWAY',
+                                 'current_setpoint': 16.0,
+                                 'actual_temperature': 10.0,
+                                 'output_0': 100,
+                                 'output_1': None,
+                                 'steering_power': 100},
+                      'location': {}}
         self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
         expected.statusses[0].setpoint_temperature = 16.0
         expected.statusses[0].setpoint = 3
@@ -409,11 +418,19 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.setpoint = 3
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        self.controller.set_per_thermostat_mode(thermostat_number=1,
+        self.controller.set_per_thermostat_mode(thermostat_id=1,
                                                 automatic=True,
                                                 setpoint=3)
         self.pubsub._publish_all_events(blocking=False)
-        event_data = {'id': 1, 'status': {'preset': 'AUTO', 'current_setpoint': 15.0, 'actual_temperature': 10.0, 'output_0': 100, 'output_1': None}, 'location': {}}
+        event_data = {'id': 1,
+                      'status': {'state': 'ON',
+                                 'preset': 'AUTO',
+                                 'current_setpoint': 15.0,
+                                 'actual_temperature': 10.0,
+                                 'output_0': 100,
+                                 'output_1': None,
+                                 'steering_power': 100},
+                      'location': {}}
         self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
         expected.statusses[0].setpoint_temperature = 15.0
         expected.statusses[0].setpoint = 0
@@ -439,11 +456,12 @@ class ThermostatControllerTest(unittest.TestCase):
 
         self.output_controller.set_output_status.reset_mock()
         self.controller.set_thermostat_group(thermostat_group_id=0, state='on', mode='cooling')
-        self.controller.set_per_thermostat_mode(thermostat_number=1, automatic=False, setpoint=4)
+        self.controller.set_per_thermostat_mode(thermostat_id=1, automatic=False, setpoint=4)
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'COOLING'}, 'location': {}}), events)
         expected.statusses[0].setpoint_temperature = 38.0
         expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
+        expected.statusses[0].steering_power = 0
         expected.cooling = True
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=False, dimmer=0)
@@ -453,6 +471,7 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint_temperature = 16.0
         expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
         expected.statusses[0].automatic = expected.automatic = True
+        expected.statusses[0].steering_power = 100
         expected.cooling = False
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=True, dimmer=100)
