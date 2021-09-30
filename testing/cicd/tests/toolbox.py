@@ -334,7 +334,7 @@ class Toolbox(object):
         # self.dut.get('/get_cooling_configurations')
         # self.dut.get('/get_sensor_configurations')
         # self.dut.get('/get_thermostat_configurations')
-        # time.sleep(60)  # Give the master some additional rest before testing begins
+        time.sleep(10)  # Give the master some additional rest before testing begins (preferably 1 min)
 
     def print_logs(self):
         # type: () -> None
@@ -724,12 +724,13 @@ class Toolbox(object):
                                            between=between):
             return
         logger.debug('### Debug Buffer DUT')
+        logger.debug(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
         # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 400}))
         # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0}))  # amount 0 will dump the whole buffer
         # json.dumps(mydict, indent=4, sort_keys=True)
-        logger.debug('### READ')
-        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['read'])
-        time.sleep(5)
+        # logger.debug('### READ')
+        # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['read'])
+        # time.sleep(5)
         logger.debug('### WRITE')
         logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['write'])
         time.sleep(5)
