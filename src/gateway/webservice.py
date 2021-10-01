@@ -47,7 +47,8 @@ from gateway.api.serializers import DimmerConfigurationSerializer, \
     SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
     ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
     ThermostatGroupStatusSerializer, ThermostatSerializer, \
-    VentilationSerializer, VentilationStatusSerializer
+    VentilationSerializer, VentilationStatusSerializer, \
+    LegacyThermostatGroupStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
@@ -971,7 +972,7 @@ class WebInterface(object):
     def get_thermostat_status(self):  # type: () -> Dict[str, Any]
         """ Get the status of the thermostats. """
         status = self._thermostat_controller.get_thermostat_group_status()
-        return ThermostatGroupStatusSerializer.serialize(status[0])
+        return LegacyThermostatGroupStatusSerializer.serialize(status[0])
 
     @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool), deprecated='set_thermostat_group')
     def set_thermostat_mode(self, thermostat_on, automatic=None, setpoint=None, cooling_mode=False, cooling_on=False):

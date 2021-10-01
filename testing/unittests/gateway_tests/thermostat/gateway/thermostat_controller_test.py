@@ -301,7 +301,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                                                  switch_to_heating_1=(2, 100),
                                                                  switch_to_cooling_0=(1, 100)))
         self.pubsub._publish_all_events(blocking=False)
-        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'HEATING'}, 'location': {}}), events)
+        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'mode': 'HEATING'}, 'location': {}}), events)
         thermostat_group = ThermostatGroup.get(number=0)
         self.assertEqual(15.0, thermostat_group.threshold_temperature)
         links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}
@@ -323,7 +323,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.controller.save_thermostat_group(new_thermostat_group_dto)
 
         self.pubsub._publish_all_events(blocking=False)
-        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'HEATING'}, 'location': {}}), events)
+        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'mode': 'HEATING'}, 'location': {}}), events)
         thermostat_group = ThermostatGroup.get(number=0)
         self.assertIsNone(thermostat_group.sensor)
         self.assertIsNone(thermostat_group.threshold_temperature)
@@ -380,10 +380,12 @@ class ThermostatControllerTest(unittest.TestCase):
                                             setpoint=0,
                                             cooling=False,
                                             automatic=True,
+                                            mode='heating',
                                             statusses=[ThermostatStatusDTO(id=1,
                                                                            automatic=True,
                                                                            setpoint=0,
                                                                            state='on',
+                                                                           preset='auto',
                                                                            actual_temperature=10.0,
                                                                            setpoint_temperature=14.0,
                                                                            outside_temperature=10.0,
@@ -414,13 +416,14 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint_temperature = 16.0
         expected.statusses[0].setpoint = 3
         expected.statusses[0].automatic = False
+        expected.statusses[0].preset = 'away'
         expected.automatic = False
         expected.setpoint = 3
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
         self.controller.set_per_thermostat_mode(thermostat_id=1,
                                                 automatic=True,
-                                                setpoint=3)
+                                                setpoint=3)  # This is conflicting with automatic = True above
         self.pubsub._publish_all_events(blocking=False)
         event_data = {'id': 1,
                       'status': {'state': 'ON',
@@ -435,6 +438,7 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint_temperature = 15.0
         expected.statusses[0].setpoint = 0
         expected.statusses[0].automatic = True
+        expected.statusses[0].preset = 'auto'
         expected.automatic = True
         expected.setpoint = 0
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
@@ -452,17 +456,20 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint_temperature = 22.0
         expected.statusses[0].setpoint = expected.setpoint = 5  # PARTY = legacy `5` setpoint
         expected.statusses[0].automatic = expected.automatic = False
+        expected.statusses[0].preset = 'party'
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
         self.output_controller.set_output_status.reset_mock()
         self.controller.set_thermostat_group(thermostat_group_id=0, state='on', mode='cooling')
         self.controller.set_per_thermostat_mode(thermostat_id=1, automatic=False, setpoint=4)
         self.pubsub._publish_all_events(blocking=False)
-        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'state': 'ON', 'mode': 'COOLING'}, 'location': {}}), events)
+        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'mode': 'COOLING'}, 'location': {}}), events)
         expected.statusses[0].setpoint_temperature = 38.0
         expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
         expected.statusses[0].steering_power = 0
+        expected.statusses[0].preset = 'vacation'
         expected.cooling = True
+        expected.mode = 'cooling'
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=False, dimmer=0)
 
@@ -472,6 +479,8 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
         expected.statusses[0].automatic = expected.automatic = True
         expected.statusses[0].steering_power = 100
+        expected.statusses[0].preset = 'auto'
         expected.cooling = False
+        expected.mode = 'heating'
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=True, dimmer=100)

@@ -96,10 +96,12 @@ class ThermostatControllerMaster(ThermostatController):
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_id,
                                       'status': {'preset': status['preset'],
+                                                 'state': status['state'].upper(),
                                                  'current_setpoint': status['current_setpoint'],
                                                  'actual_temperature': status['actual_temperature'],
                                                  'output_0': status['output_0'],
-                                                 'output_1': status['output_1']},
+                                                 'output_1': status['output_1'],
+                                                 'steering_power': status['steering_power']},
                                       'location': location})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
@@ -107,8 +109,7 @@ class ThermostatControllerMaster(ThermostatController):
         # type: (Dict[str,Any]) -> None
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                      {'id': 0,
-                                      'status': {'state': status['state'],
-                                                 'mode': status['mode']},
+                                      'status': {'mode': status['mode'].upper()},
                                       'location': {}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
@@ -527,24 +528,28 @@ class ThermostatControllerMaster(ThermostatController):
                                              automatic=False,
                                              setpoint=None,
                                              cooling=False,
+                                             mode='heating',
                                              statusses=[])]
 
         self._refresh_thermostats()  # Always return the latest information
         master_status = self._thermostat_status.get_thermostats()
-        statusses = [ThermostatStatusDTO(id=thermostat['id'],
-                                         actual_temperature=thermostat['act'],
-                                         setpoint_temperature=thermostat['csetp'],
-                                         outside_temperature=thermostat['outside'],
-                                         mode=thermostat['mode'],
-                                         state=thermostat['state'],
-                                         automatic=thermostat['automatic'],
-                                         setpoint=thermostat['setpoint'],
-                                         output_0_level=thermostat['output0'],
-                                         output_1_level=thermostat['output1'],
-                                         steering_power=(thermostat['output0'] + thermostat['output1']) // 2)
-                     for thermostat in master_status['status']]
+        statusses = []
+        for thermostat in master_status['status']:
+            statusses.append(ThermostatStatusDTO(id=thermostat['id'],
+                                                 actual_temperature=thermostat['act'],
+                                                 setpoint_temperature=thermostat['csetp'],
+                                                 outside_temperature=thermostat['outside'],
+                                                 mode=thermostat['mode'],
+                                                 state=thermostat['state'],
+                                                 preset=thermostat['preset'],
+                                                 automatic=thermostat['automatic'],
+                                                 setpoint=thermostat['setpoint'],
+                                                 output_0_level=thermostat['output0'],
+                                                 output_1_level=thermostat['output1'],
+                                                 steering_power=thermostat['steering_power']))
         return [ThermostatGroupStatusDTO(id=0,
                                          automatic=master_status['automatic'],
                                          setpoint=master_status['setpoint'],
                                          cooling=master_status['cooling'],
+                                         mode=master_status['mode'],
                                          statusses=statusses)]

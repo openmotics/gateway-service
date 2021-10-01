@@ -295,7 +295,8 @@ class ThermostatControllerGateway(ThermostatController):
             group_status = ThermostatGroupStatusDTO(id=0,
                                                     automatic=True,  # Default, will be updated below
                                                     setpoint=0,  # Default, will be updated below
-                                                    cooling=thermostat_group.mode == ThermostatMode.COOLING)
+                                                    cooling=thermostat_group.mode == ThermostatMode.COOLING,
+                                                    mode=thermostat_group.mode)
 
             outside_temperature = get_temperature_from_sensor(thermostat_group.sensor)
 
@@ -332,7 +333,8 @@ class ThermostatControllerGateway(ThermostatController):
                                                                 setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                                 output_0_level=output0_level,
                                                                 output_1_level=output1_level,
-                                                                steering_power=steering_power))
+                                                                steering_power=steering_power,
+                                                                preset=thermostat.active_preset.type))
 
             group_status.statusses = thermostat_statusses
 
@@ -664,8 +666,7 @@ class ThermostatControllerGateway(ThermostatController):
                 break
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                      {'id': 0,
-                                      'status': {'state': 'ON' if is_on else 'OFF',
-                                                 'mode': 'COOLING' if thermostat_group.mode == ThermostatMode.COOLING else 'HEATING'},
+                                      'status': {'mode': thermostat_group.mode.upper()},
                                       'location': {}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
