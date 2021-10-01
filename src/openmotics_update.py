@@ -153,7 +153,7 @@ def fetch_metadata(config, version, expected_md5):
     """
     response = requests.get(get_metadata_url(config, version),
                             timeout=2,
-                            verify=System.get_operating_system() != System.OS.ANGSTROM)
+                            verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
     if response.status_code != 200:
         raise ValueError('failed to get update metadata')
     hasher = hashlib.md5()
@@ -190,7 +190,7 @@ def download_firmware(firmware_type, url, expected_sha256):
     response = requests.get(url,
                             stream=True,
                             timeout=60,
-                            verify=System.get_operating_system() != System.OS.ANGSTROM)
+                            verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
     firmware_file = FIRMWARE_FILES[firmware_type]
     logger.info('Downloading {}...'.format(firmware_file))
     with open(firmware_file, 'wb') as f:
@@ -233,7 +233,7 @@ def check_gateway_health(timeout=60):
             http_port = Platform.http_port()
             response = requests.get('http://127.0.0.1:{}/health_check'.format(http_port),
                                     timeout=2,
-                                    verify=System.get_operating_system() != System.OS.ANGSTROM)
+                                    verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             data = response.json()
             if data['success']:
                 pending = [k for k, v in data['health'].items() if not v['state']]

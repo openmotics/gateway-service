@@ -147,7 +147,7 @@ class Cloud(object):
             request = self._session.post(self._url,
                                          data={'extra_data': json.dumps(extra_data, sort_keys=True)},
                                          timeout=10.0,
-                                         verify=System.get_operating_system() != System.OS.ANGSTROM)
+                                         verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             response = json.loads(request.text)
             data = {'success': True}
             for entry in ['sleep_time', 'open_vpn', 'configuration', 'intervals']:
