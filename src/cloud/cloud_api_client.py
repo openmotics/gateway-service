@@ -22,6 +22,7 @@ import ujson as json
 from ioc import Injectable, Inject, INJECTED
 from requests import ConnectionError
 from requests.adapters import HTTPAdapter
+from platform_utils import System
 
 logger = logging.getLogger('openmotics')
 
@@ -73,7 +74,11 @@ class CloudAPIClient(object):
         events_endpoint = self._get_endpoint('portal/events/')
         query_params = {'uuid': self._gateway_uuid}
         try:
-            response = self._session.post(events_endpoint, params=query_params, data={'events': json.dumps([event.serialize() for event in events])}, timeout=2)
+            response = self._session.post(events_endpoint,
+                                          params=query_params,
+                                          data={'events': json.dumps([event.serialize() for event in events])},
+                                          timeout=2,
+                                          verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             if not response:
                 raise APIException('Error while sending events to {}. HTTP Status: {}'.format(self._hostname, response.status_code))
         except APIException:
