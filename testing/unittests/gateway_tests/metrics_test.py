@@ -187,8 +187,8 @@ class MetricsTest(unittest.TestCase):
         send_metrics = []
         response_data = {}
 
-        def post(url, data, timeout):
-            _ = url, timeout
+        def post(url, data, timeout, verify):
+            _ = url, timeout, verify
             # Extract metrics, parse assumed data format
             time.sleep(1)
             send_metrics.append([m[0] for m in json.loads(data['metrics'])])
