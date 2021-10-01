@@ -290,11 +290,8 @@ class System(object):
             if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/dist-packages'):
                 sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/dist-packages')
 
-        # Patching where/if required
-        if operating_system == System.OS.ANGSTROM:
-            from pkg_resources import resource_filename, resource_stream, Requirement
-            resource_stream(Requirement.parse('requests'), 'requests/cacert.pem')
-            os.environ['REQUESTS_CA_BUNDLE'] = resource_filename(Requirement.parse('requests'), 'requests/cacert.pem')
+        if operating_system in [System.OS.ANGSTROM, System.OS.DEBIAN]:
+            os.environ['REQUESTS_CA_BUNDLE'] = '/opt/openmotics/python/libs/cacert.pem'
 
 
 class Platform(object):
