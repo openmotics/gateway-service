@@ -51,7 +51,7 @@ def test_actions(toolbox, _input, output, to_status):
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
     toolbox.press_input(_input)
     # TODO: Couldn't we also just do an /get_last_inputs on the tester i.s.o. using the event observer plugin?
-    toolbox.assert_output_changed(output, to_status, between=(0, 10))
+    toolbox.assert_output_changed(output, to_status, between=(0, 8))
 
 
 @pytest.mark.slow

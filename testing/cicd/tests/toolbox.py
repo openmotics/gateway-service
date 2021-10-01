@@ -732,8 +732,8 @@ class Toolbox(object):
         # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['read'])
         # time.sleep(5)
         logger.debug('### WRITE')
-        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['write'])
-        time.sleep(5)
+        time.sleep(10)  # Get more instructions in the buffer
+        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 200})['write'])
         # logger.debug(json.dumps(self.dut.get('/get_master_debug_buffer', {'amount': 0})['read'], sort_keys=True))
         # logger.debug(json.dumps(self.dut.get('/get_master_debug_buffer', {'amount': 0})['write'], sort_keys=True))
 

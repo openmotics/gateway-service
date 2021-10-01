@@ -176,17 +176,18 @@ class MasterCommunicator(object):
         def process(buffer):
             formatted_buffer = {}
             now = time.time()
+            # for key in sorted(list(buffer.keys())[-amount:]):
             for key in list(buffer.keys())[-amount:]:
                 # Buffer duration is 5 minutes, only look at the past 2mins in it, maybe even less?
-                if int(key) > now - 60:
-                    raw_value = buffer.get(key)
-                    if raw_value is not None:
-                        raw_string = str(Printable(raw_value))
-                        formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
+                # if int(key) > now - 60:
+                raw_value = buffer.get(key)
+                if raw_value is not None:
+                    raw_string = str(Printable(raw_value))
+                    formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
                     # if 'EL' not in raw_string:
                     #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-                    # if 'WE' in raw_string:
-                    #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
+                elif 'WE' in raw_string:
+                    formatted_buffer['@@@@    STRWE    @@@@'] = raw_string
                     # elif 'BA' in raw_string:
                     #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
                     # elif 'RE' in raw_string:
