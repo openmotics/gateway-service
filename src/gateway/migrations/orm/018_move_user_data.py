@@ -86,7 +86,8 @@ def migrate(migrator, database, fake=False, **kwargs):
             username=old_user.username,
             password=old_user.password,
             role=User.UserRoles.ADMIN,
-            language=User.UserLanguages.EN
+            language=User.UserLanguages.EN,
+            accepted_terms=old_user.accepted_terms
         )
 
     # remove the old user table since it is not needed anymore
