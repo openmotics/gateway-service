@@ -170,7 +170,6 @@ class LegacyThermostatGroupStatusSerializer(object):
 class ThermostatGroupStatusSerializer(object):
     @staticmethod
     def serialize(thermostat_group_status_dto):  # type: (ThermostatGroupStatusDTO) -> Dict[str, Any]
-        group_on = False
         data = {'id': thermostat_group_status_dto.id,
                 'mode': thermostat_group_status_dto.mode,
                 'thermostats': []}  # type: Dict[str, Any]
@@ -183,7 +182,6 @@ class ThermostatGroupStatusSerializer(object):
                                         'output0': status.output_0_level,
                                         'output1': status.output_1_level,
                                         'steering_power': status.steering_power})
-            group_on = group_on or status.state == 'on'
         return data
 
 

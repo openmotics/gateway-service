@@ -313,7 +313,7 @@ class ThermostatControllerGateway(ThermostatController):
                 output0_level = get_output_level(db_outputs[0] if number_of_outputs > 0 else None)
                 output1_level = get_output_level(db_outputs[1] if number_of_outputs > 1 else None)
                 if thermostat_pid is None:
-                    steering_power = (output0_level + output0_level) // 2  # type: Optional[int]
+                    steering_power = (output0_level + output1_level) // 2  # type: Optional[int]
                 else:
                     steering_power = thermostat_pid.steering_power
 
