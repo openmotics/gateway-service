@@ -79,15 +79,14 @@ class ThermostatMapper(object):
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
             index = int((7 - start_day_of_week + day_index) % 7)
-            if index in day_schedules:
-                setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(day_schedules[index], mode))
+            schedule = day_schedules[index].schedule_data if index in day_schedules else {}
+            setattr(dto, key, ThermostatMapper._schedule_to_dto(schedule, mode))
 
         # TODO: Map missing [pid_int, setp0, setp1, setp2]
         return dto
 
     @staticmethod
-    def _schedule_orm_to_dto(schedule_orm, mode, log_warnings=True):  # type: (DaySchedule, Literal['cooling', 'heating'], bool) -> Optional[ThermostatScheduleDTO]
-        schedule = schedule_orm.schedule_data
+    def _schedule_to_dto(schedule, mode, log_warnings=True):  # type: (Dict[str,Any], Literal['cooling', 'heating'], bool) -> Optional[ThermostatScheduleDTO]
         amount_of_entries = len(schedule)
         if amount_of_entries == 0:
             if log_warnings:
@@ -311,8 +310,6 @@ class ThermostatMapper(object):
                                (4, 'auto_fri'),
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
-            setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(schedule_orm=DaySchedule(index=day_index, mode=mode, content='{}'),
-                                                                    mode=mode,
-                                                                    log_warnings=False))
+            setattr(dto, key, ThermostatMapper._schedule_to_dto({}, mode=mode, log_warnings=False))
 
         return dto
