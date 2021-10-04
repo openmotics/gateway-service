@@ -686,10 +686,9 @@ class WebInterface(object):
         if master_version >= (3, 143, 88):
             features.append('input_states')
 
-        for name in (Feature.THERMOSTATS_GATEWAY,):
-            feature = Feature.get_or_none(name=name)
-            if feature and feature.enabled:
-                features.append(name)
+        feature = Feature.get_or_none(name=Feature.THERMOSTATS_GATEWAY)
+        if feature and feature.enabled:
+            features.extend([Feature.THERMOSTATS_GATEWAY, 'thermostat_groups'])
 
         if self._rebus_controller is not None:
             features.append('esafe')
@@ -936,6 +935,26 @@ class WebInterface(object):
         return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
                                                               fields=fields)}
 
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_thermostat_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one thermostat_group_configuration. """
+        data = ThermostatGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_thermostat_groups([data])
+        return {}
+
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_thermostat_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple thermostat_group_configuration. """
+        data = [ThermostatGroupSerializer.deserialize(entry) for entry in config]
+        self._thermostat_controller.save_thermostat_groups(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(config='json'))
+    def delete_thermostat_group_configuration(self, id):  # type: (int) -> Dict
+        """ Remove thermostat_group_configuration. """
+        self._thermostat_controller.remove_thermostat_groups([id])
+        return {}
+
     @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
     def get_thermostat_group_status(self):  # type: () -> Dict[str, Any]
         """ Get the status of the thermostats groups. """
@@ -950,14 +969,16 @@ class WebInterface(object):
         :param fields: The field of the cooling_configuration to get, None if all
         """
         thermostat_group_dto = self._thermostat_controller.load_thermostat_group(ThermostatController.GLOBAL_THERMOSTAT)
-        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
-                                                              fields=fields)}
+        config = ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto, fields=fields)
+        config.pop('id', None)
+        config.pop('name', None)
+        return {'config': config}
 
-    @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configuration')
+    @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configurations')
     def set_global_thermostat_configuration(self, config):
         """ Set the global_thermostat_configuration. """
         data = ThermostatGroupSerializer.deserialize(config)
-        self._thermostat_controller.save_thermostat_group(data)
+        self._thermostat_controller.save_thermostat_groups([data])
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, state=str, mode=str))

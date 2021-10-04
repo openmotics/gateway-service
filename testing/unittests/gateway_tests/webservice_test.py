@@ -236,16 +236,11 @@ class WebInterfaceTest(unittest.TestCase):
         with mock.patch.object(self.thermostat_controller, 'load_thermostat_group',
                                return_value=ThermostatGroupDTO(0,
                                                                pump_delay=120,
-                                                               outside_sensor_id=510,
-                                                               threshold_temperature=24.0,
                                                                switch_to_heating_0=(8, 100),
                                                                switch_to_cooling_0=(9, 0))):
             response = self.web.get_global_thermostat_configuration()
             self.assertEqual({
-                'id': 0,
                 'pump_delay': 120,
-                'outside_sensor': 510,
-                'threshold_temp': 24.0,
                 'switch_to_heating_output_0': 8,
                 'switch_to_heating_output_1': 255,
                 'switch_to_heating_output_2': 255,
@@ -265,25 +260,25 @@ class WebInterfaceTest(unittest.TestCase):
             }, json.loads(response)['config'])
 
     def test_set_global_thermostat_configuration(self):
-        with mock.patch.object(self.thermostat_controller, 'save_thermostat_group',
+        with mock.patch.object(self.thermostat_controller, 'save_thermostat_groups',
                                return_value=None) as save:
             config = {
                 'id': 0,
+                'name': 'Foo',
                 'pump_delay': 120,
-                'outside_sensor': 255,
-                'threshold_temp': 24.0,
                 'switch_to_heating_output_0': 8,
                 'switch_to_heating_value_0': 100,
                 'switch_to_cooling_output_0': 255,
                 'switch_to_cooling_value_0': 255,
             }
             self.web.set_global_thermostat_configuration(config=config)
-            save.assert_called_with(ThermostatGroupDTO(id=0,
-                                                       pump_delay=120,
-                                                       outside_sensor_id=None,
-                                                       threshold_temperature=24.0,
-                                                       switch_to_heating_0=[8, 100],
-                                                       switch_to_cooling_0=None))
+            save.assert_called_with([
+                ThermostatGroupDTO(id=0,
+                                   name='Foo',
+                                   pump_delay=120,
+                                   switch_to_heating_0=[8, 100],
+                                   switch_to_cooling_0=None)
+            ])
 
     def test_get_pump_group_configurations(self):
         with mock.patch.object(self.thermostat_controller, 'load_heating_pump_groups',

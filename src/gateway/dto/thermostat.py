@@ -30,7 +30,7 @@ class ThermostatDTO(BaseDTO):
                  setp0=None, setp1=None, setp2=None, setp3=None, setp4=None, setp5=None,
                  sensor=None, output0=None, output1=None,
                  pid_p=None, pid_i=None, pid_d=None, pid_int=None,
-                 room=None,
+                 room=None, thermostat_group=None,
                  auto_mon=None, auto_tue=None, auto_wed=None, auto_thu=None, auto_fri=None, auto_sat=None, auto_sun=None):
         self.id = id  # type: int
         self.name = name  # type: str
@@ -49,6 +49,7 @@ class ThermostatDTO(BaseDTO):
         self.pid_int = pid_int  # type: Optional[int]
         self.permanent_manual = permanent_manual  # type: bool
         self.room = room  # type: Optional[int]
+        self.thermostat_group = thermostat_group  # type: int
         self.auto_mon = auto_mon  # type: Optional[ThermostatScheduleDTO]
         self.auto_tue = auto_tue  # type: Optional[ThermostatScheduleDTO]
         self.auto_wed = auto_wed  # type: Optional[ThermostatScheduleDTO]
@@ -66,10 +67,11 @@ class ThermostatDTO(BaseDTO):
 
 
 class ThermostatGroupDTO(BaseDTO):
-    def __init__(self, id, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
+    def __init__(self, id, name=None, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
                  switch_to_heating_0=None, switch_to_heating_1=None, switch_to_heating_2=None, switch_to_heating_3=None,
                  switch_to_cooling_0=None, switch_to_cooling_1=None, switch_to_cooling_2=None, switch_to_cooling_3=None):
         self.id = id  # type: int
+        self.name = name  # type: str
         self.outside_sensor_id = outside_sensor_id  # type: Optional[int]
         self.pump_delay = 60 if pump_delay in (None, 255) else pump_delay  # type: int
         self.threshold_temperature = threshold_temperature  # type: Optional[float]

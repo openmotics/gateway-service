@@ -316,9 +316,13 @@ class ThermostatControllerMaster(ThermostatController):
 
         return self._master_controller.load_thermostat_group()
 
-    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
-        self._master_controller.save_thermostat_group(thermostat_group)
+    def save_thermostat_groups(self, thermostat_groups):  # type: (List[ThermostatGroupDTO]) -> None
+        for thermostat_group_dto in thermostat_groups:
+            self._master_controller.save_thermostat_group(thermostat_group_dto)
         self.invalidate_cache(THERMOSTATS)
+
+    def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+        raise NotImplementedError('Thermostat groups not supported')
 
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         return self._master_controller.load_heating_pump_group(pump_group_id)

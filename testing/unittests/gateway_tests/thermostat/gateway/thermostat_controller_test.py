@@ -254,7 +254,7 @@ class ThermostatControllerTest(unittest.TestCase):
         pump_groups = self.controller.load_heating_pump_groups()
         self.assertEqual([], pump_groups)
 
-    def test_save_thermostat_group(self):
+    def test_save_thermostat_groups(self):
         events = []
 
         def handle_event(gateway_event):
@@ -293,13 +293,15 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(0, OutputToThermostatGroup.select()
                                                    .where(OutputToThermostatGroup.thermostat_group == thermostat_group)
                                                    .count())
-        self.controller.save_thermostat_group(ThermostatGroupDTO(id=0,
-                                                                 outside_sensor_id=1,
-                                                                 pump_delay=30,
-                                                                 threshold_temperature=15,
-                                                                 switch_to_heating_0=(1, 0),
-                                                                 switch_to_heating_1=(2, 100),
-                                                                 switch_to_cooling_0=(1, 100)))
+        self.controller.save_thermostat_groups([
+            ThermostatGroupDTO(id=0,
+                               outside_sensor_id=1,
+                               pump_delay=30,
+                               threshold_temperature=15,
+                               switch_to_heating_0=(1, 0),
+                               switch_to_heating_1=(2, 100),
+                               switch_to_cooling_0=(1, 100))
+        ])
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'mode': 'HEATING'}, 'location': {}}), events)
         thermostat_group = ThermostatGroup.get(number=0)
@@ -313,6 +315,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertIn({'index': 0, 'value': 100, 'mode': 'cooling', 'output': 1}, links)
 
         new_thermostat_group_dto = ThermostatGroupDTO(id=0,
+                                                      name='Default',
                                                       pump_delay=60,
                                                       outside_sensor_id=None,
                                                       threshold_temperature=None,
@@ -320,7 +323,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                                       switch_to_heating_1=None,
                                                       switch_to_cooling_0=(2, 0),
                                                       switch_to_cooling_1=None)
-        self.controller.save_thermostat_group(new_thermostat_group_dto)
+        self.controller.save_thermostat_groups([new_thermostat_group_dto])
 
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'mode': 'HEATING'}, 'location': {}}), events)

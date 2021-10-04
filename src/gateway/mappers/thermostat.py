@@ -41,7 +41,8 @@ class ThermostatMapper(object):
                             pid_i=getattr(orm_object, 'pid_{0}_i'.format(mode)),
                             pid_d=getattr(orm_object, 'pid_{0}_d'.format(mode)),
                             permanent_manual=orm_object.automatic,
-                            room=orm_object.room.number if orm_object.room is not None else None)
+                            room=orm_object.room.number if orm_object.room is not None else None,
+                            thermostat_group=orm_object.thermostat_group.number)
 
         # Outputs
         db_outputs = [valve.output.number for valve in getattr(orm_object, '{0}_valves'.format(mode))]
@@ -159,6 +160,7 @@ class ThermostatMapper(object):
         for orm_field, (dto_field, mapping) in {'name': ('name', None),
                                                 'sensor': ('sensor', _load_sensor),
                                                 'room': ('room', lambda n: _load_object(Room, n)),
+                                                'thermostat_group': ('thermostat_group', lambda n: _load_object(ThermostatGroup, n)),
                                                 'pid_{0}_p'.format(mode): ('pid_p', float),
                                                 'pid_{0}_i'.format(mode): ('pid_i', float),
                                                 'pid_{0}_d'.format(mode): ('pid_d', float)}.items():

@@ -34,6 +34,7 @@ class ThermostatSerializer(object):
         data = {'id': thermostat_dto.id,
                 'name': thermostat_dto.name,
                 'room': Toolbox.denonify(thermostat_dto.room, ThermostatSerializer.BYTE_MAX),
+                'thermostat_group': Toolbox.denonify(thermostat_dto.thermostat_group, 0),
                 'setp0': thermostat_dto.setp0,
                 'setp1': thermostat_dto.setp1,
                 'setp2': thermostat_dto.setp2,
@@ -77,6 +78,7 @@ class ThermostatSerializer(object):
                      'setp4': ('setp4', None),
                      'setp5': ('setp5', None),
                      'room': ('room', ThermostatSerializer.BYTE_MAX),
+                     'thermostat_group': ('thermostat_group', None),
                      'sensor': ('sensor', ThermostatSerializer.BYTE_MAX),
                      'output0': ('output0', ThermostatSerializer.BYTE_MAX),
                      'output1': ('output1', ThermostatSerializer.BYTE_MAX),
@@ -106,8 +108,7 @@ class ThermostatGroupSerializer(object):
     @staticmethod
     def serialize(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, Optional[List[str]]) -> Dict
         data = {'id': thermostat_group_dto.id,
-                'outside_sensor': Toolbox.denonify(thermostat_group_dto.outside_sensor_id, ThermostatGroupSerializer.BYTE_MAX),
-                'threshold_temp': Toolbox.denonify(thermostat_group_dto.threshold_temperature, ThermostatGroupSerializer.BYTE_MAX),
+                'name': thermostat_group_dto.name,
                 'pump_delay': Toolbox.denonify(thermostat_group_dto.pump_delay, ThermostatGroupSerializer.BYTE_MAX)}
         for mode in ['heating', 'cooling']:
             for i in range(4):
@@ -121,12 +122,11 @@ class ThermostatGroupSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> ThermostatGroupDTO
-        thermostat_group_dto = ThermostatGroupDTO(id=0)
+        thermostat_group_dto = ThermostatGroupDTO(id=api_data['id'])
         SerializerToolbox.deserialize(
             dto=thermostat_group_dto,  # Referenced
             api_data=api_data,
-            mapping={'outside_sensor': ('outside_sensor_id', ThermostatGroupSerializer.BYTE_MAX),
-                     'threshold_temp': ('threshold_temperature', ThermostatGroupSerializer.BYTE_MAX),
+            mapping={'name': ('name', None),
                      'pump_delay': ('pump_delay', ThermostatGroupSerializer.BYTE_MAX)}
         )
         for mode in ['heating', 'cooling']:

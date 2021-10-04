@@ -222,7 +222,7 @@ class ThermostatControllerGateway(ThermostatController):
         if thermostat.active_preset == preset:
             return False
         thermostat.active_preset = preset
-        thermostat.save()
+        # thermostat.save()
 
         if not postpone_tick:
             self.tick_thermostat(thermostat=thermostat)
@@ -236,7 +236,7 @@ class ThermostatControllerGateway(ThermostatController):
         if thermostat.state == state:
             return False
         thermostat.sate = state
-        thermostat.save()
+        # thermostat.save()
 
         if not postpone_tick:
             self.tick_thermostat(thermostat=thermostat)
@@ -292,7 +292,7 @@ class ThermostatControllerGateway(ThermostatController):
 
         statuses = []
         for thermostat_group in list(ThermostatGroup.select()):  # type: ThermostatGroup
-            group_status = ThermostatGroupStatusDTO(id=0,
+            group_status = ThermostatGroupStatusDTO(id=thermostat_group.number,
                                                     automatic=True,  # Default, will be updated below
                                                     setpoint=0,  # Default, will be updated below
                                                     cooling=thermostat_group.mode == ThermostatMode.COOLING,
@@ -401,7 +401,7 @@ class ThermostatControllerGateway(ThermostatController):
         for thermostat_dto in thermostats:
             # TODO: mappers should only transform data, not save models
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
-            # thermostat.save()
+            thermostat.save()
         self._thermostat_config_changed()
         if self._sync_thread:
             self._sync_thread.request_single_run()
@@ -421,7 +421,7 @@ class ThermostatControllerGateway(ThermostatController):
         for thermostat_dto in thermostats:
             # TODO: mappers should only transform data, not save models
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
-            # thermostat.save()
+            thermostat.save()
         self._thermostat_config_changed()
         if self._sync_thread:
             self._sync_thread.request_single_run()
@@ -467,7 +467,8 @@ class ThermostatControllerGateway(ThermostatController):
                     pump_delay = valve.delay
                     break
             sensor_id = None if thermostat_group.sensor is None else thermostat_group.sensor.id
-            thermostat_group_dto = ThermostatGroupDTO(id=0,
+            thermostat_group_dto = ThermostatGroupDTO(id=thermostat_group.number,
+                                                      name=thermostat_group.name,
                                                       outside_sensor_id=sensor_id,
                                                       threshold_temperature=thermostat_group.threshold_temperature,
                                                       pump_delay=pump_delay)
@@ -490,7 +491,8 @@ class ThermostatControllerGateway(ThermostatController):
                 pump_delay = valve.delay
                 break
         sensor_id = None if thermostat_group.sensor is None else thermostat_group.sensor.id
-        thermostat_group_dto = ThermostatGroupDTO(id=0,
+        thermostat_group_dto = ThermostatGroupDTO(id=thermostat_group.number,
+                                                  name=thermostat_group.name,
                                                   outside_sensor_id=sensor_id,
                                                   threshold_temperature=thermostat_group.threshold_temperature,
                                                   pump_delay=pump_delay)
@@ -503,61 +505,72 @@ class ThermostatControllerGateway(ThermostatController):
             setattr(thermostat_group_dto, field, (link.output.number, link.value))
         return thermostat_group_dto
 
-    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
+    def save_thermostat_groups(self, thermostat_groups):  # type: (List[ThermostatGroupDTO]) -> None
         # Update thermostat group configuration
-        orm_object = ThermostatGroup.get(number=0)  # type: ThermostatGroup
-        changed = False
-        if 'outside_sensor_id' in thermostat_group.loaded_fields:
-            sensor = None if thermostat_group.outside_sensor_id is None else \
-                Sensor.get(id=thermostat_group.outside_sensor_id)
-            orm_object.sensor = sensor
-            changed = True
-        if 'threshold_temperature' in thermostat_group.loaded_fields:
-            orm_object.threshold_temperature = thermostat_group.threshold_temperature
-            changed = True
-        if changed:
-            orm_object.save()
-            self._thermostat_group_changed(orm_object)
+        logger.info('Groups %s', thermostat_groups)
+        for thermostat_group_dto in thermostat_groups:
+            thermostat_group = ThermostatGroup.get_or_none(number=thermostat_group_dto.id)  # type: ThermostatGroup
+            if thermostat_group is None:
+                thermostat_group = ThermostatGroup(number=thermostat_group_dto.id)
+                logger.info('Creating new ThermostatGroup %s', thermostat_group.number)
+            changed = False
+            if 'name' in thermostat_group_dto.loaded_fields:
+                thermostat_group.name = thermostat_group_dto.name
+                changed = True
+            if 'outside_sensor_id' in thermostat_group_dto.loaded_fields:
+                sensor = None if thermostat_group_dto.outside_sensor_id is None else \
+                    Sensor.get(id=thermostat_group_dto.outside_sensor_id)
+                thermostat_group.sensor = sensor
+                changed = True
+            if 'threshold_temperature' in thermostat_group_dto.loaded_fields:
+                thermostat_group.threshold_temperature = thermostat_group_dto.threshold_temperature
+                changed = True
+            if changed:
+                thermostat_group.save()
+                self._thermostat_group_changed(thermostat_group)
 
-        # Link configuration outputs to global thermostat config
-        for mode in [ThermostatMode.COOLING, ThermostatMode.HEATING]:
-            links = {link.index: link
-                     for link in OutputToThermostatGroup
-                         .select()
-                         .where((OutputToThermostatGroup.thermostat_group == orm_object) &
-                                (OutputToThermostatGroup.mode == mode))}
-            for i in range(4):
-                field = 'switch_to_{0}_{1}'.format(mode, i)
-                if field not in thermostat_group.loaded_fields:
-                    continue
+            # Link configuration outputs to global thermostat config
+            for mode in [ThermostatMode.COOLING, ThermostatMode.HEATING]:
+                links = {link.index: link
+                         for link in OutputToThermostatGroup
+                             .select()
+                             .where((OutputToThermostatGroup.thermostat_group == thermostat_group) &
+                                    (OutputToThermostatGroup.mode == mode))}
+                for i in range(4):
+                    field = 'switch_to_{0}_{1}'.format(mode, i)
+                    if field not in thermostat_group_dto.loaded_fields:
+                        continue
 
-                link = links.get(i)
-                data = getattr(thermostat_group, field)
-                if data is None:
-                    if link is not None:
-                        link.delete_instance()
-                else:
-                    output_number, value = data
-                    output = Output.get(number=output_number)
-                    if link is None:
-                        OutputToThermostatGroup.create(output=output,
-                                                       thermostat_group=orm_object,
-                                                       mode=mode,
-                                                       index=i,
-                                                       value=value)
+                    link = links.get(i)
+                    data = getattr(thermostat_group_dto, field)
+                    if data is None:
+                        if link is not None:
+                            link.delete_instance()
                     else:
-                        link.output = output
-                        link.value = value
-                        link.save()
+                        output_number, value = data
+                        output = Output.get(number=output_number)
+                        if link is None:
+                            OutputToThermostatGroup.create(output=output,
+                                                           thermostat_group=thermostat_group,
+                                                           mode=mode,
+                                                           index=i,
+                                                           value=value)
+                        else:
+                            link.output = output
+                            link.value = value
+                            link.save()
 
-        if 'pump_delay' in thermostat_group.loaded_fields:
-            # Set valve delay for all valves in this group
-            for thermostat in orm_object.thermostats:
-                for valve in thermostat.valves:
-                    valve.delay = thermostat_group.pump_delay
-                    valve.save()
-
+            if 'pump_delay' in thermostat_group_dto.loaded_fields:
+                # Set valve delay for all valves in this group
+                for thermostat in thermostat_group.thermostats:
+                    for valve in thermostat.valves:
+                        valve.delay = thermostat_group_dto.pump_delay
+                        valve.save()
         self._thermostat_config_changed()
+
+    def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+        ThermostatGroup.delete().where(ThermostatGroup.number << thermostat_group_ids) \
+            .execute()
 
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         pump = Pump.get(number=pump_group_id)
@@ -665,7 +678,7 @@ class ThermostatControllerGateway(ThermostatController):
             if is_on:
                 break
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
-                                     {'id': 0,
+                                     {'id': thermostat_group.number,
                                       'status': {'mode': thermostat_group.mode.upper()},
                                       'location': {}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)

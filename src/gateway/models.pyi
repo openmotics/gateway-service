@@ -259,7 +259,7 @@ class ThermostatGroup(BaseModel):
 
     id: MixedPrimaryKeyField
     number: MixedIntegerField
-    name: MixedCharField
+    name: str
     threshold_temperature: Optional[float]
     sensor: Optional[SensorForeignKeyField]
     mode: Literal['heating', 'cooling']
