@@ -29,6 +29,7 @@ from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
+from platform_utils import System
 import six
 
 if False:  # MYPY
@@ -376,7 +377,8 @@ class MetricsController(object):
                 # Try to send the metrics
                 request = requests.post(metrics_endpoint,
                                         data={'metrics': json.dumps(self._cloud_buffer + self._cloud_queue)},
-                                        timeout=30.0)
+                                        timeout=30.0,
+                                        verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
                 return_data = json.loads(request.text)
                 if return_data.get('success', False) is False:
                     raise RuntimeError('{0}'.format(return_data.get('error')))

@@ -69,7 +69,8 @@ class UserControllerTest(unittest.TestCase):
         self.rfid_controller = RfidController()
         SetUpTestInjections(rfid_controller=self.rfid_controller)
         self.auth_controller = AuthenticationController()
-        SetUpTestInjections(authentication_controller=self.auth_controller)
+        self.pubsub = mock.Mock()
+        SetUpTestInjections(authentication_controller=self.auth_controller, pubsub=self.pubsub)
         self.controller = UserController()
         self.auth_controller.set_user_controller(self.controller)
         self.controller.start()
@@ -298,6 +299,43 @@ class UserControllerTest(unittest.TestCase):
         self.assertTrue(success)
         self.assertNotEqual(None, token)
         self.assertTrue(self.controller.check_token(token))
+
+    def test_token_multiple_sessions(self):
+        """ Test the timeout on the tokens. """
+
+        # Setup credentials
+        user_dto = UserDTO(username='om')
+        user_dto.set_password('pass')
+        # verify that the user can login
+        success, token_1 = self.controller.login(user_dto, accept_terms=True)
+        self.assertEqual(True, success)
+        self.assertNotEqual(None, token_1)
+
+        # verify that the token is still valid
+        self.assertTrue(self.controller.check_token(token_1))
+        self.assertEqual(1, len(self.controller.authentication_controller.token_store.tokens))
+
+        success, token_2 = self.controller.login(user_dto, accept_terms=True)
+        self.assertEqual(True, success)
+        self.assertNotEqual(None, token_2)
+
+        # verify that the token is still valid
+        self.assertTrue(self.controller.check_token(token_1))
+        self.assertTrue(self.controller.check_token(token_2))
+        self.assertNotEqual(token_1, token_2)
+        self.assertEqual(2, len(self.controller.authentication_controller.token_store.tokens))
+
+        # logout with the first token
+        self.controller.logout(token_1)
+        self.assertEqual(1, len(self.controller.authentication_controller.token_store.tokens))
+        self.assertFalse(self.controller.check_token(token_1))
+        self.assertTrue(self.controller.check_token(token_2))
+
+        # logout with the second token
+        self.controller.logout(token_2)
+        self.assertEqual(0, len(self.controller.authentication_controller.token_store.tokens))
+        self.assertFalse(self.controller.check_token(token_1))
+        self.assertFalse(self.controller.check_token(token_2))
 
     def test_logout(self):
         """ Test logout. """
