@@ -122,7 +122,7 @@ class ThermostatGroupSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> ThermostatGroupDTO
-        thermostat_group_dto = ThermostatGroupDTO(id=api_data['id'])
+        thermostat_group_dto = ThermostatGroupDTO(id=api_data.get('id', 0))
         SerializerToolbox.deserialize(
             dto=thermostat_group_dto,  # Referenced
             api_data=api_data,

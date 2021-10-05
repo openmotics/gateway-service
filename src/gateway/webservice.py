@@ -977,7 +977,6 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configurations')
     def set_global_thermostat_configuration(self, config):
         """ Set the global_thermostat_configuration. """
-        config['id'] = 0
         data = ThermostatGroupSerializer.deserialize(config)
         self._thermostat_controller.save_thermostat_groups([data])
         return {}
@@ -1535,7 +1534,7 @@ class WebInterface(object):
         sensor_dto = SensorSerializer.deserialize(config)
         saved_sensors_dtos = self._sensor_controller.save_sensors([sensor_dto])
         data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+                for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
         return {'config': data}
 
     @openmotics_api(auth=True, check=types(config='json'))
@@ -1544,7 +1543,7 @@ class WebInterface(object):
         sensor_dtos = [SensorSerializer.deserialize(entry) for entry in config]
         saved_sensors_dtos = self._sensor_controller.save_sensors(sensor_dtos)
         data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+                for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
         return {'config': data}
 
     # Heating Pump Group
