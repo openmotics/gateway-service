@@ -955,7 +955,7 @@ class WebInterface(object):
         self._thermostat_controller.remove_thermostat_groups([id])
         return {}
 
-    @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
+    @openmotics_api(auth=True)
     def get_thermostat_group_status(self):  # type: () -> Dict[str, Any]
         """ Get the status of the thermostats groups. """
         status = self._thermostat_controller.get_thermostat_group_status()
