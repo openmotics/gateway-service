@@ -20,14 +20,15 @@ import mock
 from peewee import SqliteDatabase
 
 from gateway.migrations.thermostats import CoolingConfiguration, DaySchedule, \
-    GlobalThermostatConfiguration, PumpGroupConfiguration, \
-    ThermostatConfiguration, ThermostatsMigrator, OutputToThermostatGroup
+    GlobalThermostatConfiguration, OutputToThermostatGroup, \
+    PumpGroupConfiguration, ThermostatConfiguration, ThermostatsMigrator
 from gateway.models import DaySchedule, Output, Preset, Pump, PumpToValve, \
     Room, Sensor, Thermostat, ThermostatGroup, Valve, ValveToThermostat
 from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import SetTestMode, SetUpTestInjections
 from master.classic.eeprom_controller import EepromController
 from master.classic.master_communicator import MasterCommunicator
+from platform_utils import Platform
 
 MODELS = [DaySchedule, Output, OutputToThermostatGroup, Preset, Pump,
           PumpToValve, Room, Sensor, Thermostat, ThermostatGroup,
@@ -163,7 +164,8 @@ class ThermostatsMigratorTest(unittest.TestCase):
         self.eeprom_controller.read_all.side_effect = _read_eeprom
         self.eeprom_controller.read.side_effect = _read_eeprom
 
-        ThermostatsMigrator._migrate()
+        with mock.patch.object(Platform, 'get_platform', return_value=Platform.Type.CLASSIC):
+            ThermostatsMigrator._migrate()
 
         self.assertEqual(ThermostatGroup.select().count(), 1)
         thermostat_group = ThermostatGroup.get(number=0)

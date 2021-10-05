@@ -260,7 +260,7 @@ class ThermostatsMigrator(BaseMigrator):
     @classmethod
     def _migrate(cls):
         # Core(+) platforms only support gateway thermostats
-        if Platform.get_platform() in Platform.CoreTypes:
+        if Platform.get_platform() not in Platform.ClassicTypes:
             return
 
         # Remove all existing gateway configuration

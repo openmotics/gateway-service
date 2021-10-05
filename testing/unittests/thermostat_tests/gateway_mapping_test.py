@@ -73,9 +73,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_load(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
-        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', mode=ThermostatGroup.Modes.HEATING)
         thermostat = Thermostat(number=10,
                                 start=0,
+                                state='on',
                                 name='thermostat',
                                 thermostat_group=group)
         thermostat.save()
@@ -104,7 +105,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_orm_to_dto_mapping(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
-        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', mode=ThermostatGroup.Modes.HEATING)
         controller.save_heating_thermostats([ThermostatDTO(id=10, name='thermostat')])
         thermostat = Thermostat.get(number=10)
 
@@ -130,6 +131,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_i=0.0,
                                        pid_d=0.0,
                                        room=None,
+                                       thermostat_group=0,
                                        permanent_manual=True,
                                        auto_mon=schedule_dto,
                                        auto_tue=schedule_dto,
@@ -221,6 +223,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_i=0.0,
                                        pid_d=0.0,
                                        room=5,
+                                       thermostat_group=0,
                                        output0=5,
                                        permanent_manual=True,
                                        auto_mon=default_schedule_dto,
