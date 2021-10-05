@@ -977,6 +977,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configurations')
     def set_global_thermostat_configuration(self, config):
         """ Set the global_thermostat_configuration. """
+        config['id'] = 0
         data = ThermostatGroupSerializer.deserialize(config)
         self._thermostat_controller.save_thermostat_groups([data])
         return {}
