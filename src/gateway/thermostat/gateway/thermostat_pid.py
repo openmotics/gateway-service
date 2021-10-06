@@ -43,7 +43,7 @@ class ThermostatPid(object):
         self._thermostat_change_lock = Lock()
         self._heating_valve_ids = []  # type: List[int]
         self._cooling_valve_ids = []  # type: List[int]
-        self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[int], int, int, str], None]]
+        self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[int], int, int, str, str], None]]
         self._thermostat = thermostat
         self._mode = thermostat.thermostat_group.mode
         self._state = thermostat.state
@@ -114,7 +114,7 @@ class ThermostatPid(object):
         return self._current_steering_power
 
     def subscribe_state_changes(self, callback):
-        # type: (Callable[[int, str, float, Optional[float], List[int], int, int, str], None]) -> None
+        # type: (Callable[[int, str, float, Optional[float], List[int], int, int, str, str], None]) -> None
         self._report_state_callbacks.append(callback)
 
     def report_state_change(self):  # type: () -> None
@@ -123,7 +123,7 @@ class ThermostatPid(object):
         for callback in self._report_state_callbacks:
             callback(self.number, self._active_preset.type, self.setpoint, self._current_temperature,
                      self.get_active_valves_percentage(), self._current_steering_power or 0,
-                     room_number, self._state)
+                     room_number, self._state, self._mode)
 
     def tick(self):  # type: () -> bool
         if self.enabled != self._current_enabled:
