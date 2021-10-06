@@ -21,6 +21,7 @@ from __future__ import absolute_import
 
 import json
 import logging
+import os
 import random
 import six
 import uuid
@@ -95,6 +96,11 @@ class UserController(object):
 
         logger.info('Adding the eSafe users')
         esafe_config_file_location = constants.get_renson_main_config_file()
+
+        if not os.path.exists(esafe_config_file_location):
+            logger.warning('Could not find the eSafe config file, cannot add the initial user codes')
+            return
+
         with open(esafe_config_file_location, 'rb') as esafe_config:
             esafe_config_content = json.load(esafe_config)
         admin_pin = esafe_config_content['esafe_admin_code']
