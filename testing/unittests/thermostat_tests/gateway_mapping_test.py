@@ -113,13 +113,13 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
-        schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
-                                             start_day_1='07:00',
-                                             end_day_1='09:00',
+        schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
+                                             start_day_1='06:00',
+                                             end_day_1='08:00',
                                              temp_day_2=21.0,
-                                             start_day_2='17:00',
+                                             start_day_2='16:00',
                                              end_day_2='22:00',
-                                             temp_night=16.0)
+                                             temp_night=17.0)
 
         self.assertEqual(ThermostatDTO(id=10,
                                        name='thermostat',
@@ -184,13 +184,13 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
-        default_schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
-                                                     start_day_1='07:00',
-                                                     end_day_1='09:00',
+        default_schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
+                                                     start_day_1='06:00',
+                                                     end_day_1='08:00',
                                                      temp_day_2=21.0,
-                                                     start_day_2='17:00',
+                                                     start_day_2='16:00',
                                                      end_day_2='22:00',
-                                                     temp_night=16.0)
+                                                     temp_night=17.0)
 
         sensor = Sensor.create(id=15, source='master', external_id='0', physical_quantity='temperature', name='')
 
