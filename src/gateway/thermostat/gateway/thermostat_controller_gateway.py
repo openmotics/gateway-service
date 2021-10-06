@@ -655,13 +655,14 @@ class ThermostatControllerGateway(ThermostatController):
         gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
-    def _thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, steering_power, room, state):
-        # type: (int, str, float, Optional[float], List[int], int, int, str) -> None
+    def _thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, steering_power, room, state, mode):
+        # type: (int, str, float, Optional[float], List[int], int, int, str, str) -> None
         location = {'room_id': room} if room not in (None, 255) else {}
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_number,
                                       'status': {'state': state.upper(),
                                                  'preset': active_preset.upper(),
+                                                 'mode': mode.upper(),
                                                  'current_setpoint': current_setpoint,
                                                  'actual_temperature': actual_temperature,
                                                  'output_0': percentages[0] if len(percentages) >= 1 else None,
@@ -672,11 +673,6 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _thermostat_group_changed(self, thermostat_group):
         # type: (ThermostatGroup) -> None
-        is_on = False
-        for thermostat in thermostat_group.thermostats:
-            is_on |= thermostat.state == ThermostatState.ON
-            if is_on:
-                break
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                      {'id': thermostat_group.number,
                                       'status': {'mode': thermostat_group.mode.upper()},
