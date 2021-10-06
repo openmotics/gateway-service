@@ -268,6 +268,11 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=13, tester_output_id=53),
                        Input(input_id=14, tester_output_id=54),
                        Input(input_id=15, tester_output_id=55)]),
+        Module(name='CC emulated input module', mtype='I', is_can=True,
+               hardware_type=Module.HardwareType.EMULATED,
+               inputs=[Input(input_id=16, tester_output_id=45),
+                       Input(input_id=17, tester_output_id=46),
+                       Input(input_id=18, tester_output_id=47), ]),
     ],
     TestPlatform.DEBIAN: [
         Module(name='input module', mtype='I',
@@ -290,7 +295,26 @@ _INPUT_MODULE_LAYOUTS = {
         #                Input(input_id=26, tester_output_id=18),
         #                Input(input_id=27, tester_output_id=19),
         #                Input(input_id=28, tester_output_id=20),
-        #                Input(input_id=29, tester_output_id=21)]),
+        #                Input(input_id=29, tester_output_id=21),
+        #                # Lange bus uCAN's
+        #                Input(input_id=30, tester_output_id=56),
+        #                Input(input_id=31, tester_output_id=57),
+        #                ]),
+        # Module(name='CC emulated input module', mtype='I', is_can=True,
+        #        hardware_type=Module.HardwareType.EMULATED,
+        #        inputs=[Input(input_id=40, tester_output_id=58),
+        #                Input(input_id=41, tester_output_id=59),
+        #                Input(input_id=42, tester_output_id=60),
+        #                Input(input_id=43, tester_output_id=61),
+        #                Input(input_id=44, tester_output_id=62),
+        #                Input(input_id=45, tester_output_id=63),
+        #                Input(input_id=46, tester_output_id=64),
+        #                Input(input_id=47, tester_output_id=65),
+        #                ]),
+        # Module(name='CC emulated input module', mtype='I', is_can=True,
+        #        hardware_type=Module.HardwareType.EMULATED,
+        #        inputs=[Input(input_id=48, tester_output_id=66),
+        #                ]),
     ]
 }
 INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
@@ -301,6 +325,11 @@ _TEMPERATURE_MODULE_LAYOUTS = {
         Module(name='temperature module', mtype='T',
                hardware_type=Module.HardwareType.PHYSICAL,
                temps=[]),
+        # Module(name='CC emulated temperature module', mtype='T', is_can=True,
+        #        hardware_type=Module.HardwareType.EMULATED,
+        #        temps=[]),
+        # There are 17 uCAN's in total, 7 with Humidity sensor, 9 with Temp sensor and one without a sensor
+        # Since there are 9 temp sensors, expect to have two CC emulated temp modules
         # Module(name='CC emulated temperature module', mtype='T', is_can=True,
         #        hardware_type=Module.HardwareType.EMULATED,
         #        temps=[]),

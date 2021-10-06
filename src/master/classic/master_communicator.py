@@ -186,8 +186,8 @@ class MasterCommunicator(object):
                     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
                     # if 'EL' not in raw_string:
                     #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-                elif 'WE' in raw_string:
-                    formatted_buffer['@@@@    STRWE    @@@@'] = raw_string
+                    if 'WE' in raw_string:
+                        formatted_buffer['@@@@    STRWE    @@@@'] = raw_string
                     # elif 'BA' in raw_string:
                     #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
                     # elif 'RE' in raw_string:
