@@ -147,6 +147,18 @@ class ApartmentController(object):
                     if 'doorbell_rebus_id' in apartment.loaded_fields:
                         apartment_orm.doorbell_rebus_id = None
                     apartment_orm.save()
+
+                # Then check if there is already an apartment with an mailbox or doorbell rebus id that is passed
+                # This is needed for when an doorbell or mailbox gets assigned to another apartment. Then the first assignment needs to be deleted.
+                for apartment_orm in Apartment.select():
+                    for apartment_dto in apartment_dtos:
+                        if apartment_orm.mailbox_rebus_id == apartment_dto.mailbox_rebus_id and apartment_orm.mailbox_rebus_id is not None:
+                            apartment_orm.mailbox_rebus_id = None
+                            apartment_orm.save()
+                        if apartment_orm.doorbell_rebus_id == apartment_dto.doorbell_rebus_id and apartment_orm.doorbell_rebus_id is not None:
+                            apartment_orm.doorbell_rebus_id = None
+                            apartment_orm.save()
+
                 for apartment in apartment_dtos:
                     updated = self.update_apartment(apartment)
                     if updated is not None:
