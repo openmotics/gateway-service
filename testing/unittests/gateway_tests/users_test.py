@@ -27,6 +27,7 @@ import unittest
 
 from peewee import SqliteDatabase
 
+import platform_utils
 from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod, AuthenticationToken
 from gateway.dto import UserDTO, RfidDTO
 from gateway.enums import UserEnums
@@ -37,6 +38,7 @@ from gateway.rfid_controller import RfidController
 from gateway.system_config_controller import SystemConfigController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
+from platform_utils import Platform
 
 MODELS = [User, RFID]
 
@@ -62,6 +64,11 @@ class UserControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self.sys_conf_controller = mock.Mock(SystemConfigController)
+        self.get_platform_patch = mock.patch('platform_utils.Platform.get_platform')
+        self.get_platform_mock = self.get_platform_patch.start()
+        self.get_platform_mock.return_value = 'CLASSIC'
+        Platform.get_platform = self.get_platform_mock
+
         SetUpTestInjections(system_config_controller=self.sys_conf_controller)
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
                             token_timeout=UserControllerTest.TOKEN_TIMEOUT)
@@ -84,6 +91,7 @@ class UserControllerTest(unittest.TestCase):
 
     def tearDown(self):
         self.controller.stop()
+        self.get_platform_patch.stop()
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 
