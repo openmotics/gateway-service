@@ -641,7 +641,7 @@ class ThermostatControllerGateway(ThermostatController):
                 output = Output.get(number=output_id)
                 valve = Valve.get_or_none(output=output)
                 if valve is None:
-                    valve = Valve(name=output.name,
+                    valve = Valve(name='Output {0}'.format(output.number),
                                   output=output)
                     valve.save()
                 PumpToValve.create(pump=pump,
