@@ -168,7 +168,8 @@ class EsafeEvent(BaseEvent):
       {'type': str}  # config type: Global, Doorbell, RFID, User, Apartment
 
     * DELIVERY_CHANGE
-      {'type': str,              # Delivery type: DELIVERY or RETURN
+      {'id': int,                # The id of the delivery
+       'type': str,              # Delivery type: DELIVERY or RETURN
        'action': str,            # action type: DELIVERY or PICKUP
        'user_delivery_id': int,  # ID of the delivery user (can be None)
        'user_pickup_id': int,    # ID of the pickup user (Always has a value, but can be a courier)
