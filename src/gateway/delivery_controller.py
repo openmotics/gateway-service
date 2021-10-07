@@ -148,6 +148,7 @@ class DeliveryController(object):
         delivery_orm = DeliveryMapper.dto_to_orm(delivery_dto)
         delivery_orm.save()
         event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+            'id': delivery_orm.id,
             'type': delivery_dto.type,
             'action': 'DELIVERY',
             'user_delivery_id': delivery_dto.user_id_delivery,
@@ -196,7 +197,8 @@ class DeliveryController(object):
         else:
             delivery_dto_saved = self.save_delivery(delivery_dto)
 
-        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {
+        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+            'id': delivery_dto_saved.id,
             'type': delivery_dto.type,
             'action': 'PICKUP',
             'user_delivery_id': delivery_dto.user_id_delivery,
