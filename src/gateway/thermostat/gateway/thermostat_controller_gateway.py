@@ -351,7 +351,7 @@ class ThermostatControllerGateway(ThermostatController):
         if mode == ThermostatMode.COOLING:
             state = state and cooling_on
         for thermostat_group in ThermostatGroup.select():
-            self.set_thermostat_group(thermostat_group_id=thermostat_group.id,
+            self.set_thermostat_group(thermostat_group_id=thermostat_group.number,
                                       state=ThermostatState.ON if state else ThermostatState.OFF,
                                       mode=mode)
 
