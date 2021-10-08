@@ -57,4 +57,3 @@ class ScheduleMigrator(BaseMigrator):
                                         status=row[8])
                     schedule.save()
             os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
-            scheduling_controller.reload_schedules()

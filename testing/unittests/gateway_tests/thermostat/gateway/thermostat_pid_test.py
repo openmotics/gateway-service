@@ -22,6 +22,7 @@ from peewee import SqliteDatabase
 
 import fakesleep
 from gateway.dto import SensorStatusDTO
+from gateway.enums import ThermostatState
 from gateway.models import DaySchedule, Output, Preset, Sensor, Thermostat, \
     ThermostatGroup, Valve, ValveToThermostat
 from gateway.sensor_controller import SensorController
@@ -113,12 +114,13 @@ class PumpValveControllerTest(unittest.TestCase):
 
     def test_enabled(self):
         thermostat_pid = self._get_thermostat_pid()
+        thermostat = thermostat_pid._thermostat
         self.assertTrue(thermostat_pid.enabled)
         # No sensor configured
-        sensor = thermostat_pid._thermostat.sensor
-        thermostat_pid._thermostat.sensor = None
+        sensor = thermostat.sensor
+        thermostat.sensor = None
         self.assertFalse(thermostat_pid.enabled)
-        thermostat_pid._thermostat.sensor = sensor
+        thermostat.sensor = sensor
         self.assertTrue(thermostat_pid.enabled)
         # No valves
         heating_valve_ids = thermostat_pid._heating_valve_ids
@@ -128,9 +130,11 @@ class PumpValveControllerTest(unittest.TestCase):
         thermostat_pid._heating_valve_ids = heating_valve_ids
         self.assertTrue(thermostat_pid.enabled)
         # The group is turned off
-        self._thermostat_group.on = False
+        thermostat.state = ThermostatState.OFF
+        thermostat_pid.update_thermostat(thermostat)
         self.assertFalse(thermostat_pid.enabled)
-        self._thermostat_group.on = True
+        thermostat.state = ThermostatState.ON
+        thermostat_pid.update_thermostat(thermostat)
         self.assertTrue(thermostat_pid.enabled)
         # A high amount of errors
         thermostat_pid._errors = 10
@@ -142,9 +146,11 @@ class PumpValveControllerTest(unittest.TestCase):
         thermostat_pid = self._get_thermostat_pid()
         thermostat_pid._pid = mock.Mock(PID)
         thermostat_pid._pid.setpoint = 0.0
+        thermostat = thermostat_pid._thermostat
         self.assertTrue(thermostat_pid.enabled)
 
-        self._thermostat_group.on = False
+        thermostat.state = ThermostatState.OFF
+        thermostat_pid.update_thermostat(thermostat)
         self._pump_valve_controller.set_valves.call_count = 0
         self._pump_valve_controller.set_valves.mock_calls = []
         self.assertFalse(thermostat_pid.tick())
@@ -153,7 +159,8 @@ class PumpValveControllerTest(unittest.TestCase):
                                  mock.call(0, [2], mode='equal')]),
                          sorted(self._pump_valve_controller.set_valves.mock_calls))
         self.assertEqual(2, self._pump_valve_controller.set_valves.call_count)
-        self._thermostat_group.on = True
+        thermostat.state = ThermostatState.ON
+        thermostat_pid.update_thermostat(thermostat)
 
         for mode, output_power, heating_power, cooling_power in [(ThermostatGroup.Modes.HEATING, 100, 100, 0),
                                                                  (ThermostatGroup.Modes.HEATING, 50, 50, 0),

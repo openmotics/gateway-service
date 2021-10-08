@@ -153,6 +153,7 @@ def thermostat_group_status(method=None, version=1):
         return _method
     return wrapper
 
+
 def receive_events(method=None, version=1):
     """
     Decorator to indicate that the method should receive event messages.

@@ -166,7 +166,8 @@ class UpdateController(object):
         platform = Platform.get_platform()
         if metadata is None:
             response = requests.get(url=self._get_update_metadata_url(version=new_version),
-                                    timeout=2)
+                                    timeout=2,
+                                    verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             if response.status_code != 200:
                 raise ValueError('Failed to get update metadata for {0}'.format(new_version))
             metadata = response.json()
@@ -795,7 +796,9 @@ class UpdateController(object):
                             dst=target_filename)
             return
 
-        response = requests.get(self._get_update_firmware_metadata_url(firmware_type, version), timeout=2)
+        response = requests.get(self._get_update_firmware_metadata_url(firmware_type, version),
+                                timeout=2,
+                                verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
         if response.status_code != 200:
             raise ValueError('Failed to get update firmware metadata for {0} {1}'.format(firmware_type, version))
         metadata = response.json()
@@ -819,7 +822,9 @@ class UpdateController(object):
         with open(target_filename, 'w') as handle:
             for url in urls:
                 try:
-                    response = requests.get(url, stream=True)
+                    response = requests.get(url,
+                                            verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM,
+                                            stream=True)
                     shutil.copyfileobj(response.raw, handle)
                     downloaded = True
                 except Exception as ex:

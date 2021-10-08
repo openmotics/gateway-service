@@ -20,6 +20,8 @@ the master.
 from __future__ import absolute_import
 from threading import Lock
 
+from gateway.enums import ThermostatMode, ThermostatState
+
 
 class ThermostatStatusMaster(object):
     """ Contains a cached version of the current thermostats of the controller. """
@@ -57,22 +59,20 @@ class ThermostatStatusMaster(object):
                      'output1': 0}]}
         """
         with self._merge_lock:
-            new_status = {t['id']: t for t in thermostats['status']}
+            new_status = {}
+            state = ThermostatState.ON if thermostats['thermostats_on'] else ThermostatState.OFF
+            thermostats['mode'] = ThermostatMode.COOLING if thermostats['cooling'] else ThermostatMode.HEATING
+            for status in thermostats['status']:
+                status.update({'state': state,
+                               'steering_power': (status['output0'] + status['output1']) // 2})
+                new_status[status['id']] = status
             if not self._thermostats:
-                self._report_group_change(thermostats_on=thermostats['thermostats_on'],
-                                          cooling=thermostats['cooling'])
+                self._report_group_change(mode=thermostats['mode'])
                 for i in range(0, 32):
                     self._report_change(i, new_status.get(i))
             else:
-                change = False
-                for key in self._thermostats:
-                    if key == 'status':
-                        continue
-                    if thermostats[key] != self._thermostats[key]:
-                        change = True
-                if change:
-                    self._report_group_change(thermostats_on=thermostats['thermostats_on'],
-                                              cooling=thermostats['cooling'])
+                if thermostats['mode'] != self._thermostats['mode']:
+                    self._report_group_change(mode=thermostats['mode'])
                 old_status = {t['id']: t for t in self._thermostats['status']}
                 for thermostat_id in range(0, 32):
                     change = False
@@ -94,15 +94,16 @@ class ThermostatStatusMaster(object):
     def _report_change(self, thermostat_id, status):
         if self._on_thermostat_change is not None and status is not None:
             self._on_thermostat_change(thermostat_id, {'preset': ThermostatStatusMaster._serialize_preset(status['setpoint']),
+                                                       'state': status['state'],
                                                        'current_setpoint': status['csetp'],
                                                        'actual_temperature': status['act'],
                                                        'output_0': status['output0'],
-                                                       'output_1': status['output1']})
+                                                       'output_1': status['output1'],
+                                                       'steering_power': status['steering_power']})
 
-    def _report_group_change(self, thermostats_on, cooling):
+    def _report_group_change(self, mode):
         if self._on_thermostat_group_change is not None:
-            self._on_thermostat_group_change({'state': 'ON' if thermostats_on else 'OFF',
-                                              'mode': 'COOLING' if cooling else 'HEATING'})
+            self._on_thermostat_group_change({'mode': mode})
 
     @staticmethod
     def _serialize_preset(setpoint):

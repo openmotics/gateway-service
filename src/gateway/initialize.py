@@ -100,6 +100,7 @@ def lock_file(file):
 
 def apply_migrations():
     # type: () -> None
+    from peewee_migrate import Router
     logger.info('Applying migrations')
     # Run all unapplied migrations
     db = Database.get_db()
@@ -343,17 +344,28 @@ def setup_target_platform(target_platform, message_client_name):
 
     # eSafe controller
     if target_platform == Platform.Type.ESAFE and six.PY3:
-        from esafe.rebus.rebus_controller import RebusController
-        Injectable.value(rebus_controller=RebusController())
-    elif target_platform == Platform.Type.ESAFE_DUMMY:
+        try:
+            from rebus import Rebus  # Test import to check if rebus is available
+        except ImportError as ex:
+            # when rebus is not available, use an dummy rebus controller
+            logger.warning("Could not load the esafe rebus controller, instantiating dummy rebus controller: {}".format(ex))
+            from esafe.rebus.dummy_rebus_controller import DummyRebusController
+            Injectable.value(rebus_controller=DummyRebusController())
+        else:
+            # when rebus is available, use the real rebus controller
+            from esafe.rebus.rebus_controller import RebusController
+            Injectable.value(rebus_controller=RebusController())
+
+    elif target_platform == Platform.Type.ESAFE_DUMMY:  # for local development purposes, when rebus is available, but dummy rebus controller is enforced
         from esafe.rebus.dummy_rebus_controller import DummyRebusController
         Injectable.value(rebus_controller=DummyRebusController())
     else:
         Injectable.value(rebus_controller=None)
 
     # Thermostats
-    thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
-    thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
+    thermostats_gateway_enabled = Feature.select(Feature.enabled) \
+        .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
+        .scalar()
     if target_platform not in Platform.ClassicTypes or thermostats_gateway_enabled:
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:

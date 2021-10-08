@@ -88,6 +88,11 @@ class ThermostatMode(object):
     HEATING = 'heating'  # type: Literal['heating']
 
 
+class ThermostatState(object):
+    ON = 'on'  # type: Literal['on']
+    OFF = 'off'  # type: Literal['off']
+
+
 class IndicateType(object):
     OUTPUT = 0
     INPUT = 1

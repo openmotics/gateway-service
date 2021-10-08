@@ -19,10 +19,14 @@ and authenticating users.
 
 from __future__ import absolute_import
 
+import json
 import logging
+import os
 import random
 import six
+import uuid
 
+import constants
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums, Languages
@@ -31,6 +35,7 @@ from gateway.exceptions import GatewayException
 from gateway.mappers.user import UserMapper
 from gateway.models import User
 from gateway.pubsub import PubSub
+from platform_utils import Platform
 
 from ioc import Injectable, Inject, Singleton, INJECTED
 
@@ -84,6 +89,37 @@ class UserController(object):
         cloud_user_dto.set_password(self._config['password'])
         # Save the user to the DB
         self.save_user(user_dto=cloud_user_dto)
+
+        # Skip the creation of the eSafe users when the platform is not esafe
+        if Platform.get_platform() not in Platform.EsafeTypes + [Platform.Type.ESAFE_DUMMY]:
+            return
+
+        logger.info('Adding the eSafe users')
+        esafe_config_file_location = constants.get_renson_main_config_file()
+
+        if not os.path.exists(esafe_config_file_location):
+            logger.warning('Could not find the eSafe config file, cannot add the initial user codes')
+            return
+
+        with open(esafe_config_file_location, 'rb') as esafe_config:
+            esafe_config_content = json.load(esafe_config)
+        admin_pin = esafe_config_content['esafe_admin_code']
+        technician_pin = esafe_config_content['esafe_technician_code']
+
+        for user_role, pin in [(User.UserRoles.ADMIN, admin_pin), (User.UserRoles.TECHNICIAN, technician_pin)]:
+            if User.select().where(User.role == user_role).count() > 0:
+                logger.info('Skipping the creation of the eSafe {} user, already exists'.format(user_role))
+            else:
+                logger.info('Creating the eSafe {} user'.format(user_role))
+                cloud_user_dto = UserDTO(
+                    username=user_role,
+                    pin_code=pin,
+                    role=user_role,
+                    accepted_terms=AuthenticationController.TERMS_VERSION,
+                    language='en'
+                )
+                cloud_user_dto.set_password(uuid.uuid4().hex)
+                self.save_user(user_dto=cloud_user_dto)
 
     def stop(self):
         # type: () -> None

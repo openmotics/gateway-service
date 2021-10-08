@@ -32,7 +32,8 @@
       "initial_state": "closed",
       "height": 400,
       "width": 380,
-      "size": "M"
+      "size": "M",
+      "simulate_stuck": true
     },
     {
       "id": 160,

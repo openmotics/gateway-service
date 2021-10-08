@@ -19,9 +19,9 @@ import time
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
     ThermostatAircoStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
-    ThermostatGroupStatusDTO, ThermostatStatusDTO, ThermostatScheduleDTO
+    ThermostatGroupStatusDTO, ThermostatScheduleDTO, ThermostatStatusDTO
 from gateway.events import GatewayEvent
-from gateway.exceptions import CommunicationFailure
+from gateway.exceptions import CommunicationFailure, FeatureUnavailableException
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Sensor
 from gateway.pubsub import PubSub
@@ -29,6 +29,8 @@ from gateway.thermostat.master.thermostat_status_master import \
     ThermostatStatusMaster
 from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
+from master.classic.eeprom_controller import EepromAddress, \
+    EepromController
 from master.classic.master_communicator import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -47,12 +49,14 @@ class ThermostatControllerMaster(ThermostatController):
     DEFAULT_TIMINGS = ['07:00', '09:00', '17:00', '22:00']
     DEFAULT_TEMPS_HEATING = [20.0, 21.0, 16.0]
     DEFAULT_TEMPS_COOLING = [24.0, 23.0, 25.0]
+    EEPROM_MASTER_ENABLE = EepromAddress(0, 40, 1)
 
     @Inject
-    def __init__(self, output_controller=INJECTED, master_controller=INJECTED, pubsub=INJECTED):
-        # type: (OutputController, MasterClassicController, PubSub) -> None
+    def __init__(self, output_controller=INJECTED, master_controller=INJECTED, eeprom_controller=INJECTED, pubsub=INJECTED):
+        # type: (OutputController, MasterClassicController, EepromController, PubSub) -> None
         super(ThermostatControllerMaster, self).__init__(output_controller)
         self._master_controller = master_controller  # classic only
+        self._eeprom_controller = eeprom_controller  # classic only
         self._pubsub = pubsub
 
         self._monitor_thread = DaemonThread(name='thermostatctl',
@@ -66,6 +70,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._thermostats_last_updated = 0.0
         self._thermostats_restore = 0
         self._thermostats_config = {}  # type: Dict[int, ThermostatDTO]
+        self._enabled = True
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
@@ -91,10 +96,12 @@ class ThermostatControllerMaster(ThermostatController):
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_id,
                                       'status': {'preset': status['preset'],
+                                                 'state': status['state'].upper(),
                                                  'current_setpoint': status['current_setpoint'],
                                                  'actual_temperature': status['actual_temperature'],
                                                  'output_0': status['output_0'],
-                                                 'output_1': status['output_1']},
+                                                 'output_1': status['output_1'],
+                                                 'steering_power': status['steering_power']},
                                       'location': location})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
@@ -102,8 +109,7 @@ class ThermostatControllerMaster(ThermostatController):
         # type: (Dict[str,Any]) -> None
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                      {'id': 0,
-                                      'status': {'state': status['state'],
-                                                 'mode': status['mode']},
+                                      'status': {'mode': status['mode'].upper()},
                                       'location': {}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
@@ -170,6 +176,8 @@ class ThermostatControllerMaster(ThermostatController):
         return was_incorrect
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        if not self._enabled:
+            raise RuntimeError('Master thermostats are disabled')
         thermostat_dto = self._master_controller.load_heating_thermostat(thermostat_id)
         thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
         if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
@@ -179,6 +187,8 @@ class ThermostatControllerMaster(ThermostatController):
         return thermostat_dto
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
+        if not self._enabled:
+            return []
         thermostats = self._master_controller.load_heating_thermostats()
         changed_thermostat_dtos = []
         for thermostat_dto in thermostats:
@@ -192,6 +202,8 @@ class ThermostatControllerMaster(ThermostatController):
         return thermostats
 
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
+        if not self._enabled:
+            raise RuntimeError('Master thermostats are disabled')
         for thermostat_dto in thermostats:
             if 'sensor' in thermostat_dto.loaded_fields:
                 thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
@@ -202,6 +214,8 @@ class ThermostatControllerMaster(ThermostatController):
         self.invalidate_cache(THERMOSTATS)
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        if not self._enabled:
+            raise RuntimeError('Master thermostats are disabled')
         thermostat_dto = self._master_controller.load_cooling_thermostat(thermostat_id)
         thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
         if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
@@ -211,6 +225,8 @@ class ThermostatControllerMaster(ThermostatController):
         return thermostat_dto
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
+        if not self._enabled:
+            return []
         thermostats = self._master_controller.load_cooling_thermostats()
         changed_thermostat_dtos = []
         for thermostat_dto in thermostats:
@@ -223,6 +239,8 @@ class ThermostatControllerMaster(ThermostatController):
         return thermostats
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
+        if not self._enabled:
+            raise RuntimeError('Master thermostats are disabled')
         for thermostat_dto in thermostats:
             if 'sensor' in thermostat_dto.loaded_fields:
                 thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
@@ -298,9 +316,13 @@ class ThermostatControllerMaster(ThermostatController):
 
         return self._master_controller.load_thermostat_group()
 
-    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
-        self._master_controller.save_thermostat_group(thermostat_group)
+    def save_thermostat_groups(self, thermostat_groups):  # type: (List[ThermostatGroupDTO]) -> None
+        for thermostat_group_dto in thermostat_groups:
+            self._master_controller.save_thermostat_group(thermostat_group_dto)
         self.invalidate_cache(THERMOSTATS)
+
+    def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+        raise NotImplementedError('Thermostat groups not supported')
 
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         return self._master_controller.load_heating_pump_group(pump_group_id)
@@ -311,11 +333,13 @@ class ThermostatControllerMaster(ThermostatController):
     def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         self._master_controller.save_heating_pump_groups(pump_groups)
 
-    def set_thermostat_group(self, thermostat_group_id, group_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (int, bool, bool, bool, Optional[bool], Optional[int]) -> None
+    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
+        # type: (int, Optional[str], Optional[str]) -> None
+        raise FeatureUnavailableException()
+
+    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
         """ Set the mode of the thermostats. """
-        if thermostat_group_id != self.GLOBAL_THERMOSTAT:
-            raise NotImplementedError('Thermostat groups not supported')
 
         # Figure out whether the system should be on or off
         set_on = False
@@ -379,6 +403,10 @@ class ThermostatControllerMaster(ThermostatController):
         self.invalidate_cache(THERMOSTATS)
         self.increase_interval(THERMOSTATS, interval=2, window=10)
 
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> None
+        raise FeatureUnavailableException()
+
     def set_airco_status(self, thermostat_id, airco_on):
         # type: (int, bool) -> None
         """ Set the mode of the airco attached to a given thermostat. """
@@ -430,6 +458,11 @@ class ThermostatControllerMaster(ThermostatController):
         """
         Get basic information about all thermostats and pushes it in to the Thermostat Status tracker
         """
+        master_enable = self._eeprom_controller.read_address(self.EEPROM_MASTER_ENABLE)
+        if master_enable.bytes == bytearray([0x00]):
+            self._enabled = False
+            logger.warning('Master thermostats are disabled: %s', master_enable)
+            return
 
         def get_automatic_setpoint(_mode):
             _automatic = bool(_mode & 1 << 3)
@@ -461,8 +494,8 @@ class ThermostatControllerMaster(ThermostatController):
 
         thermostats = []
         for thermostat_id in range(32):
-            thermostat_dto = self._thermostats_config[thermostat_id]  # type: ThermostatDTO
-            if thermostat_dto.in_use:
+            thermostat_dto = self._thermostats_config.get(thermostat_id)  # type: Optional[ThermostatDTO]
+            if thermostat_dto and thermostat_dto.in_use:
                 t_mode = thermostat_mode['mode{0}'.format(thermostat_id)]
                 t_automatic, t_setpoint = get_automatic_setpoint(t_mode)
                 thermostat = {'id': thermostat_id,
@@ -494,21 +527,33 @@ class ThermostatControllerMaster(ThermostatController):
     def get_thermostat_group_status(self):
         # type: () -> List[ThermostatGroupStatusDTO]
         """ Returns thermostat information """
+        if not self._enabled:
+            return [ThermostatGroupStatusDTO(id=0,
+                                             automatic=False,
+                                             setpoint=None,
+                                             cooling=False,
+                                             mode='heating',
+                                             statusses=[])]
+
         self._refresh_thermostats()  # Always return the latest information
         master_status = self._thermostat_status.get_thermostats()
-        statusses = [ThermostatStatusDTO(id=thermostat['id'],
-                                         actual_temperature=thermostat['act'],
-                                         setpoint_temperature=thermostat['csetp'],
-                                         outside_temperature=thermostat['outside'],
-                                         mode=thermostat['mode'],
-                                         automatic=thermostat['automatic'],
-                                         setpoint=thermostat['setpoint'],
-                                         output_0_level=thermostat['output0'],
-                                         output_1_level=thermostat['output1'])
-                     for thermostat in master_status['status']]
+        statusses = []
+        for thermostat in master_status['status']:
+            statusses.append(ThermostatStatusDTO(id=thermostat['id'],
+                                                 actual_temperature=thermostat['act'],
+                                                 setpoint_temperature=thermostat['csetp'],
+                                                 outside_temperature=thermostat['outside'],
+                                                 mode=thermostat['mode'],
+                                                 state=thermostat['state'],
+                                                 preset=thermostat['preset'],
+                                                 automatic=thermostat['automatic'],
+                                                 setpoint=thermostat['setpoint'],
+                                                 output_0_level=thermostat['output0'],
+                                                 output_1_level=thermostat['output1'],
+                                                 steering_power=thermostat['steering_power']))
         return [ThermostatGroupStatusDTO(id=0,
-                                         on=master_status['thermostats_on'],
                                          automatic=master_status['automatic'],
                                          setpoint=master_status['setpoint'],
                                          cooling=master_status['cooling'],
+                                         mode=master_status['mode'],
                                          statusses=statusses)]

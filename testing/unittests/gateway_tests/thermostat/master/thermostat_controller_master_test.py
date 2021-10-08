@@ -26,6 +26,7 @@ from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.thermostat.master.thermostat_controller_master import \
     ThermostatControllerMaster
+from master.classic.eeprom_controller import EepromController
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -39,6 +40,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
         self._master_controller = mock.Mock(MasterClassicController)
         SetUpTestInjections(pubsub=self.pubsub,
                             master_controller=self._master_controller,
+                            eeprom_controller=mock.Mock(EepromController),
                             output_controller=mock.Mock(OutputController))
         self.controller = ThermostatControllerMaster()
 
@@ -55,16 +57,20 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                       'csetp': None,
                       'setpoint': None,
                       'output0': None,
-                      'output1': None}
+                      'output1': None,
+                      'state': 'on',
+                      'steering_power': None}
             self.controller._thermostats_config = {1: ThermostatDTO(1)}
             self.controller._thermostat_status._report_change(1, status)
             self.pubsub._publish_all_events(blocking=False)
             event_data = {'id': 1,
                           'status': {'preset': 'AUTO',
+                                     'state': 'ON',
                                      'current_setpoint': None,
                                      'actual_temperature': None,
                                      'output_0': None,
-                                     'output_1': None},
+                                     'output_1': None,
+                                     'steering_power': None},
                           'location': {'room_id': 255}}
             assert GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, event_data) in events
 
