@@ -681,6 +681,7 @@ class WebInterface(object):
             'shutter_positions',  # Shutter positions
             'ventilation',  # Native ventilation
             'modules_information',  # Clean module information
+            'dynamic_updates',  # Dynamic updates
         ]
 
         master_version = self._module_controller.get_master_version()
