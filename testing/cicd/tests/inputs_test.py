@@ -45,7 +45,7 @@ def test_actions(toolbox, _input, output, to_status):
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
     logger.debug(time.ctime(time.time()))
-    time.sleep(10) # Allow time for the EEPROM activate to settle
+    time.sleep(10)  # Allow time for the EEPROM activate to settle
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
@@ -54,15 +54,17 @@ def test_actions(toolbox, _input, output, to_status):
     # TODO: Couldn't we also just do an /get_last_inputs on the tester i.s.o. using the event observer plugin?
     toolbox.assert_output_changed(output, to_status, between=(0, 8))
 
+
 def test_fixed_actions(toolbox):
+    repeat = 10
     to_status = True
     from_status = not to_status
     i_mod = INPUT_MODULE_LAYOUT[0]
     o_mod = OUTPUT_MODULE_LAYOUT[0]
 
     input_configs = []
-    logger.debug("verifying whether i_mod.inputs[0].input_id is what I think it is:")
-    logger.debug(i_mod.inputs[0].input_id)
+    # logger.debug("verifying whether i_mod.inputs[0].input_id is what I think it is:")
+    # logger.debug(i_mod.inputs[0].input_id)
     for i in range(8):
         _input = i_mod.inputs[i]
         output = o_mod.outputs[i]
@@ -72,26 +74,35 @@ def test_fixed_actions(toolbox):
         # Ensuring all outputs are in the right starting state
         toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
 
-    logger.debug("verifying whether input_configs is what I think it is:")
-    logger.debug(input_configs)
+    # logger.debug("verifying whether input_configs is what I think it is:")
+    # logger.debug(input_configs)
 
     toolbox.dut.get('/set_input_configurations', {'config': json.dumps(input_configs)})
     logger.debug("Sleeping for two minutes, after 1'30\" go to CLI mode on the DUT")
     time.sleep(90)  # Long sleep because it's a bigger config, give time for the blocking eeprom activate call to settle
+    # time.sleep(60)  # Trying a short sleep and not going to CLI [Because if the test fails, I do not get the debug_buffer output
     logger.debug("Go to CLI/Maintenance mode on the DUT now, you've got 30 seconds")
     time.sleep(30)
 
+    for j in range(repeat):
+        logger.debug("Run #{}".format(j))
+        for i in range(8):
+            _input = i_mod.inputs[i]
+            output = o_mod.outputs[i]
+            logger.debug('input action {} to {}, expect event {} -> {}'.format(
+                _input, output, from_status, to_status))
 
-    for i in range(8):
-        _input = i_mod.inputs[i]
-        output = o_mod.outputs[i]
-        logger.debug('input action {} to {}, expect event {} -> {}'.format(
-            _input, output, from_status, to_status))
+            # toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)  # Will not work because of CLI mode
+            toolbox.press_input(_input)
+            time.sleep(0.1)
+            # TODO: Couldn't we also just do an /get_last_inputs on the tester i.s.o. using the event observer plugin?
+            toolbox.assert_output_changed(output, to_status)
+            # Ensuring all outputs are in the right starting state for the next run if we don't go to CLI mode
+            # toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
+        # Workaround when in CLI mode, where I can't ensure the correct output state
+        from_status = not from_status
+        to_status = not to_status
 
-        # toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)  # Will not work because of CLI mode
-        toolbox.press_input(_input)
-        # TODO: Couldn't we also just do an /get_last_inputs on the tester i.s.o. using the event observer plugin?
-        toolbox.assert_output_changed(output, to_status)
 
 @pytest.mark.slow
 @hypothesis.settings(max_examples=2)

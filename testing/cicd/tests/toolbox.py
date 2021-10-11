@@ -653,7 +653,7 @@ class Toolbox(object):
         # type: (Output, int, Optional[Dict[str,Any]]) -> None
         if config:
             self.configure_output(output, config)
-        hypothesis.note('ensure output {} is {}'.format(output, status))
+        # hypothesis.note('ensure output {} is {}'.format(output, status))
         logger.debug('ensure output {} is {}'.format(output, status))
         time.sleep(0.2)
         self.set_output(output, status)
@@ -682,11 +682,11 @@ class Toolbox(object):
 
     def press_input(self, _input):
         # type: (Input) -> None
-        logger.debug('### Inside press_input')
+        # logger.debug('### Inside press_input')
         self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
         time.sleep(0.2)
         self.tester.reset()
-        hypothesis.note('After input {} pressed'.format(_input))
+        # hypothesis.note('After input {} pressed'.format(_input))
         self.tester.toggle_output(_input.tester_output_id, is_dimmer=_input.is_dimmer)
         logger.debug('Toggled {} -> True -> False'.format(_input))
 
@@ -718,8 +718,8 @@ class Toolbox(object):
 
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
-        hypothesis.note('assert {} status changed {} -> {}'.format(output, not status, status))
-        logger.debug('### Inside assert_output_changed')
+        # hypothesis.note('assert {} status changed {} -> {}'.format(output, not status, status))
+        # logger.debug('### Inside assert_output_changed')
         if self.tester.receive_input_event(entity=output,
                                            input_id=output.tester_input_id,
                                            input_status=status,
@@ -729,7 +729,8 @@ class Toolbox(object):
         logger.debug(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
         logger.debug('### WRITE')
         time.sleep(10)  # Get more instructions in the buffer
-        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 200})['write'])
+        # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 200})['write'])
+        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['write'])
 
 
 
