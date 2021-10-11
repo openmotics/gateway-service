@@ -203,6 +203,7 @@ class UpdateEnums(object):
     class States(object):
         ERROR = 'ERROR'
         UPDATING = 'UPDATING'
+        SKIPPED = 'SKIPPED'
         OK = 'OK'
 
     class Modes(object):

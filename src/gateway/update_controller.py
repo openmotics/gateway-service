@@ -194,7 +194,8 @@ class UpdateController(object):
             return  # Wait a bit, making sure the service is completely up-and-running before starting updates
 
         success, target_version = UpdateController._get_target_version_info('gateway_service')
-        gateway_service_up_to_date = success and target_version == gateway.__version__
+        gateway_service_current_version = self._fetch_version(firmware_type='gateway_service', logger=global_logger)
+        gateway_service_up_to_date = success and target_version == gateway_service_current_version
 
         firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
         for firmware_type in firmware_types:
@@ -209,9 +210,9 @@ class UpdateController(object):
                 try:
                     component_logger.info('Updating gateway_service to {0}'.format(target_version))
                     # Validate whether an update is needed
-                    if target_version == gateway.__version__:
+                    if target_version == gateway_service_current_version:
                         component_logger.info('Firmware for gateway_service up-to-date')
-                        UpdateController._register_version_success(firmware_type, success=True)
+                        UpdateController._register_version_success(firmware_type=firmware_type, success=True)
                         continue  # Already up-to-date
                     # Check whether `current` isn't already pointing to the target version (would indicate some version mismatch)
                     target_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(target_version)
@@ -442,10 +443,7 @@ class UpdateController(object):
     def _update_master_firmware(self, firmware_type, target_version, firmware_filename, logger, mode):
         # type: (str, str, Optional[str], Logger, str) -> Tuple[int, int]
         try:
-            try:
-                current_version = '.'.join(str(e) for e in self._master_controller.get_firmware_version())  # type: Optional[str]
-            except Exception:
-                current_version = None
+            current_version = self._fetch_version(firmware_type=firmware_type, logger=logger)
             if mode != UpdateEnums.Modes.FORCED and current_version == target_version:
                 logger.info('Master already up-to-date')
                 UpdateController._register_version_success(firmware_type, success=True)
@@ -474,14 +472,9 @@ class UpdateController(object):
 
         # Migrate legacy folder structure, if needed
         if not os.path.exists(UpdateController.FRONTEND_CURRENT):
-            current_version = 'legacy'
-            try:
-                with open(os.path.join(UpdateController.PREFIX, 'static', 'index.html'), 'r') as index:
-                    match = re.search(r"v([0-9]+?\.[0-9]+?\.[0-9]+)", index.read())
-                    if match is not None:
-                        current_version = match.groups()[0]
-            except Exception as ex:
-                logger.warning('Could not parse current frontend version while migrating legacy structure: {0}'.format(ex))
+            current_version = self._fetch_version(firmware_type='gateway_frontend', logger=logger)
+            if current_version is None:
+                current_version = 'legacy'
             old_version_folder = UpdateController.FRONTEND_BASE_TEMPLATE.format(current_version)
             os.makedirs(old_version_folder)
             os.symlink(old_version_folder, UpdateController.FRONTEND_CURRENT)
@@ -491,7 +484,7 @@ class UpdateController(object):
             shutil.move(old_location, new_location)
             os.symlink(new_location, old_location)
 
-        old_version = os.readlink(UpdateController.FRONTEND_CURRENT).split(os.path.sep)[-1]
+        old_version = self._fetch_version(firmware_type='gateway_frontend', logger=logger)
         if old_version == new_version:
             # Already up-to-date
             logger.info('Firmware for gateway_frontend up-to-date')
@@ -651,9 +644,34 @@ class UpdateController(object):
         # available, ...
         logger.info('Preparation for first startup completed')
 
-    @staticmethod
-    def get_update_state():
-        state_values = {}
+    def _fetch_version(self, logger, firmware_type):  # type: (Logger, str) -> Optional[str]
+        try:
+            if firmware_type == 'gateway_service':
+                return gateway.__version__
+            if firmware_type == 'gateway_frontend':
+                if not os.path.exists(UpdateController.FRONTEND_CURRENT):
+                    with open(os.path.join(UpdateController.PREFIX, 'static', 'index.html'), 'r') as index:
+                        match = re.search(r"v([0-9]+?\.[0-9]+?\.[0-9]+)", index.read())
+                        if match is not None:
+                            return match.groups()[0]
+                return str(os.readlink(UpdateController.FRONTEND_CURRENT).split(os.path.sep)[-1])
+            if firmware_type in ['master_classic', 'master_coreplus']:
+                return '.'.join(str(e) for e in self._master_controller.get_firmware_version())
+        except Exception as ex:
+            logger.warning('Could not load {0} version: {1}'.format(firmware_type, ex))
+        return None
+
+    def get_update_state(self):
+        states = []
+        state = 2
+        state_map = {0: UpdateEnums.States.ERROR,
+                     1: UpdateEnums.States.UPDATING,
+                     2: UpdateEnums.States.SKIPPED,
+                     3: UpdateEnums.States.OK}
+        global_state_map = {0: UpdateEnums.States.ERROR,
+                            1: UpdateEnums.States.UPDATING,
+                            2: UpdateEnums.States.OK,
+                            3: UpdateEnums.States.OK}
         modules = {}  # type: Dict[str, List[Module]]
         for module in Module.select().where(Module.hardware_type == HardwareType.PHYSICAL):
             modules.setdefault(module.module_type, []).append(module)
@@ -663,38 +681,35 @@ class UpdateController(object):
             if target_version is None:
                 continue
             if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
-                state_values[firmware_type] = 1
-                if success is not None:
-                    state_values[firmware_type] = 2 if success else 0
+                current_version = self._fetch_version(firmware_type=firmware_type, logger=global_logger)
+                if current_version == target_version:
+                    state_number = 3
+                else:
+                    state_number = 1
+                    if success is not None:
+                        state_number = 2 if success else 0
+                state = min(state, state_number)
+                states.append({'firmware_type': firmware_type,
+                               'state': state_map[state_number],
+                               'current_version': current_version,
+                               'target_version': target_version})
             else:
-                if firmware_type not in state_values:
-                    state_values[firmware_type] = {}
                 for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
                     for module in modules.get(module_type, []):
                         if module.firmware_version == target_version:
-                            state_values[firmware_type][module.address] = 2
+                            state_number = 3
                         else:
-                            state_values[firmware_type][module.address] = 1
+                            state_number = 1
                             update_success = module.update_success
                             if update_success is not None:
-                                state_values[firmware_type][module.address] = 2 if update_success else 0
-        state_map = {0: UpdateEnums.States.ERROR,
-                     1: UpdateEnums.States.UPDATING,
-                     2: UpdateEnums.States.OK}
-        state = 2
-        states = {}
-        for firmware_type, state_value in state_values.items():
-            if isinstance(state_value, dict):
-                for address in list(state_value.keys()):
-                    state_value = state_values[firmware_type][address]
-                    state = min(state, state_value)
-                    if firmware_type not in states:
-                        states[firmware_type] = {}
-                    states[firmware_type][address] = state_map[state_value]
-            else:
-                state = min(state, state_value)
-                states[firmware_type] = state_map[state_value]
-        return {'status': state_map[state],
+                                state_number = 2 if update_success else 0
+                        state = min(state, state_number)
+                        states.append({'firmware_type': firmware_type,
+                                       'state': state_map[state_number],
+                                       'current_version': module.firmware_version,
+                                       'target_version': target_version,
+                                       'module_address': module.address})
+        return {'status': global_state_map[state],
                 'status_detail': states}
 
     @staticmethod

@@ -731,7 +731,7 @@ class WebInterface(object):
 
     @openmotics_api(auth=True)
     def get_system_status(self):
-        return {'updates': UpdateController.get_update_state()}
+        return {'updates': self._update_controller.get_update_state()}
 
     @openmotics_api(auth=True)
     def get_input_status(self):
