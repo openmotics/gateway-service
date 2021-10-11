@@ -55,21 +55,22 @@ def test_actions(toolbox, _input, output, to_status):
     toolbox.assert_output_changed(output, to_status, between=(0, 8))
 
 def test_fixed_actions(toolbox):
-    # TODO: Ensure all outputs are set to false as starting state
     to_status = True
     from_status = not to_status
     i_mod = INPUT_MODULE_LAYOUT[0]
     o_mod = OUTPUT_MODULE_LAYOUT[0]
-    # _input = i_mod.inputs[0]
-    # output = o_mod.outputs[0]
 
     input_configs = []
     logger.debug("verifying whether i_mod.inputs[0].input_id is what I think it is:")
     logger.debug(i_mod.inputs[0].input_id)
     for i in range(8):
-        input_configs.append({'name': "input{}".format(i), 'id': i_mod.inputs[i].input_id,
-                              'action': o_mod.outputs[i].output_id})
+        _input = i_mod.inputs[i]
+        output = o_mod.outputs[i]
+        input_configs.append({'name': "input{}".format(i), 'id': _input.input_id,
+                              'action': output.output_id})
         input_configs[i].update(DEFAULT_INPUT_CONFIG)
+        # Ensuring all outputs are in the right starting state
+        toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
 
     logger.debug("verifying whether input_configs is what I think it is:")
     logger.debug(input_configs)
@@ -87,7 +88,7 @@ def test_fixed_actions(toolbox):
         logger.debug('input action {} to {}, expect event {} -> {}'.format(
             _input, output, from_status, to_status))
 
-        # toolbox.ensure_output(i['action'], from_status, DEFAULT_OUTPUT_CONFIG)  # Will not work because of CLI mode
+        # toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)  # Will not work because of CLI mode
         toolbox.press_input(_input)
         # TODO: Couldn't we also just do an /get_last_inputs on the tester i.s.o. using the event observer plugin?
         toolbox.assert_output_changed(output, to_status)
