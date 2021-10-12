@@ -222,7 +222,7 @@ class ThermostatControllerGateway(ThermostatController):
         if thermostat.active_preset == preset:
             return False
         thermostat.active_preset = preset
-        # thermostat.save()
+        thermostat.save()
 
         if not postpone_tick:
             self.tick_thermostat(thermostat=thermostat)
@@ -236,7 +236,7 @@ class ThermostatControllerGateway(ThermostatController):
         if thermostat.state == state:
             return False
         thermostat.sate = state
-        # thermostat.save()
+        thermostat.save()
 
         if not postpone_tick:
             self.tick_thermostat(thermostat=thermostat)
