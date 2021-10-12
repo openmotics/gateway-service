@@ -56,6 +56,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
             status = {'act': None,
                       'csetp': None,
                       'setpoint': None,
+                      'preset': 'AUTO',
                       'output0': None,
                       'output1': None,
                       'state': 'on',
