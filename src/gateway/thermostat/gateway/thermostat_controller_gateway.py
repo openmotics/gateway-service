@@ -235,7 +235,7 @@ class ThermostatControllerGateway(ThermostatController):
 
         if thermostat.state == state:
             return False
-        thermostat.sate = state
+        thermostat.state = state
         thermostat.save()
 
         if not postpone_tick:
