@@ -151,5 +151,10 @@ def toolbox(toolbox_session):
         yield toolbox
     finally:
         toolbox.print_logs()
-        # # TODO: Only print the buffer when a test fails - this will print the buffer after every test
-        # logger.debug(toolbox.dut.get('/get_master_debug_buffer'))
+        # Printing the debug buffer if the test fails to inspect the commands sent to the master
+        logger.debug('### Debug Buffer DUT')
+        logger.debug(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
+        logger.debug('### WRITE')
+        logger.debug(toolbox.dut.get('/get_master_debug_buffer', {'amount': 200})['write'])
+        logger.debug('### READ')
+        logger.debug(toolbox.dut.get('/get_master_debug_buffer', {'amount': 200})['read'])

@@ -172,31 +172,20 @@ class MasterCommunicator(object):
         self.__command_success_histogram.clear()
         self.__command_timeout_histogram.clear()
 
-    def get_debug_buffer(self, amount):
-        # type: (int, bool) -> Dict[str,Dict[float,str]]
+    def get_debug_buffer(self, amount=100):
+        # type: (int) -> Dict[str,Dict[float,str]]
         def process(buffer):
             formatted_buffer = {}
-            now = time.time()
-            # for key in sorted(list(buffer.keys())[-amount:]):
             for key in list(buffer.keys())[-amount:]:
-                # Buffer duration is 5 minutes, only look at the past 2mins in it, maybe even less?
-                # if int(key) > now - 60:
+                # Buffer duration is 5 minutes
                 raw_value = buffer.get(key)
                 if raw_value is not None:
                     raw_string = str(Printable(raw_value))
                     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-                    # if 'EL' not in raw_string:
-                    #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-                    if 'WE' in raw_string:
-                        formatted_buffer['@@@@    STRWE    @@@@'] = raw_string
-                    # elif 'BA' in raw_string:
-                    #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-                    # elif 'RE' in raw_string:
-                    #     formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
             return json.dumps(formatted_buffer, sort_keys=True)
 
-        # 'read':  process(self.__debug_buffer['read']),
-        return {'write': process(self.__debug_buffer['write'])}
+        return {'read': process(self.__debug_buffer['read']),
+                'write': process(self.__debug_buffer['write'])}
 
     def get_seconds_since_last_success(self):
         """ Get the number of seconds since the last successful communication. """
@@ -285,11 +274,6 @@ class MasterCommunicator(object):
                     self.__communication_stats['calls_succeeded'].append(time.time())
                     self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
                     self.__command_success_histogram.update({str(cmd.action): 1})
-                    # Trying to figure out why there are so many FV calls when running the input test
-                    if cmd == master_api.get_module_version():
-                        logger.info("### FV Stack trace :) ")
-                        for line in traceback.format_stack():
-                            logger.info(line.strip())
                     return result
             except CommunicationTimedOutException:
                 if cmd.action != bytearray(b'FV'):

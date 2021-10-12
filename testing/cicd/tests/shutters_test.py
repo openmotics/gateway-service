@@ -42,7 +42,7 @@ def clean_shutters(toolbox_session):
             toolbox.configure_shutter(shutter, {'timer_up': 0, 'timer_down': 0, 'up_down_config': 1})
 
 
-@pytest.mark.smoke
+@pytest.mark.slow
 @hypothesis.given(shutters(), booleans(), booleans())
 def test_shutter_moving(toolbox, clean_shutters, shutter, primary_direction, inverted):
     # type: (Toolbox, Any, Shutter, bool, bool) -> None

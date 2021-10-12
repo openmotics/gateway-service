@@ -324,17 +324,17 @@ class Toolbox(object):
                 self.ensure_shutter_exists(module.shutters[-1], timeout=300)
 
         # Make sure the eeprom cache of the gateway is filled
-        # self.dut.get('/get_input_configurations')
-        # self.dut.get('/get_output_configurations')
-        # self.dut.get('/get_shutter_configurations')
-        # self.dut.get('/get_shutter_group_configurations')
-        # self.dut.get('/get_ventilation_configurations')
-        # self.dut.get('/get_scheduled_action_configurations')
-        # self.dut.get('/get_group_action_configurations')
-        # self.dut.get('/get_cooling_configurations')
-        # self.dut.get('/get_sensor_configurations')
-        # self.dut.get('/get_thermostat_configurations')
-        time.sleep(10)  # Give the master some additional rest before testing begins (preferably 1 min)
+        self.dut.get('/get_input_configurations')
+        self.dut.get('/get_output_configurations')
+        self.dut.get('/get_shutter_configurations')
+        self.dut.get('/get_shutter_group_configurations')
+        self.dut.get('/get_ventilation_configurations')
+        self.dut.get('/get_scheduled_action_configurations')
+        self.dut.get('/get_group_action_configurations')
+        self.dut.get('/get_cooling_configurations')
+        self.dut.get('/get_sensor_configurations')
+        self.dut.get('/get_thermostat_configurations')
+        time.sleep(20)  # Give the master some additional rest before testing begins
 
     def print_logs(self):
         # type: () -> None
@@ -433,8 +433,6 @@ class Toolbox(object):
     def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
         logger.debug('Discovering modules')
         since = time.time()
-        # [WIP] tried to disable ucan logic for the factory reset test (CAN FX call)
-        # but it did not enable us to check the behaviour
         if ucans:
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
@@ -475,7 +473,7 @@ class Toolbox(object):
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
             self.module_discover_stop()
-            time.sleep(60)  # Give time for the master to clear the eeprom cache
+            time.sleep(30)  # Give time for the master to clear the eeprom cache
 
 
         while since > time.time() - timeout:
@@ -653,7 +651,7 @@ class Toolbox(object):
         # type: (Output, int, Optional[Dict[str,Any]]) -> None
         if config:
             self.configure_output(output, config)
-        # hypothesis.note('ensure output {} is {}'.format(output, status))
+        hypothesis.note('ensure output {} is {}'.format(output, status))
         logger.debug('ensure output {} is {}'.format(output, status))
         time.sleep(0.2)
         self.set_output(output, status)
@@ -682,11 +680,10 @@ class Toolbox(object):
 
     def press_input(self, _input):
         # type: (Input) -> None
-        # logger.debug('### Inside press_input')
         self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
         time.sleep(0.2)
         self.tester.reset()
-        # hypothesis.note('After input {} pressed'.format(_input))
+        hypothesis.note('After input {} pressed'.format(_input))
         self.tester.toggle_output(_input.tester_output_id, is_dimmer=_input.is_dimmer)
         logger.debug('Toggled {} -> True -> False'.format(_input))
 
@@ -718,21 +715,12 @@ class Toolbox(object):
 
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
-        # hypothesis.note('assert {} status changed {} -> {}'.format(output, not status, status))
-        # logger.debug('### Inside assert_output_changed')
+        hypothesis.note('assert {} status changed {} -> {}'.format(output, not status, status))
         if self.tester.receive_input_event(entity=output,
                                            input_id=output.tester_input_id,
                                            input_status=status,
                                            between=between):
             return
-        logger.debug('### Debug Buffer DUT')
-        logger.debug(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
-        logger.debug('### WRITE')
-        time.sleep(10)  # Get more instructions in the buffer
-        # logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 200})['write'])
-        logger.debug(self.dut.get('/get_master_debug_buffer', {'amount': 0})['write'])
-
-
 
         raise AssertionError('expected event {} status={}'.format(output, status))
 
