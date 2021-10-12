@@ -71,6 +71,7 @@ class ModuleController(BaseController):
             return False
         self._sync_running = True
 
+        return True  # Disabling this sync to stop the FV calls
         logger.info('ORM sync (Modules)')
 
         amounts = {None: 0, True: 0, False: 0}

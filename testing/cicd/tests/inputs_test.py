@@ -33,7 +33,7 @@ DEFAULT_INPUT_CONFIG = {'invert': 255}
 
 # @pytest.mark.smoke
 @pytest.mark.slow
-@hypothesis.settings(max_examples=7)
+@hypothesis.settings(max_examples=10)
 @hypothesis.given(inputs(), outputs(), booleans())
 def test_actions(toolbox, _input, output, to_status):
     from_status = not to_status
@@ -45,7 +45,7 @@ def test_actions(toolbox, _input, output, to_status):
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
     logger.debug(time.ctime(time.time()))
-    time.sleep(10)  # Allow time for the EEPROM activate to settle
+    time.sleep(1)  # Allow time for the EEPROM activate to settle
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.

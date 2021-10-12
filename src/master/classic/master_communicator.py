@@ -23,6 +23,7 @@ import json
 import select
 import time
 from threading import Event, Lock, Thread
+import traceback
 
 import six
 from six.moves.queue import Empty, Queue
@@ -284,6 +285,11 @@ class MasterCommunicator(object):
                     self.__communication_stats['calls_succeeded'].append(time.time())
                     self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
                     self.__command_success_histogram.update({str(cmd.action): 1})
+                    # Trying to figure out why there are so many FV calls when running the input test
+                    if cmd == master_api.get_module_version():
+                        logger.info("### FV Stack trace :) ")
+                        for line in traceback.format_stack():
+                            logger.info(line.strip())
                     return result
             except CommunicationTimedOutException:
                 if cmd.action != bytearray(b'FV'):

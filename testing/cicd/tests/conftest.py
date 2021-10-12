@@ -141,7 +141,8 @@ def firmware_updates(toolbox_session):
 
 
 @fixture
-def toolbox(toolbox_session, software_update, firmware_updates):
+# def toolbox(toolbox_session, software_update, firmware_updates):
+def toolbox(toolbox_session):
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     toolbox.health_check(timeout=360)
