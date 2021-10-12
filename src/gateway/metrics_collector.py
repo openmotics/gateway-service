@@ -1126,7 +1126,7 @@ class MetricsCollector(object):
                           'unit': '%'}]},
             # thermostat
             {'type': 'thermostat',
-             'tags': ['id', 'name'],
+             'tags': ['id'],
              'metrics': [{'name': 'on',
                           'description': 'Indicates whether the thermostat is on',
                           'type': 'gauge',
