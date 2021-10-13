@@ -339,6 +339,7 @@ class UpdateController(object):
         if not modules_to_update:
             return 0, 0
 
+        # Fetch the firmware
         filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
         filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
         target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
@@ -348,9 +349,13 @@ class UpdateController(object):
                             target_filename=target_filename,
                             source_filename=firmware_filename)
 
+        # Update
         successes, failures = 0, 0
+        hold_versions = {target_version}
         for module in modules:
             module_address = module.address
+            if module.firmware_version is not None:
+                hold_versions.add(module.firmware_version)
             individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module_address))
             try:
                 new_version = self._master_controller.update_slave_module(firmware_type=firmware_type,
@@ -367,6 +372,13 @@ class UpdateController(object):
                 module.update_success = False
                 failures += 1
             module.save()
+
+        # Cleanup
+        base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
+        UpdateController._clean_old_firmware_versions(base_template=base_template,
+                                                      hold_versions=hold_versions,
+                                                      logger=logger)
+
         return successes, failures
 
     def _update_energy_firmware(self, firmware_type, target_version, module_address, firmware_filename, logger, mode):
@@ -387,6 +399,7 @@ class UpdateController(object):
         if not modules_to_update:
             return 0, 0
 
+        # Fetch the firmware
         filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
         filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
         target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
@@ -396,9 +409,13 @@ class UpdateController(object):
                             target_filename=target_filename,
                             source_filename=firmware_filename)
 
+        # Update
         successes, failures = 0, 0
+        hold_versions = {target_version}
         for module in modules_to_update:
             module_address = module.address
+            if module.firmware_version is not None:
+                hold_versions.add(module.firmware_version)
             individual_logger = Logs.get_update_logger('{0}_{1}'.format(EnergyEnums.VERSION_TO_STRING[module_version], module_address))
             try:
                 new_version = self._energy_module_controller.update_module(module_version=module_version,
@@ -415,6 +432,13 @@ class UpdateController(object):
                 module.update_success = False
                 failures += 1
             module.save()
+
+        # Cleanup
+        base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
+        UpdateController._clean_old_firmware_versions(base_template=base_template,
+                                                      hold_versions=hold_versions,
+                                                      logger=logger)
+
         return successes, failures
 
     @staticmethod
@@ -449,6 +473,7 @@ class UpdateController(object):
                 UpdateController._register_version_success(firmware_type, success=True)
                 return 0, 0
 
+            # Fetch the firmware
             filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
             filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
             target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
@@ -458,8 +483,16 @@ class UpdateController(object):
                                 target_filename=target_filename,
                                 source_filename=firmware_filename)
 
+            # Update
             self._master_controller.update_master(hex_filename=target_filename,
                                                   version=target_version)
+
+            # Cleanup
+            base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
+            UpdateController._clean_old_firmware_versions(base_template=base_template,
+                                                          hold_versions={current_version, target_version},
+                                                          logger=logger)
+
             UpdateController._register_version_success(firmware_type, success=True)
             return 1, 0
         except Exception as ex:
@@ -514,7 +547,7 @@ class UpdateController(object):
         os.symlink(new_version_folder, UpdateController.FRONTEND_CURRENT)
 
         # Cleanup
-        UpdateController._clean_old_versions(base_template=UpdateController.SERVICE_BASE_TEMPLATE,
+        UpdateController._clean_old_versions(base_template=UpdateController.FRONTEND_BASE_TEMPLATE,
                                              logger=logger)
 
         logger.info('Update completed')
@@ -735,6 +768,26 @@ class UpdateController(object):
         Config.set_entry('firmware_target_versions', target_versions)
 
     @staticmethod
+    def _clean_old_firmware_versions(base_template, hold_versions, logger):
+        logger.info('Clean up old firmware versions')
+        path_prefix = base_template.split('{0}')[0]
+
+        def _extract_version(filename_):
+            return filename_.replace(path_prefix, '').replace('.hex', '')
+
+        versions = set()  # type: Set[str]
+        for version_path in glob.glob(base_template.format('*')):
+            versions.add(_extract_version(version_path))
+        versions_to_keep = (set(hold_versions) |
+                            set(sorted(versions, reverse=True)[:3]))
+        for version in versions:
+            if version in versions_to_keep:
+                logger.info('Keeping {0}'.format(version))
+                continue
+            logger.info('Removing {0}'.format(version))
+            shutil.rmtree(base_template.format(version))
+
+    @staticmethod
     def _clean_old_versions(base_template, logger):
         logger.info('Clean up old versions')
         versions = set()  # type: Set[str]
@@ -746,12 +799,11 @@ class UpdateController(object):
                 continue
             if version == 'current':
                 current_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
-
             elif version == 'previous':
                 previous_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
             else:
                 versions.add(version)
-        versions_to_keep = set(sorted(versions, key=lambda v: tuple(int(i) for i in v.split('.')), reverse=True)[:3])
+        versions_to_keep = set(sorted(versions, reverse=True)[:3])
         if current_version is not None:
             versions_to_keep.add(current_version)
         if previous_version is not None:
@@ -826,8 +878,11 @@ class UpdateController(object):
         # >           'https://foo.bar/master-coreplus_3.12.3.hex'],
         # >  'url': 'https://foo.bar/master-coreplus_3.12.3.hex'}
         # Where the order of download is based on `firmware.get('urls', [firmware['url']])`
+        checksum = metadata['sha256']
+        if os.path.exists(target_filename) and UpdateController._is_checksum_valid(target_filename, checksum):
+            return  # File exists and is valid, no need to redownload
         UpdateController._download_urls(urls=metadata.get('urls', [metadata['url']]),
-                                        checksum=metadata['sha256'],
+                                        checksum=checksum,
                                         logger=logger,
                                         target_filename=target_filename)
 
@@ -842,16 +897,25 @@ class UpdateController(object):
                                             stream=True)
                     shutil.copyfileobj(response.raw, handle)
                     downloaded = True
+                    break
                 except Exception as ex:
                     logger.error('Could not download firmware from {0}: {1}'.format(url, ex))
         if not downloaded:
             raise RuntimeError('No update could be downloaded')
-        hasher = hashlib.sha256()
-        with open(target_filename, 'rb') as f:
-            hasher.update(f.read())
-        calculated_hash = hasher.hexdigest()
-        if calculated_hash != checksum:
-            raise RuntimeError('Downloaded firmware {0} checksum {1} does not match'.format(target_filename, calculated_hash))
+        if not UpdateController._is_checksum_valid(target_filename, checksum):
+            raise RuntimeError('Downloaded firmware {0} checksum does not match'.format(target_filename))
+
+    @staticmethod
+    def _is_checksum_valid(filename, checksum):  # type: (str, str) -> bool
+        try:
+            hasher = hashlib.sha256()
+            with open(filename, 'rb') as f:
+                hasher.update(f.read())
+            calculated_hash = hasher.hexdigest()
+            return calculated_hash == checksum
+        except Exception:
+            pass
+        return False
 
     def _get_update_metadata_url(self, version):
         query = 'uuid={0}'.format(self._gateway_uuid)
