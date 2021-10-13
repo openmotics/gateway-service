@@ -34,6 +34,7 @@ class ThermostatSerializer(object):
         data = {'id': thermostat_dto.id,
                 'name': thermostat_dto.name,
                 'room': Toolbox.denonify(thermostat_dto.room, ThermostatSerializer.BYTE_MAX),
+                'thermostat_group': Toolbox.denonify(thermostat_dto.thermostat_group, 0),
                 'setp0': thermostat_dto.setp0,
                 'setp1': thermostat_dto.setp1,
                 'setp2': thermostat_dto.setp2,
@@ -77,6 +78,7 @@ class ThermostatSerializer(object):
                      'setp4': ('setp4', None),
                      'setp5': ('setp5', None),
                      'room': ('room', ThermostatSerializer.BYTE_MAX),
+                     'thermostat_group': ('thermostat_group', None),
                      'sensor': ('sensor', ThermostatSerializer.BYTE_MAX),
                      'output0': ('output0', ThermostatSerializer.BYTE_MAX),
                      'output1': ('output1', ThermostatSerializer.BYTE_MAX),
@@ -106,8 +108,7 @@ class ThermostatGroupSerializer(object):
     @staticmethod
     def serialize(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, Optional[List[str]]) -> Dict
         data = {'id': thermostat_group_dto.id,
-                'outside_sensor': Toolbox.denonify(thermostat_group_dto.outside_sensor_id, ThermostatGroupSerializer.BYTE_MAX),
-                'threshold_temp': Toolbox.denonify(thermostat_group_dto.threshold_temperature, ThermostatGroupSerializer.BYTE_MAX),
+                'name': thermostat_group_dto.name,
                 'pump_delay': Toolbox.denonify(thermostat_group_dto.pump_delay, ThermostatGroupSerializer.BYTE_MAX)}
         for mode in ['heating', 'cooling']:
             for i in range(4):
@@ -121,12 +122,11 @@ class ThermostatGroupSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> ThermostatGroupDTO
-        thermostat_group_dto = ThermostatGroupDTO(id=0)
+        thermostat_group_dto = ThermostatGroupDTO(id=api_data.get('id', 0))
         SerializerToolbox.deserialize(
             dto=thermostat_group_dto,  # Referenced
             api_data=api_data,
-            mapping={'outside_sensor': ('outside_sensor_id', ThermostatGroupSerializer.BYTE_MAX),
-                     'threshold_temp': ('threshold_temperature', ThermostatGroupSerializer.BYTE_MAX),
+            mapping={'name': ('name', None),
                      'pump_delay': ('pump_delay', ThermostatGroupSerializer.BYTE_MAX)}
         )
         for mode in ['heating', 'cooling']:
@@ -144,23 +144,45 @@ class ThermostatGroupSerializer(object):
         return thermostat_group_dto
 
 
+class LegacyThermostatGroupStatusSerializer(object):
+    @staticmethod
+    def serialize(thermostat_group_status_dto):  # type: (ThermostatGroupStatusDTO) -> Dict[str, Any]
+        group_on = False
+        data = {'automatic': thermostat_group_status_dto.automatic,
+                'setpoint': thermostat_group_status_dto.setpoint,
+                'cooling': thermostat_group_status_dto.cooling,
+                'status': []}  # type: Dict[str, Any]
+        for status in thermostat_group_status_dto.statusses:
+            data['status'].append({'id': status.id,
+                                   'act': status.actual_temperature,
+                                   'csetp': status.setpoint_temperature,
+                                   'outside': status.outside_temperature,
+                                   'mode': status.mode,
+                                   'automatic': status.automatic,
+                                   'setpoint': status.setpoint,
+                                   'output0': status.output_0_level,
+                                   'output1': status.output_1_level})
+            group_on = group_on or status.state == 'on'
+        data['thermostat_on'] = group_on
+        return data
+
+
 class ThermostatGroupStatusSerializer(object):
     @staticmethod
     def serialize(thermostat_group_status_dto):  # type: (ThermostatGroupStatusDTO) -> Dict[str, Any]
-        return {'thermostats_on': thermostat_group_status_dto.on,
-                'automatic': thermostat_group_status_dto.automatic,
-                'setpoint': thermostat_group_status_dto.setpoint,
-                'cooling': thermostat_group_status_dto.cooling,
-                'status': [{'id': status.id,
-                            'act': status.actual_temperature,
-                            'csetp': status.setpoint_temperature,
-                            'outside': status.outside_temperature,
-                            'mode': status.mode,
-                            'automatic': status.automatic,
-                            'setpoint': status.setpoint,
-                            'output0': status.output_0_level,
-                            'output1': status.output_1_level}
-                           for status in thermostat_group_status_dto.statusses]}
+        data = {'id': thermostat_group_status_dto.id,
+                'mode': thermostat_group_status_dto.mode,
+                'thermostats': []}  # type: Dict[str, Any]
+        for status in thermostat_group_status_dto.statusses:
+            data['thermostats'].append({'id': status.id,
+                                        'actual_temperature': status.actual_temperature,
+                                        'setpoint_temperature': status.setpoint_temperature,
+                                        'state': status.state,
+                                        'preset': status.preset,
+                                        'output0': status.output_0_level,
+                                        'output1': status.output_1_level,
+                                        'steering_power': status.steering_power})
+        return data
 
 
 class ThermostatAircoStatusSerializer(object):

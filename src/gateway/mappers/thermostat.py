@@ -41,7 +41,8 @@ class ThermostatMapper(object):
                             pid_i=getattr(orm_object, 'pid_{0}_i'.format(mode)),
                             pid_d=getattr(orm_object, 'pid_{0}_d'.format(mode)),
                             permanent_manual=orm_object.automatic,
-                            room=orm_object.room.number if orm_object.room is not None else None)
+                            room=orm_object.room.number if orm_object.room is not None else None,
+                            thermostat_group=orm_object.thermostat_group.number)
 
         # Outputs
         db_outputs = [valve.output.number for valve in getattr(orm_object, '{0}_valves'.format(mode))]
@@ -78,15 +79,14 @@ class ThermostatMapper(object):
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
             index = int((7 - start_day_of_week + day_index) % 7)
-            if index in day_schedules:
-                setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(day_schedules[index], mode))
+            schedule = day_schedules[index].schedule_data if index in day_schedules else {}
+            setattr(dto, key, ThermostatMapper._schedule_to_dto(schedule, mode))
 
         # TODO: Map missing [pid_int, setp0, setp1, setp2]
         return dto
 
     @staticmethod
-    def _schedule_orm_to_dto(schedule_orm, mode, log_warnings=True):  # type: (DaySchedule, Literal['cooling', 'heating'], bool) -> Optional[ThermostatScheduleDTO]
-        schedule = schedule_orm.schedule_data
+    def _schedule_to_dto(schedule, mode, log_warnings=True):  # type: (Dict[str,Any], Literal['cooling', 'heating'], bool) -> Optional[ThermostatScheduleDTO]
         amount_of_entries = len(schedule)
         if amount_of_entries == 0:
             if log_warnings:
@@ -159,6 +159,7 @@ class ThermostatMapper(object):
         for orm_field, (dto_field, mapping) in {'name': ('name', None),
                                                 'sensor': ('sensor', _load_sensor),
                                                 'room': ('room', lambda n: _load_object(Room, n)),
+                                                'thermostat_group': ('thermostat_group', lambda n: _load_object(ThermostatGroup, n)),
                                                 'pid_{0}_p'.format(mode): ('pid_p', float),
                                                 'pid_{0}_i'.format(mode): ('pid_i', float),
                                                 'pid_{0}_d'.format(mode): ('pid_d', float)}.items():
@@ -309,8 +310,6 @@ class ThermostatMapper(object):
                                (4, 'auto_fri'),
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
-            setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(schedule_orm=DaySchedule(index=day_index, mode=mode, content='{}'),
-                                                                    mode=mode,
-                                                                    log_warnings=False))
+            setattr(dto, key, ThermostatMapper._schedule_to_dto({}, mode=mode, log_warnings=False))
 
         return dto

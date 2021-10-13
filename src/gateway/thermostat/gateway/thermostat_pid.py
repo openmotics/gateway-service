@@ -19,6 +19,7 @@ from simple_pid import PID
 from ioc import Inject, INJECTED
 from serial_utils import CommunicationTimedOutException
 from gateway.models import ThermostatGroup, Thermostat
+from gateway.enums import ThermostatState
 
 if False:  # MYPY
     from typing import Optional, List, Callable
@@ -42,9 +43,10 @@ class ThermostatPid(object):
         self._thermostat_change_lock = Lock()
         self._heating_valve_ids = []  # type: List[int]
         self._cooling_valve_ids = []  # type: List[int]
-        self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[float], int], None]]
+        self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[int], int, int, str, str], None]]
         self._thermostat = thermostat
         self._mode = thermostat.thermostat_group.mode
+        self._state = thermostat.state
         self._active_preset = thermostat.active_preset
         self._pid = PID(Kp=ThermostatPid.DEFAULT_KP,
                         Ki=ThermostatPid.DEFAULT_KI,
@@ -66,7 +68,7 @@ class ThermostatPid(object):
             return False
         if len(self._heating_valve_ids) == 0 and len(self._cooling_valve_ids) == 0:
             return False
-        if not self._thermostat.thermostat_group.on:
+        if self._state != ThermostatState.ON:
             return False
         if self._errors > 5:
             return False
@@ -81,6 +83,7 @@ class ThermostatPid(object):
             # cache these values to avoid DB lookups on every tick
             self._thermostat = thermostat
             self._mode = thermostat.thermostat_group.mode
+            self._state = thermostat.state
             self._active_preset = thermostat.active_preset
 
             self._heating_valve_ids = [valve.id for valve in thermostat.heating_valves]
@@ -106,8 +109,12 @@ class ThermostatPid(object):
     def thermostat(self):  # type: () -> Thermostat
         return self._thermostat
 
+    @property
+    def steering_power(self):  # type: () -> Optional[int]
+        return self._current_steering_power
+
     def subscribe_state_changes(self, callback):
-        # type: (Callable[[int, str, float, Optional[float], List[float], int], None]) -> None
+        # type: (Callable[[int, str, float, Optional[float], List[int], int, int, str, str], None]) -> None
         self._report_state_callbacks.append(callback)
 
     def report_state_change(self):  # type: () -> None
@@ -115,7 +122,8 @@ class ThermostatPid(object):
         room_number = 255 if self._thermostat.room is None else self._thermostat.room.number
         for callback in self._report_state_callbacks:
             callback(self.number, self._active_preset.type, self.setpoint, self._current_temperature,
-                     self.get_active_valves_percentage(), room_number)
+                     self.get_active_valves_percentage(), self._current_steering_power or 0,
+                     room_number, self._state, self._mode)
 
     def tick(self):  # type: () -> bool
         if self.enabled != self._current_enabled:
@@ -123,7 +131,8 @@ class ThermostatPid(object):
             self._current_enabled = self.enabled
 
         if not self.enabled:
-            self.switch_off()
+            self.steer(0)
+            self.report_state_change()
             return False
 
         if self._current_preset_type != self._active_preset.type or self._current_setpoint != self._pid.setpoint:
@@ -166,7 +175,7 @@ class ThermostatPid(object):
             self._errors += 1
             return False
 
-    def get_active_valves_percentage(self):  # type: () -> List[float]
+    def get_active_valves_percentage(self):  # type: () -> List[int]
         return [self._pump_valve_controller.get_valve_driver(valve.id).percentage for valve in self._thermostat.active_valves]
 
     @property
@@ -194,9 +203,6 @@ class ThermostatPid(object):
 
         # Effectively steer pumps and valves according to needs
         self._pump_valve_controller.steer()
-
-    def switch_off(self):  # type: () -> None
-        self.steer(0)
 
     @property
     def kp(self):  # type: () -> float

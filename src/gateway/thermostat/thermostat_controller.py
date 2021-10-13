@@ -70,13 +70,20 @@ class ThermostatController(object):
         # type: (int, bool, int) -> None
         raise NotImplementedError()
 
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> None
+        raise NotImplementedError()
+
     def load_thermostat_groups(self):  # type: () -> List[ThermostatGroupDTO]
         raise NotImplementedError()
 
     def load_thermostat_group(self, thermostat_group_id):  # type: (int) -> ThermostatGroupDTO
         raise NotImplementedError()
 
-    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
+    def save_thermostat_groups(self, thermostat_groups):  # type: (List[ThermostatGroupDTO]) -> None
+        raise NotImplementedError()
+
+    def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
         raise NotImplementedError()
 
     def get_thermostat_group_status(self):  # type: () -> List[ThermostatGroupStatusDTO]

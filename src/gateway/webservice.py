@@ -47,7 +47,8 @@ from gateway.api.serializers import DimmerConfigurationSerializer, \
     SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
     ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
     ThermostatGroupStatusSerializer, ThermostatSerializer, \
-    VentilationSerializer, VentilationStatusSerializer
+    VentilationSerializer, VentilationStatusSerializer, \
+    LegacyThermostatGroupStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
@@ -689,10 +690,9 @@ class WebInterface(object):
         if master_version >= (3, 143, 88):
             features.append('input_states')
 
-        for name in (Feature.THERMOSTATS_GATEWAY,):
-            feature = Feature.get_or_none(name=name)
-            if feature and feature.enabled:
-                features.append(name)
+        feature = Feature.get_or_none(name=Feature.THERMOSTATS_GATEWAY)
+        if feature and feature.enabled:
+            features.extend([Feature.THERMOSTATS_GATEWAY, 'thermostat_groups'])
 
         if self._rebus_controller is not None:
             features.append('esafe')
@@ -939,7 +939,27 @@ class WebInterface(object):
         return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
                                                               fields=fields)}
 
-    @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_thermostat_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one thermostat_group_configuration. """
+        data = ThermostatGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_thermostat_groups([data])
+        return {}
+
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_thermostat_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple thermostat_group_configuration. """
+        data = [ThermostatGroupSerializer.deserialize(entry) for entry in config]
+        self._thermostat_controller.save_thermostat_groups(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(config='json'))
+    def delete_thermostat_group_configuration(self, id):  # type: (int) -> Dict
+        """ Remove thermostat_group_configuration. """
+        self._thermostat_controller.remove_thermostat_groups([id])
+        return {}
+
+    @openmotics_api(auth=True)
     def get_thermostat_group_status(self):  # type: () -> Dict[str, Any]
         """ Get the status of the thermostats groups. """
         status = self._thermostat_controller.get_thermostat_group_status()
@@ -953,29 +973,31 @@ class WebInterface(object):
         :param fields: The field of the cooling_configuration to get, None if all
         """
         thermostat_group_dto = self._thermostat_controller.load_thermostat_group(ThermostatController.GLOBAL_THERMOSTAT)
-        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
-                                                              fields=fields)}
+        config = ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto, fields=fields)
+        config.pop('id', None)
+        config.pop('name', None)
+        return {'config': config}
 
-    @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configuration')
+    @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configurations')
     def set_global_thermostat_configuration(self, config):
         """ Set the global_thermostat_configuration. """
         data = ThermostatGroupSerializer.deserialize(config)
-        self._thermostat_controller.save_thermostat_group(data)
+        self._thermostat_controller.save_thermostat_groups([data])
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, state=str, mode=str))
-    def set_thermostat_group(self, id, state=None, mode=None):
+    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
         """
-        Sets a thermsotat group on a given state (e.g. on or off) and/or mode (e.g. cooling or heating)
+        Sets a thermsotat group on a given mode (e.g. cooling or heating) and/or all child thermostats on a given state (e.g. on or off)
         """
-        self._thermostat_controller.set_thermostat_group(id, state, mode)
+        self._thermostat_controller.set_thermostat_group(thermostat_group_id, state, mode)
         return {}
 
     @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
     def get_thermostat_status(self):  # type: () -> Dict[str, Any]
         """ Get the status of the thermostats. """
         status = self._thermostat_controller.get_thermostat_group_status()
-        return ThermostatGroupStatusSerializer.serialize(status[0])
+        return LegacyThermostatGroupStatusSerializer.serialize(status[0])
 
     @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool), deprecated='set_thermostat_group')
     def set_thermostat_mode(self, thermostat_on, automatic=None, setpoint=None, cooling_mode=False, cooling_on=False):
@@ -1008,7 +1030,7 @@ class WebInterface(object):
                                                                 cooling_temperature=cooling_temperature)
         return {'status': 'OK'}
 
-    @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int))
+    @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int), deprecated='set_thermostat')
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
         # type: (int, bool, int) -> Dict[str,Any]
         """
@@ -1016,6 +1038,15 @@ class WebInterface(object):
         manual, in case of manual a setpoint (0 to 5) can be provided.
         """
         self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(thermostat_id=int, preset=str, state=str, setpoint=float))
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> Dict[str, str]
+        self._thermostat_controller.set_thermostat(thermostat_id=thermostat_id,
+                                                   preset=preset,
+                                                   state=state,
+                                                   temperature=temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
@@ -1507,7 +1538,7 @@ class WebInterface(object):
         sensor_dto = SensorSerializer.deserialize(config)
         saved_sensors_dtos = self._sensor_controller.save_sensors([sensor_dto])
         data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+                for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
         return {'config': data}
 
     @openmotics_api(auth=True, check=types(config='json'))
@@ -1516,7 +1547,7 @@ class WebInterface(object):
         sensor_dtos = [SensorSerializer.deserialize(entry) for entry in config]
         saved_sensors_dtos = self._sensor_controller.save_sensors(sensor_dtos)
         data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+                for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
         return {'config': data}
 
     # Heating Pump Group

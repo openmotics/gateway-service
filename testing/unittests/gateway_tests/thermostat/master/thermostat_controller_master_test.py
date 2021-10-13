@@ -56,17 +56,22 @@ class ThermostatControllerMasterTest(unittest.TestCase):
             status = {'act': None,
                       'csetp': None,
                       'setpoint': None,
+                      'preset': 'AUTO',
                       'output0': None,
-                      'output1': None}
+                      'output1': None,
+                      'state': 'on',
+                      'steering_power': None}
             self.controller._thermostats_config = {1: ThermostatDTO(1)}
             self.controller._thermostat_status._report_change(1, status)
             self.pubsub._publish_all_events(blocking=False)
             event_data = {'id': 1,
                           'status': {'preset': 'AUTO',
+                                     'state': 'ON',
                                      'current_setpoint': None,
                                      'actual_temperature': None,
                                      'output_0': None,
-                                     'output_1': None},
+                                     'output_1': None,
+                                     'steering_power': None},
                           'location': {'room_id': 255}}
             assert GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, event_data) in events
 

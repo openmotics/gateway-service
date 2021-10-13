@@ -73,9 +73,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_load(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
-        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', mode=ThermostatGroup.Modes.HEATING)
         thermostat = Thermostat(number=10,
                                 start=0,
+                                state='on',
                                 name='thermostat',
                                 thermostat_group=group)
         thermostat.save()
@@ -104,7 +105,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_orm_to_dto_mapping(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
-        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', mode=ThermostatGroup.Modes.HEATING)
         controller.save_heating_thermostats([ThermostatDTO(id=10, name='thermostat')])
         thermostat = Thermostat.get(number=10)
 
@@ -112,13 +113,13 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
-        schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
-                                             start_day_1='07:00',
-                                             end_day_1='09:00',
+        schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
+                                             start_day_1='06:00',
+                                             end_day_1='08:00',
                                              temp_day_2=21.0,
-                                             start_day_2='17:00',
+                                             start_day_2='16:00',
                                              end_day_2='22:00',
-                                             temp_night=16.0)
+                                             temp_night=17.0)
 
         self.assertEqual(ThermostatDTO(id=10,
                                        name='thermostat',
@@ -130,6 +131,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_i=0.0,
                                        pid_d=0.0,
                                        room=None,
+                                       thermostat_group=0,
                                        permanent_manual=True,
                                        auto_mon=schedule_dto,
                                        auto_tue=schedule_dto,
@@ -182,13 +184,13 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
-        default_schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
-                                                     start_day_1='07:00',
-                                                     end_day_1='09:00',
+        default_schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
+                                                     start_day_1='06:00',
+                                                     end_day_1='08:00',
                                                      temp_day_2=21.0,
-                                                     start_day_2='17:00',
+                                                     start_day_2='16:00',
                                                      end_day_2='22:00',
-                                                     temp_night=16.0)
+                                                     temp_night=17.0)
 
         sensor = Sensor.create(id=15, source='master', external_id='0', physical_quantity='temperature', name='')
 
@@ -221,6 +223,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_i=0.0,
                                        pid_d=0.0,
                                        room=5,
+                                       thermostat_group=0,
                                        output0=5,
                                        permanent_manual=True,
                                        auto_mon=default_schedule_dto,

@@ -32,7 +32,7 @@ from gateway.base_controller import BaseController
 from gateway.models import Module, Sensor
 from gateway.mappers.module import ModuleMapper
 from six.moves.urllib.parse import urlparse, urlunparse
-from platform_utils import Platform
+from platform_utils import Platform, System
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Any
@@ -316,12 +316,15 @@ class ModuleController(BaseController):
         if not os.path.exists(target_dir):
             os.mkdir(target_dir)
         url = self._get_firmware_url(module_type, version)
-        response = requests.get(url)
+        response = requests.get(url,
+                                verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
         if response.status_code != 200:
             raise ValueError('Failed to retrieve {0} firmware from {1}: {2}'.format(module_type, url, response.status_code))
         data = response.json()
         logger.info('Downloading {0} firmware from {1} ...'.format(module_type, data['url']))
-        response = requests.get(data['url'], stream=True)
+        response = requests.get(data['url'],
+                                stream=True,
+                                verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
         with open(target_filename, 'wb') as f:
             shutil.copyfileobj(response.raw, f)
         logger.info('Downloading {0} firmware from {1} ... Done'.format(module_type, data['url']))

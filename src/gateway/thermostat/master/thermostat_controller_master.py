@@ -96,10 +96,12 @@ class ThermostatControllerMaster(ThermostatController):
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_id,
                                       'status': {'preset': status['preset'],
+                                                 'state': status['state'].upper(),
                                                  'current_setpoint': status['current_setpoint'],
                                                  'actual_temperature': status['actual_temperature'],
                                                  'output_0': status['output_0'],
-                                                 'output_1': status['output_1']},
+                                                 'output_1': status['output_1'],
+                                                 'steering_power': status['steering_power']},
                                       'location': location})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
@@ -107,8 +109,7 @@ class ThermostatControllerMaster(ThermostatController):
         # type: (Dict[str,Any]) -> None
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                      {'id': 0,
-                                      'status': {'state': status['state'],
-                                                 'mode': status['mode']},
+                                      'status': {'mode': status['mode'].upper()},
                                       'location': {}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
@@ -315,9 +316,13 @@ class ThermostatControllerMaster(ThermostatController):
 
         return self._master_controller.load_thermostat_group()
 
-    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
-        self._master_controller.save_thermostat_group(thermostat_group)
+    def save_thermostat_groups(self, thermostat_groups):  # type: (List[ThermostatGroupDTO]) -> None
+        for thermostat_group_dto in thermostat_groups:
+            self._master_controller.save_thermostat_group(thermostat_group_dto)
         self.invalidate_cache(THERMOSTATS)
+
+    def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+        raise NotImplementedError('Thermostat groups not supported')
 
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         return self._master_controller.load_heating_pump_group(pump_group_id)
@@ -398,6 +403,10 @@ class ThermostatControllerMaster(ThermostatController):
         self.invalidate_cache(THERMOSTATS)
         self.increase_interval(THERMOSTATS, interval=2, window=10)
 
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> None
+        raise FeatureUnavailableException()
+
     def set_airco_status(self, thermostat_id, airco_on):
         # type: (int, bool) -> None
         """ Set the mode of the airco attached to a given thermostat. """
@@ -455,9 +464,11 @@ class ThermostatControllerMaster(ThermostatController):
             logger.warning('Master thermostats are disabled: %s', master_enable)
             return
 
-        def get_automatic_setpoint(_mode):
+        def get_automatic_setpoint_preset(_mode):
             _automatic = bool(_mode & 1 << 3)
-            return _automatic, 0 if _automatic else (_mode & 0b00000111)
+            _setpoint = 0 if _automatic else (_mode & 0b00000111)
+            _preset = ThermostatControllerMaster._setpoint_to_preset(_setpoint)
+            return _automatic, _setpoint, _preset
 
         try:
             thermostat_info = self._master_controller.get_thermostats()
@@ -471,7 +482,7 @@ class ThermostatControllerMaster(ThermostatController):
         mode = thermostat_info['mode']
         thermostats_on = bool(mode & 1 << 7)
         cooling = bool(mode & 1 << 4)
-        automatic, setpoint = get_automatic_setpoint(thermostat_mode['mode0'])
+        automatic, setpoint, _ = get_automatic_setpoint_preset(thermostat_mode['mode0'])
 
         try:
             if cooling:
@@ -488,7 +499,7 @@ class ThermostatControllerMaster(ThermostatController):
             thermostat_dto = self._thermostats_config.get(thermostat_id)  # type: Optional[ThermostatDTO]
             if thermostat_dto and thermostat_dto.in_use:
                 t_mode = thermostat_mode['mode{0}'.format(thermostat_id)]
-                t_automatic, t_setpoint = get_automatic_setpoint(t_mode)
+                t_automatic, t_setpoint, t_preset = get_automatic_setpoint_preset(t_mode)
                 thermostat = {'id': thermostat_id,
                               'act': thermostat_info['tmp{0}'.format(thermostat_id)].get_temperature(),
                               'csetp': thermostat_info['setp{0}'.format(thermostat_id)].get_temperature(),
@@ -496,6 +507,7 @@ class ThermostatControllerMaster(ThermostatController):
                               'mode': t_mode,
                               'automatic': t_automatic,
                               'setpoint': t_setpoint,
+                              'preset': t_preset,
                               'name': thermostat_dto.name,
                               'sensor_nr': thermostat_dto.sensor,
                               'airco': 1 if aircos.status[thermostat_id] else 0}
@@ -520,27 +532,41 @@ class ThermostatControllerMaster(ThermostatController):
         """ Returns thermostat information """
         if not self._enabled:
             return [ThermostatGroupStatusDTO(id=0,
-                                             on=False,
                                              automatic=False,
                                              setpoint=None,
                                              cooling=False,
+                                             mode='heating',
                                              statusses=[])]
 
         self._refresh_thermostats()  # Always return the latest information
         master_status = self._thermostat_status.get_thermostats()
-        statusses = [ThermostatStatusDTO(id=thermostat['id'],
-                                         actual_temperature=thermostat['act'],
-                                         setpoint_temperature=thermostat['csetp'],
-                                         outside_temperature=thermostat['outside'],
-                                         mode=thermostat['mode'],
-                                         automatic=thermostat['automatic'],
-                                         setpoint=thermostat['setpoint'],
-                                         output_0_level=thermostat['output0'],
-                                         output_1_level=thermostat['output1'])
-                     for thermostat in master_status['status']]
+        statusses = []
+        for thermostat in master_status['status']:
+            statusses.append(ThermostatStatusDTO(id=thermostat['id'],
+                                                 actual_temperature=thermostat['act'],
+                                                 setpoint_temperature=thermostat['csetp'],
+                                                 outside_temperature=thermostat['outside'],
+                                                 mode=thermostat['mode'],
+                                                 state=thermostat['state'],
+                                                 preset=thermostat['preset'],
+                                                 automatic=thermostat['automatic'],
+                                                 setpoint=thermostat['setpoint'],
+                                                 output_0_level=thermostat['output0'],
+                                                 output_1_level=thermostat['output1'],
+                                                 steering_power=thermostat['steering_power']))
         return [ThermostatGroupStatusDTO(id=0,
-                                         on=master_status['thermostats_on'],
                                          automatic=master_status['automatic'],
                                          setpoint=master_status['setpoint'],
                                          cooling=master_status['cooling'],
+                                         mode=master_status['mode'],
                                          statusses=statusses)]
+
+    @staticmethod
+    def _setpoint_to_preset(setpoint):
+        if setpoint == 3:
+            return 'AWAY'
+        if setpoint == 4:
+            return 'VACATION'
+        if setpoint == 5:
+            return 'PARTY'
+        return 'AUTO'

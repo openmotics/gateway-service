@@ -79,17 +79,16 @@ def migrate(migrator, database, fake=False, **kwargs):
         accepted_terms = IntegerField(default=0)
 
     # copy over the data from the old table to the new one
-    for user in UserOld.select():
-        print('Migrating user: {}'.format(user))
-        user_orm = User()
-        user_orm.username = user.username
-        user_orm.role = User.UserRoles.ADMIN
-        user_orm.pin_code = None
-        user_orm.id = user.id
-        user_orm.is_active = True
-        user_orm.apartment_id = None
-        user_orm.language = User.UserLanguages.EN
-        user_orm.save()
+    for old_user in UserOld.select():
+        print('Migrating user: {}, {}'.format(old_user.id, old_user.username))
+        User.create(
+            id=old_user.id,
+            username=old_user.username,
+            password=old_user.password,
+            role=User.UserRoles.ADMIN,
+            language=User.UserLanguages.EN,
+            accepted_terms=old_user.accepted_terms
+        )
 
     # remove the old user table since it is not needed anymore
     migrator.drop_table(UserOld)

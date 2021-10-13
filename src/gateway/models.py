@@ -328,7 +328,6 @@ class ThermostatGroup(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
-    on = BooleanField(default=True)
     threshold_temperature = FloatField(null=True, default=None)
     sensor = ForeignKeyField(Sensor, null=True, backref='thermostat_groups', on_delete='SET NULL')
     mode = CharField(default=Modes.HEATING)  # Options: 'heating' or 'cooling'
@@ -410,6 +409,7 @@ class Thermostat(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(default='Thermostat')
+    state = CharField(default='on')
     sensor = ForeignKeyField(Sensor, null=True, backref='thermostats', on_delete='SET NULL')
     pid_heating_p = FloatField(default=120)
     pid_heating_i = FloatField(default=0)
@@ -543,9 +543,9 @@ class Preset(BaseModel):
 
 
 class DaySchedule(BaseModel):
-    DEFAULT_SCHEDULE_TIMES = [0, 7 * 3600, 9 * 3600, 17 * 3600, 22 * 3600]
-    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [16.0, 20.0, 16.0, 21.0, 16.0])),
-                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [25.0, 24.0, 25.0, 23.0, 25.0]))}
+    DEFAULT_SCHEDULE_TIMES = [0, 6 * 3600, 8 * 3600, 16 * 3600, 22 * 3600]
+    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [17.0, 21.0, 17.0, 21.0, 17.0])),
+                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [26.0, 23.0, 26.0, 23.0, 26.0]))}
 
     id = AutoField()
     index = IntegerField()

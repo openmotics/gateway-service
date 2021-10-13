@@ -557,15 +557,13 @@ class MetricsCollector(object):
                 # TODO: handle metrics for groups, what's the uscase here other than
                 # tracking current_temperature + output levels?
                 for status in self._thermostat_controller.get_thermostat_group_status():
-                    self._enqueue_metrics(metric_type=metric_type,
-                                          values={'on': status.on,
-                                                  'cooling': status.cooling},
-                                          tags={'id': 'G.{0}'.format(status.id)},
-                                          timestamp=now)
+                    group_on = False
                     for thermostat in status.statusses:
                         values = {'setpoint': int(thermostat.setpoint),
                                   'output0': thermostat.output_0_level and float(thermostat.output_0_level),
                                   'output1': thermostat.output_1_level and float(thermostat.output_1_level),
+                                  'steering_power': thermostat.steering_power,
+                                  'state': thermostat.state,
                                   'mode': int(thermostat.mode),
                                   'automatic': thermostat.automatic,
                                   'current_setpoint': thermostat.setpoint_temperature}
@@ -578,6 +576,13 @@ class MetricsCollector(object):
                                               tags={'id': '{0}.{1}'.format('C' if status.cooling is True else 'H',
                                                                            thermostat.id)},
                                               timestamp=now)
+                        group_on = group_on or thermostat.state == 'on'
+
+                    self._enqueue_metrics(metric_type=metric_type,
+                                          values={'on': group_on,
+                                                  'cooling': status.cooling},
+                                          tags={'id': 'G.{0}'.format(status.id)},
+                                          timestamp=now)
             except CommunicationFailure as ex:
                 logger.error('Error getting thermostat status: {}'.format(ex))
             except Exception as ex:
@@ -1121,7 +1126,7 @@ class MetricsCollector(object):
                           'unit': '%'}]},
             # thermostat
             {'type': 'thermostat',
-             'tags': ['id', 'name'],
+             'tags': ['id'],
              'metrics': [{'name': 'on',
                           'description': 'Indicates whether the thermostat is on',
                           'type': 'gauge',
