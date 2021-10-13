@@ -562,11 +562,11 @@ class MetricsCollector(object):
                         values = {'setpoint': int(thermostat.setpoint),
                                   'output0': thermostat.output_0_level and float(thermostat.output_0_level),
                                   'output1': thermostat.output_1_level and float(thermostat.output_1_level),
-                                  'steering_power': thermostat.steering_power,
+                                  'steering_power': thermostat.steering_power and float(thermostat.steering_power),
                                   'state': thermostat.state,
                                   'mode': int(thermostat.mode),
                                   'automatic': thermostat.automatic,
-                                  'current_setpoint': thermostat.setpoint_temperature}
+                                  'current_setpoint': thermostat.setpoint_temperature and float(thermostat.setpoint_temperature)}
                         if thermostat.outside_temperature is not None:
                             values['outside'] = thermostat.outside_temperature
                         if thermostat.actual_temperature is not None:
