@@ -131,7 +131,8 @@ class ThermostatPid(object):
             self._current_enabled = self.enabled
 
         if not self.enabled:
-            self.switch_off()
+            self.steer(0)
+            self.report_state_change()
             return False
 
         if self._current_preset_type != self._active_preset.type or self._current_setpoint != self._pid.setpoint:
@@ -202,9 +203,6 @@ class ThermostatPid(object):
 
         # Effectively steer pumps and valves according to needs
         self._pump_valve_controller.steer()
-
-    def switch_off(self):  # type: () -> None
-        self.steer(0)
 
     @property
     def kp(self):  # type: () -> float

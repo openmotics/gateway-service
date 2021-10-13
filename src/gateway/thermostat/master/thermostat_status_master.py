@@ -93,7 +93,7 @@ class ThermostatStatusMaster(object):
 
     def _report_change(self, thermostat_id, status):
         if self._on_thermostat_change is not None and status is not None:
-            self._on_thermostat_change(thermostat_id, {'preset': ThermostatStatusMaster._serialize_preset(status['setpoint']),
+            self._on_thermostat_change(thermostat_id, {'preset': status['preset'],
                                                        'state': status['state'],
                                                        'current_setpoint': status['csetp'],
                                                        'actual_temperature': status['act'],
@@ -104,13 +104,3 @@ class ThermostatStatusMaster(object):
     def _report_group_change(self, mode):
         if self._on_thermostat_group_change is not None:
             self._on_thermostat_group_change({'mode': mode})
-
-    @staticmethod
-    def _serialize_preset(setpoint):
-        if setpoint == 3:
-            return 'AWAY'
-        if setpoint == 4:
-            return 'VACATION'
-        if setpoint == 5:
-            return 'PARTY'
-        return 'AUTO'

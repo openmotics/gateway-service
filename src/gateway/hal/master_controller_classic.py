@@ -1052,15 +1052,17 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def get_module_information(self, address):
         # type: (bytearray) -> Tuple[bool, Optional[str], Optional[str]]
-        try:
-            _module_version = self._master_communicator.do_command(master_api.get_module_version(),
-                                                                   {'addr': address},
-                                                                   extended_crc=True,
-                                                                   timeout=5)
-            _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
-            return True, _module_version['hw_version'], _firmware_version
-        except CommunicationTimedOutException:
-            return False, None, None
+        _ = address
+        # TODO: Re-enable this call once the FV call gets fixed in the firmware
+        # try:
+        #     _module_version = self._master_communicator.do_command(master_api.get_module_version(),
+        #                                                            {'addr': address},
+        #                                                            extended_crc=True,
+        #                                                            timeout=5)
+        #     _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
+        #     return True, _module_version['hw_version'], _firmware_version
+        # except CommunicationTimedOutException:
+        return False, None, None
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         old_address_bytes = bytearray([int(part) for part in old_address.split('.')])
