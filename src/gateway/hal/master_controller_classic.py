@@ -1414,7 +1414,7 @@ class MasterClassicController(MasterController):
                                          'address': address})
             logger.info('Initialize/discovery - {0} module found: {1} ({2})'.format(
                 code_map.get(api_data['instr'], 'Unknown'),
-                api_data['id'][0],
+                module_type,
                 address
             ))
         except Exception:

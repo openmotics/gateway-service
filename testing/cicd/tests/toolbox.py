@@ -433,16 +433,21 @@ class Toolbox(object):
     def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
         logger.debug('Discovering modules')
         since = time.time()
+        expected_ucan_emulated_modules = {'I': 0, 'T': 0}
         if ucans:
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
                 if module.is_can:
                     ucan_inputs += module.inputs
+                    expected_ucan_emulated_modules[module.mtype] += 1
+            for module in TEMPERATURE_MODULE_LAYOUT:
+                if module.is_can:
+                    expected_ucan_emulated_modules[module.mtype] += 1
             logger.debug('Toggle uCAN inputs %s', ucan_inputs)
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
                 time.sleep(0.5)
-            time.sleep(0.5)  # Give a brief moment for the CC to settle
+            time.sleep(5)  # Give a brief moment for the CC to settle
 
         new_modules = []
         self.clear_module_discovery_log()
@@ -467,14 +472,12 @@ class Toolbox(object):
             if can_controls or ucans:
                 self.tester.toggle_output(TESTER.Button.can, delay=0.5)
                 module_amounts = {'C': 1}
-                if ucans:
-                    module_amounts.update({'I': 1, 'T': 1})
+                module_amounts.update(expected_ucan_emulated_modules)
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses)
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
             self.module_discover_stop()
             time.sleep(30)  # Give time for the master to clear the eeprom cache
-
 
         while since > time.time() - timeout:
             data = self.dut.get('/get_modules_information')
