@@ -324,9 +324,9 @@ _TEMPERATURE_MODULE_LAYOUTS = {
         Module(name='CC emulated temperature module 0', mtype='T', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                temps=[]),
-        Module(name='CC emulated temperature module 1', mtype='T', is_can=True,
-               hardware_type=Module.HardwareType.EMULATED,
-               temps=[])
+        # Module(name='CC emulated temperature module 1', mtype='T', is_can=True,
+        #        hardware_type=Module.HardwareType.EMULATED,
+        #        temps=[])
     ],
 }
 TEMPERATURE_MODULE_LAYOUT = _TEMPERATURE_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
