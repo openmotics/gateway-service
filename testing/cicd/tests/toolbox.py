@@ -473,7 +473,7 @@ class Toolbox(object):
                 self.tester.toggle_output(TESTER.Button.can, delay=0.5)
                 module_amounts = {'C': 1}
                 module_amounts.update(expected_ucan_emulated_modules)
-                new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses)
+                new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses, timeout=30)
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
             self.module_discover_stop()
