@@ -688,6 +688,7 @@ class Toolbox(object):
         self.tester.reset()
         hypothesis.note('After input {} pressed'.format(_input))
         self.tester.toggle_output(_input.tester_output_id, is_dimmer=_input.is_dimmer)
+        # time.sleep(0.5)
         logger.debug('Toggled {} -> True -> False'.format(_input))
 
     def assert_shutter_changed(self, shutter, from_status, to_status, timeout=5, inverted=False):
