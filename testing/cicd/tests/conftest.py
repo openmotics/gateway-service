@@ -141,8 +141,7 @@ def firmware_updates(toolbox_session):
 
 
 @fixture
-# def toolbox(toolbox_session, software_update, firmware_updates):
-def toolbox(toolbox_session):
+def toolbox(toolbox_session, software_update, firmware_updates):
     def _log_debug_buffer(buffer_):
         for key in sorted(buffer_.keys()):
             logger.debug('   {0} - {1}'.format(
