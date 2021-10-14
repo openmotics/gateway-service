@@ -143,6 +143,13 @@ def firmware_updates(toolbox_session):
 @fixture
 # def toolbox(toolbox_session, software_update, firmware_updates):
 def toolbox(toolbox_session):
+    def _log_debug_buffer(buffer_):
+        for key in sorted(buffer_.keys()):
+            logger.debug('   {0} - {1}'.format(
+                time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key)),
+                buffer_[key]
+            ))
+
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     toolbox.health_check(timeout=360)
@@ -151,10 +158,12 @@ def toolbox(toolbox_session):
         yield toolbox
     finally:
         toolbox.print_logs()
+
         # Printing the debug buffer if the test fails to inspect the commands sent to the master
+        debug_buffer = toolbox.dut.get('/get_master_debug_buffer', {'amount': 200})
         logger.debug('### Debug Buffer DUT')
         logger.debug(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
         logger.debug('### WRITE')
-        logger.debug(toolbox.dut.get('/get_master_debug_buffer', {'amount': 200})['write'])
+        logger.debug(_log_debug_buffer(debug_buffer['write']))
         logger.debug('### READ')
-        logger.debug(toolbox.dut.get('/get_master_debug_buffer', {'amount': 200})['read'])
+        logger.debug(_log_debug_buffer(debug_buffer['read']))

@@ -19,11 +19,9 @@ Module to communicate with the master.
 from __future__ import absolute_import
 
 import logging
-import json
 import select
 import time
 from threading import Event, Lock, Thread
-import traceback
 
 import six
 from six.moves.queue import Empty, Queue
@@ -172,17 +170,10 @@ class MasterCommunicator(object):
         self.__command_success_histogram.clear()
         self.__command_timeout_histogram.clear()
 
-    def get_debug_buffer(self, amount=100):
-        # type: (int) -> Dict[str,Dict[float,str]]
+    def get_debug_buffer(self):
+        # type: () -> Dict[str, Dict[float, str]]
         def process(buffer):
-            formatted_buffer = {}
-            for key in list(buffer.keys())[-amount:]:
-                # Buffer duration is 5 minutes
-                raw_value = buffer.get(key)
-                if raw_value is not None:
-                    raw_string = str(Printable(raw_value))
-                    formatted_buffer[time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key))] = raw_string
-            return json.dumps(formatted_buffer, sort_keys=True)
+            return {k: str(Printable(v)) for k, v in six.iteritems(buffer)}
 
         return {'read': process(self.__debug_buffer['read']),
                 'write': process(self.__debug_buffer['write'])}

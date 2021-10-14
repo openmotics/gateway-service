@@ -43,49 +43,13 @@ def test_actions(toolbox, _input, output, to_status):
     input_config = {'id': _input.input_id, 'action': output.output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-    logger.debug(time.ctime(time.time()))
-    time.sleep(2)  # Allow time for the EEPROM activate to settle
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
+
     toolbox.press_input(_input)
-    toolbox.assert_output_changed(output, to_status, between=(0, 3))
-
-def test_fixed_actions(toolbox):
-    repeat = 10
-    to_status = True
-    from_status = not to_status
-    i_mod = INPUT_MODULE_LAYOUT[0]
-    o_mod = OUTPUT_MODULE_LAYOUT[0]
-
-    input_configs = []
-    for i in range(8):
-        _input = i_mod.inputs[i]
-        output = o_mod.outputs[i]
-        input_configs.append({'name': "input{}".format(i), 'id': _input.input_id,
-                              'action': output.output_id})
-        input_configs[i].update(DEFAULT_INPUT_CONFIG)
-        # Ensuring all outputs are in the right starting state
-        toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
-
-    toolbox.dut.get('/set_input_configurations', {'config': json.dumps(input_configs)})
-    time.sleep(20)  # Allow time for the EEPROM activate to settle
-
-    for j in range(repeat):
-        logger.debug("Run #{}".format(j))
-        for i in range(8):
-            _input = i_mod.inputs[i]
-            output = o_mod.outputs[i]
-            logger.debug('input action {} to {}, expect event {} -> {}'.format(
-                _input, output, from_status, to_status))
-
-            toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)  # Will not work when in CLI mode
-            toolbox.press_input(_input)
-            toolbox.assert_output_changed(output, to_status)
-        # Workaround when in CLI mode, where I can't ensure the correct output state
-        # from_status = not from_status
-        # to_status = not to_status
+    toolbox.assert_output_changed(output, to_status)
 
 
 @pytest.mark.slow
