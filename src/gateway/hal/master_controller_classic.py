@@ -96,9 +96,7 @@ class MasterClassicController(MasterController):
         self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
-        self._synchronization_thread = DaemonThread(name='mastersync',
-                                                    target=self._synchronize,
-                                                    interval=5, delay=10)
+        self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
         self._output_config = {}  # type: Dict[int, OutputDTO]
@@ -336,7 +334,8 @@ class MasterClassicController(MasterController):
     def _invalidate_caches(self):
         # type: () -> None
         self._shutters_last_updated = 0.0
-        self._synchronization_thread.request_single_run()
+        if self._synchronization_thread is not None:
+            self._synchronization_thread.request_single_run()
 
     #######################
     # Internal management #
@@ -346,11 +345,16 @@ class MasterClassicController(MasterController):
         # type: () -> None
         super(MasterClassicController, self).start()
         self._heartbeat.start()
+        self._synchronization_thread = DaemonThread(name='mastersync',
+                                                    target=self._synchronize,
+                                                    interval=5, delay=10)
         self._synchronization_thread.start()
 
     def stop(self):
         # type: () -> None
-        self._synchronization_thread.stop()
+        if self._synchronization_thread is not None:
+            self._synchronization_thread.stop()
+            self._synchronization_thread = None
         self._heartbeat.stop()
         super(MasterClassicController, self).stop()
 
