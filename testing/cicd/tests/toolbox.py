@@ -259,6 +259,7 @@ class Toolbox(object):
 
         expected_modules = {Module.HardwareType.VIRTUAL: {},
                             Module.HardwareType.PHYSICAL: {},
+                            Module.HardwareType.EMULATED: {},
                             Module.HardwareType.INTERNAL: {}}
         for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
             hardware_type = module.hardware_type
@@ -285,13 +286,11 @@ class Toolbox(object):
 
         modules = self.count_modules('master')
         logger.info('Post-discovery modules: {0}'.format(modules))
-        for module_type in set(list(expected_modules[Module.HardwareType.PHYSICAL].keys()) +
-                               list(expected_modules[Module.HardwareType.INTERNAL].keys())):
-            expected_amount = (expected_modules[Module.HardwareType.PHYSICAL].get(module_type, 0) +
-                               expected_modules[Module.HardwareType.INTERNAL].get(module_type, 0))
-            actual_amount = (modules[Module.HardwareType.PHYSICAL].get(module_type, 0) +
-                             modules[Module.HardwareType.INTERNAL].get(module_type, 0))
-            assert actual_amount >= expected_amount, 'Expected {0} modules {1}'.format(expected_amount, module_type)
+        for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.INTERNAL, Module.HardwareType.EMULATED]:
+            for module_type in set(list(expected_modules[hardware_type].keys())):
+                expected_amount = (expected_modules[hardware_type].get(module_type, 0))
+                actual_amount = (modules[hardware_type].get(module_type, 0))
+                assert actual_amount >= expected_amount, 'Expected {0} {1} {2} modules'.format(expected_amount, hardware_type, module_type)
 
         try:
             for module_type, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
