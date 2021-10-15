@@ -357,6 +357,8 @@ _TEMPERATURE_MODULE_LAYOUTS = {
 }
 TEMPERATURE_MODULE_LAYOUT = _TEMPERATURE_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 
+# TODO: Model the uCAN modules
+
 _ENERGY_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
         # TODO: Add energy module to the Core+

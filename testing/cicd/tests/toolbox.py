@@ -391,6 +391,9 @@ class Toolbox(object):
         assert self.dut._auth
         user_data = {'username': self.dut._auth[0], 'password': self.dut._auth[1]}
         self.dut.get('/create_user', params=user_data, use_token=False, success=success)
+        # For easier debugging, always create an admin/admin user as well
+        user_data = {'username': 'admin', 'password': 'admin'}
+        self.dut.get('/create_user', params=user_data, use_token=False, success=success)
 
     def get_gateway_version(self):
         # type: () -> str

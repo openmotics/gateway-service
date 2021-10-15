@@ -1132,12 +1132,12 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if device_type == 't':
-                if '.000.000.' in sensor_module_info.address:
-                    hardware_type = HardwareType.INTERNAL
-                else:
-                    hardware_type = HardwareType.VIRTUAL
+            if device_type == 'T':
+                hardware_type = HardwareType.PHYSICAL
+            elif device_type == 's':
+                hardware_type = HardwareType.EMULATED
+            else:
+                hardware_type = HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=sensor_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
