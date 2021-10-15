@@ -146,7 +146,7 @@ def toolbox(toolbox_session):
     def _log_debug_buffer(buffer_):
         for key in sorted(buffer_.keys()):
             logger.debug('   {0} - {1}'.format(
-                time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(key)),
+                time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(float(key))),
                 buffer_[key]
             ))
 
