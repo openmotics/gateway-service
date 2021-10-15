@@ -23,6 +23,7 @@ import fcntl
 import logging
 import os
 import six
+import sys
 import time
 from contextlib import contextmanager
 from threading import Lock
@@ -66,22 +67,23 @@ def initialize(message_client_name):
     logger.info('Initializing')
     init_lock = constants.get_init_lockfile()
     logger.info('Waiting for lock')
+    had_factory_reset = False
     with lock_file(init_lock) as fd:
         content = fd.read()
         apply_migrations()
         setup_platform(message_client_name)
-        if content == '':
-            logger.info('Initializing, done')
-        elif content == 'factory_reset':
-            logger.info('Running factory reset...')
-            factory_reset()
-            logger.info('Running factory reset, done')
-        elif content == 'factory_reset_full':
-            logger.info('Running full factory reset [also wiping CC EEPROM]...')
-            factory_reset(can=True)
-            logger.info('Running full factory reset, done')
-        else:
-            logger.warning('unknown initialization {}'.format(content))
+        if 'factory_reset' in content:
+            full = content == 'factory_reset_full'
+            logger.info('Running {0}factory reset...'.format('full ' if full else ''))
+            factory_reset(can=full)
+            logger.info('Running {0}factory reset, done'.format('full ' if full else ''))
+            had_factory_reset = True
+        elif content != '':
+            logger.warning('Unknown initialization {}'.format(content))
+        logger.info('Initializing, done')
+    if had_factory_reset:
+        logger.info('Trigger service restart after factory reset')
+        sys.exit(1)
 
 
 @contextmanager
