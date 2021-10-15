@@ -262,8 +262,6 @@ class Toolbox(object):
                             Module.HardwareType.INTERNAL: {}}
         for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
             hardware_type = module.hardware_type
-            if hardware_type == Module.HardwareType.EMULATED:
-                hardware_type = Module.HardwareType.PHYSICAL  # Emulated moduled are (for testing purposes) considered physical
             if module.module_type not in expected_modules[hardware_type]:
                 expected_modules[hardware_type][module.module_type] = 0
             expected_modules[hardware_type][module.module_type] += 1

@@ -334,7 +334,12 @@ _INPUT_MODULE_LAYOUTS = {
 INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 
 _TEMPERATURE_MODULE_LAYOUTS = {
-    TestPlatform.CORE_PLUS: [],
+    TestPlatform.CORE_PLUS: [
+        Module(name='CC emulated temperature module',
+               module_type='sensor', is_can=True,
+               hardware_type=Module.HardwareType.EMULATED,
+               temps=[])
+    ],
     TestPlatform.DEBIAN: [
         Module(name='temperature module',
                module_type='temperature',
