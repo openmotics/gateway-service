@@ -559,6 +559,15 @@ class WebInterface(object):
         usernames = [user.username for user in users]
         return {'usernames': usernames}
 
+    @openmotics_api(auth=True, check=types(amount=int))
+    def get_master_debug_buffer(self, amount=10):
+        debug_buffer = self._module_controller.get_master_debug_buffer()
+        filtered_buffer = {}
+        for direction in ['read', 'write']:
+            buffer = debug_buffer[direction]
+            filtered_buffer[direction] = {key: buffer[key] for key in sorted(buffer.keys())[-amount:]}
+        return filtered_buffer
+
     @openmotics_api(plugin_exposed=False)
     def remove_user(self, username):
         """

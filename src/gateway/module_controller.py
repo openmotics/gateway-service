@@ -179,6 +179,9 @@ class ModuleController(BaseController):
     def get_master_version(self):
         return self._master_controller.get_firmware_version()
 
+    def get_master_debug_buffer(self):
+        return self._master_controller.get_debug_buffer()
+
     def reset_master(self, power_on=True):
         # type: (bool) -> None
         self._master_controller.cold_reset(power_on=power_on)

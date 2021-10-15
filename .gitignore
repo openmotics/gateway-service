@@ -1,6 +1,7 @@
 # Testing artifacts
 .coverage
 .coverage**
+.hypothesis
 coverage.xml
 testing/gw-unit-reports
 testing/gw-unit-reports-3
@@ -44,3 +45,6 @@ venv2.7/
 # Local scripts (makes it possible to add local bash scripts for easier development)
 **ignore.sh
 **ignore.py
+
+# env file
+.env_dev2_as_DUT

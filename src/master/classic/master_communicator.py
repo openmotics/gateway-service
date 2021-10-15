@@ -171,9 +171,14 @@ class MasterCommunicator(object):
         self.__command_timeout_histogram.clear()
 
     def get_debug_buffer(self):
-        # type: () -> Dict[str,Dict[float,str]]
+        # type: () -> Dict[str, Dict[float, str]]
         def process(buffer):
-            return {k: str(Printable(v)) for k, v in six.iteritems(buffer)}
+            formatted_buffer = {}
+            for key in list(buffer.keys()):
+                value = buffer.get(key)
+                if value is not None:
+                    formatted_buffer[key] = str(Printable(value))
+            return formatted_buffer
 
         return {'read': process(self.__debug_buffer['read']),
                 'write': process(self.__debug_buffer['write'])}
