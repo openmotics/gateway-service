@@ -47,7 +47,7 @@ def update(toolbox_session):
     if not update_version or not update_metadata:
         return
 
-    logger.info('Applying update {}...'.format(update))
+    logger.info('Applying update {}...'.format(update_version))
     toolbox.dut.post('/update', {'version': update_version,
                                  'metadata': update_metadata})
     logger.info('Waiting for update to complete...')
