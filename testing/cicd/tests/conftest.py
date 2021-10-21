@@ -39,110 +39,24 @@ def toolbox_session():
 
 
 @fixture(scope='session')
-def software_update(toolbox_session):
+def update(toolbox_session):
     toolbox = toolbox_session
 
-    update = os.environ.get('OPENMOTICS_UPDATE')
-    if update:
-        try:
-            logger.info('applying update {}...'.format(update))
-            with open(update, 'rb') as fd:
-                hasher = hashlib.md5()
-                hasher.update(fd.read())
-                md5 = hasher.hexdigest()
-            toolbox.dut.post('/update', {'version': '0.0.0', 'md5': md5},
-                             files={'update_data': open(update, 'rb')})
-            logger.info('waiting for update to complete...')
-            time.sleep(120)
-            toolbox.health_check(timeout=480)
-        finally:
-            toolbox.health_check()
-            toolbox.dut.login()
-            logger.debug('update output')
-            since = time.time()
-            while since > time.time() - 120:
-                output = toolbox.dut.get('/get_update_output')['output']
-                logger.info(output)
-                if 'exit 0' in output:
-                    break
-            output = toolbox.dut.get('/get_update_output')['output']
-            assert 'exit 0' in output
-            assert 'DONE' in output
-            time.sleep(120)
-
-    logger.info('gateway {}'.format(toolbox.get_gateway_version()))
-
-
-@fixture(scope='session')
-def firmware_updates(toolbox_session):
-    toolbox = toolbox_session
-
-    if os.environ.get('OPENMOTICS_UPDATE'):
-        logger.debug('Firmware updates skipped')
+    update = os.environ.get('OPENMOTICS_UPDATE_VERSION')
+    if not update:
         return
 
-    versions = toolbox.get_firmware_versions()
-    logger.info('Current firmwares: {}'.format(', '.join('{}={}'.format(k, v) for k, v in versions.items())))
-    firmware = {}
-    force_update = os.environ.get('OPENMOTICS_FORCE_UPDATE', '0') == '1'
+    logger.info('Applying update {}...'.format(update))
+    toolbox.dut.post('/update', {'version': update})
+    logger.info('Waiting for update to complete...')
+    time.sleep(120)
+    toolbox.wait_for_completed_update()
 
-    def _check_and_schedule(letter, firmware_type, desired_version):
-        if desired_version:
-            if letter in versions:
-                if force_update or desired_version != versions[letter]:
-                    logger.info('Firmware {}: {} -> {}...'.format(firmware_type, versions[letter], desired_version))
-                    firmware[firmware_type] = desired_version
-            else:
-                logger.info('Skipping {0} - no module found'.format(firmware_type))
-
-    if TEST_PLATFORM == TestPlatform.DEBIAN:
-        _check_and_schedule('M', 'master_classic', os.environ.get('OPENMOTICS_MASTER_CLASSIC_FIRMWARE'))
-    if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-        _check_and_schedule('M', 'master_core', os.environ.get('OPENMOTICS_MASTER_CORE_FIRMWARE'))
-
-    _check_and_schedule('O', 'output', os.environ.get('OPENMOTICS_OUTPUT_FIRMWARE'))
-    _check_and_schedule('D', 'dim_control', os.environ.get('OPENMOTICS_DIM_CONTROL_FIRMWARE'))
-    _check_and_schedule('I', 'input', os.environ.get('OPENMOTICS_INPUT_FIRMWARE'))
-    _check_and_schedule('T', 'temperature', os.environ.get('OPENMOTICS_TEMPERATURE_FIRMWARE'))
-    _check_and_schedule('C', 'can_control', os.environ.get('OPENMOTICS_CAN_CONTROL_FIRMWARE'))
-    if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-        _check_and_schedule('UC', 'ucan', os.environ.get('OPENMOTICS_MICRO_CAN_FIRMWARE'))
-
-    if firmware:
-        for module, version in firmware.items():
-            logger.info('updating {} firmware...'.format(module))
-            for _ in range(8):
-                try:
-                    toolbox.health_check(timeout=120)
-                    toolbox.dut.get('/update_firmware', {'module_type': module,
-                                                         'firmware_version': version})
-                    time.sleep(5)
-                    toolbox.health_check(timeout=120)
-                    break
-                except Exception:
-                    logger.error('updating {} failed, retrying'.format(module))
-                    time.sleep(30)
-
-        versions = toolbox.get_firmware_versions()
-        logger.info('Post-update firmwares: {}'.format(', '.join('{}={}'.format(k, v) for k, v in versions.items())))
-        mismatches = []
-        for expected, current in [('master_classic', 'M'),
-                                  ('master_core', 'M'),
-                                  ('output', 'O'),
-                                  ('dim_control', 'D'),
-                                  ('input', 'I'),
-                                  ('temperature', 'T'),
-                                  ('can_control', 'C')]:
-            if expected in firmware and current in versions and firmware[expected] != versions[current]:
-                mismatches.append('{0}({1}!={2})'.format(current, firmware[expected], versions[current]))
-        if mismatches:
-            logger.warning('Firmware mismatches: {0}'.format(', '.join(mismatches)))
-            # TODO: assert False  # Fail
+    logger.info('Gateway version {}'.format(toolbox.get_gateway_version()))
 
 
 @fixture
-# def toolbox(toolbox_session, software_update, firmware_updates):
-def toolbox(toolbox_session):
+def toolbox(toolbox_session, update):
     def _log_debug_buffer(buffer_):
         for key in sorted(buffer_.keys()):
             logger.debug('   {0} - {1}'.format(

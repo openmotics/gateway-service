@@ -629,6 +629,28 @@ class Toolbox(object):
             assert pending == []
         return pending
 
+    def wait_for_completed_update(self, timeout=300):
+        # type: (float) -> None
+        since = time.time()
+        updates_status = {}
+        while since > time.time() - timeout:
+            try:
+                data = self.dut.get('/get_system_status', use_token=False, success=False, timeout=5)
+                updates_status = data['updates']
+                if updates_status['status'] == 'OK':
+                    logger.info('Update completed')
+                    logger.info(updates_status.get('status_detail', 'No details available'))
+                    return
+                if updates_status['status'] == 'ERROR':
+                    break
+                logger.debug('Waiting for update completion')
+            except Exception:
+                pass
+            time.sleep(10)
+        logger.error('Update did not complete in time')
+        logger.error(updates_status.get('status_detail', 'No details available'))
+        assert False
+
     def module_error_check(self):
         # type: () -> None
         data = self.dut.get('/get_errors')
