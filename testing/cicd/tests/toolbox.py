@@ -19,6 +19,7 @@ import os
 import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from itertools import groupby
 
 import hypothesis
 import requests
@@ -631,6 +632,20 @@ class Toolbox(object):
 
     def wait_for_completed_update(self, timeout=300):
         # type: (float) -> None
+        def _log_status_detail(logger_, status_detail):
+            logger_('Update status overview:')
+            for key, value in groupby(status_detail, key=lambda d: d['firmware_type']):
+                logger_('* {0}'.format(key))
+                for entry in list(value):
+                    address = '{0}: '.format(entry['module_address']) if 'module_address' in entry else ''
+                    if entry['status'] == 'OK':
+                        logger_('  * {0}{1} (OK)'.format(address, entry['current_version']))
+                    else:
+                        logger_('  * {0}{1} -> {2} ({3})'.format(address,
+                                                                 entry['current_version'],
+                                                                 entry['target_version'],
+                                                                 entry['status']))
+
         since = time.time()
         updates_status = {}
         while since > time.time() - timeout:
@@ -645,7 +660,7 @@ class Toolbox(object):
                 logger.info(updates_status)
                 if updates_status['status'] == 'OK':
                     logger.info('Update completed')
-                    logger.info(updates_status.get('status_detail', 'No details available'))
+                    _log_status_detail(logger.info, updates_status.get('status_detail', []))
                     return
                 if updates_status['status'] == 'ERROR':
                     break
@@ -654,7 +669,7 @@ class Toolbox(object):
                 pass
             time.sleep(10)
         logger.error('Update did not complete in time')
-        logger.error(updates_status.get('status_detail', 'No details available'))
+        _log_status_detail(logger.error, updates_status.get('status_detail', []))
         assert False
 
     def module_error_check(self):
