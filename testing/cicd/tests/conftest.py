@@ -42,12 +42,14 @@ def toolbox_session():
 def update(toolbox_session):
     toolbox = toolbox_session
 
-    update = os.environ.get('OPENMOTICS_UPDATE_VERSION')
-    if not update:
+    update_version = os.environ.get('UPDATE_VERSION')
+    update_metadata = os.environ.get('UPDATE_METADATA')
+    if not update_version or not update_metadata:
         return
 
     logger.info('Applying update {}...'.format(update))
-    toolbox.dut.post('/update', {'version': update})
+    toolbox.dut.post('/update', {'version': update_version,
+                                 'metadata': update_metadata})
     logger.info('Waiting for update to complete...')
     toolbox.wait_for_completed_update()
 

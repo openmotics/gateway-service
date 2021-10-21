@@ -648,6 +648,7 @@ class Toolbox(object):
 
         since = time.time()
         updates_status = {}
+        failure = False
         while since > time.time() - timeout:
             try:
                 data = self.dut.get('/get_system_status', use_token=True, success=False, timeout=5)
@@ -661,12 +662,13 @@ class Toolbox(object):
                     _log_status_detail(logger.info, updates_status.get('status_detail', []))
                     return
                 if updates_status['status'] == 'ERROR':
+                    failure = True
                     break
                 logger.debug('Waiting for update completion')
             except Exception:
                 pass
             time.sleep(10)
-        logger.error('Update did not complete in time')
+        logger.error('Update failed' if failure else 'Update timed out')
         _log_status_detail(logger.error, updates_status.get('status_detail', []))
         assert False
 
