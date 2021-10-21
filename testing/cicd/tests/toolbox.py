@@ -636,7 +636,9 @@ class Toolbox(object):
         while since > time.time() - timeout:
             try:
                 data = self.dut.get('/get_system_status', use_token=False, success=False, timeout=5)
+                logger.info(data)
                 updates_status = data['updates']
+                logger.info(updates_status)
                 if updates_status['status'] == 'OK':
                     logger.info('Update completed')
                     logger.info(updates_status.get('status_detail', 'No details available'))
