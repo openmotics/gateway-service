@@ -638,13 +638,13 @@ class Toolbox(object):
                 logger_('* {0}'.format(key))
                 for entry in list(value):
                     address = '{0}: '.format(entry['module_address']) if 'module_address' in entry else ''
-                    if entry['status'] == 'OK':
+                    if entry['state'] == 'OK':
                         logger_('  * {0}{1} (OK)'.format(address, entry['current_version']))
                     else:
                         logger_('  * {0}{1} -> {2} ({3})'.format(address,
                                                                  entry['current_version'],
                                                                  entry['target_version'],
-                                                                 entry['status']))
+                                                                 entry['state']))
 
         since = time.time()
         updates_status = {}
@@ -655,9 +655,7 @@ class Toolbox(object):
                     if data.get('msg', 'unknown') == 'invalid_token':
                         self.dut.login()
                         continue
-                logger.info(data)
                 updates_status = data['updates']
-                logger.info(updates_status)
                 if updates_status['status'] == 'OK':
                     logger.info('Update completed')
                     _log_status_detail(logger.info, updates_status.get('status_detail', []))
