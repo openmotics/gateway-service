@@ -49,7 +49,6 @@ def update(toolbox_session):
     logger.info('Applying update {}...'.format(update))
     toolbox.dut.post('/update', {'version': update})
     logger.info('Waiting for update to complete...')
-    time.sleep(120)
     toolbox.wait_for_completed_update()
 
     logger.info('Gateway version {}'.format(toolbox.get_gateway_version()))
