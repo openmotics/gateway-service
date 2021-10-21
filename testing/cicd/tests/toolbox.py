@@ -635,7 +635,11 @@ class Toolbox(object):
         updates_status = {}
         while since > time.time() - timeout:
             try:
-                data = self.dut.get('/get_system_status', use_token=False, success=False, timeout=5)
+                data = self.dut.get('/get_system_status', use_token=True, success=False, timeout=5)
+                if not data.get('success', False):
+                    if data.get('msg', 'unknown') == 'invalid_token':
+                        self.dut.login()
+                        continue
                 logger.info(data)
                 updates_status = data['updates']
                 logger.info(updates_status)
