@@ -158,7 +158,7 @@ class ThermostatControllerMaster(ThermostatController):
                 setattr(ref_thermostat, 'auto_{0}'.format(day), schedule_dto)
             incorrect_timing = '42:30' in [schedule_dto.start_day_1, schedule_dto.end_day_1,
                                            schedule_dto.start_day_2, schedule_dto.end_day_2]
-            incorrect_temps = None in [schedule_dto.temp_day_1, schedule_dto.temp_day_2, schedule_dto.temp_night]
+            incorrect_temps = 0.0 in [schedule_dto.temp_day_1, schedule_dto.temp_day_2, schedule_dto.temp_night]
             if incorrect_temps or incorrect_timing:
                 schedule_dto.start_day_1 = ThermostatControllerMaster.DEFAULT_TIMINGS[0]
                 schedule_dto.end_day_1 = ThermostatControllerMaster.DEFAULT_TIMINGS[1]
