@@ -931,7 +931,7 @@ class UpdateController(object):
             raise RuntimeError('No update could be downloaded')
         actual_checksum = UpdateController._calculate_checksum(filename=target_filename)
         if actual_checksum != checksum:
-            raise RuntimeError('Downloaded firmware {0} checksum {1} does not match expected {1}'.format(target_filename, actual_checksum, checksum))
+            raise RuntimeError('Downloaded firmware {0} checksum {1} does not match expected {2}'.format(target_filename, actual_checksum, checksum))
 
     @staticmethod
     def _calculate_checksum(filename):  # type: (str) -> Optional[str]
