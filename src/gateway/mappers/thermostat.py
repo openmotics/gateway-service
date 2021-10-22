@@ -88,39 +88,39 @@ class ThermostatMapper(object):
     @staticmethod
     def _schedule_to_dto(schedule, mode, log_warnings=True):  # type: (Dict[str,Any], Literal['cooling', 'heating'], bool) -> Optional[ThermostatScheduleDTO]
         amount_of_entries = len(schedule)
-        if amount_of_entries == 0:
-            if log_warnings:
-                logger.warning('Mapping an empty temperature day schedule.')
-            schedule = DaySchedule.DEFAULT_SCHEDULE[mode]
-        elif amount_of_entries < 5:
-            if log_warnings:
-                logger.warning('Not enough data to map day schedule. Returning best effort data.')
-            schedule = DaySchedule.DEFAULT_SCHEDULE[mode]
+        if log_warnings:
+            if amount_of_entries == 0:
+                logger.warning('Mapping an empty temperature day schedule')
+            elif amount_of_entries < 5:
+                logger.warning('Not enough data to map day schedule, returning best effort data')
 
+        default_schedule = DaySchedule.DEFAULT_SCHEDULE[mode]
         # Parsing day/night, assuming following (classic) schedule:
         #      ______     ______
         #      |    |     |    |
         # _____|    |_____|    |_____
         # ^    ^    ^     ^    ^
         # So to parse a classic format out of it, at least 5 of the markers are required
-        index = 0
         kwargs = {}  # type: Dict[str, Any]
-        for timestamp in sorted(schedule.keys(), key=lambda t: int(t)):
-            temperature = schedule[timestamp]
-            timestamp_int = int(timestamp)
-            if index == 0:
-                kwargs['temp_night'] = temperature
-            elif index == 1:
-                kwargs['temp_day_1'] = temperature
-                kwargs['start_day_1'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
-            elif index == 2:
-                kwargs['end_day_1'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
-            elif index == 3:
-                kwargs['temp_day_2'] = temperature
-                kwargs['start_day_2'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
-            elif index == 4:
-                kwargs['end_day_2'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
-            index += 1
+        for data in (default_schedule, schedule):
+            setpoints = list(sorted((int(k), v) for k, v in data.items()))
+            temps_night = set(setpoints[i][1] for i  in (0, 2, 4) if i < len(setpoints))
+            if len(temps_night) > 1:
+                logger.warning('Unsupported day schedule, contains multiple temp_night values: %s', temps_night)
+                continue
+            for index, (timestamp, temperature) in enumerate(setpoints):
+                if index == 0:
+                    kwargs['temp_night'] = temperature
+                elif index == 1:
+                    kwargs['temp_day_1'] = temperature
+                    kwargs['start_day_1'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+                elif index == 2:
+                    kwargs['end_day_1'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+                elif index == 3:
+                    kwargs['temp_day_2'] = temperature
+                    kwargs['start_day_2'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+                elif index == 4:
+                    kwargs['end_day_2'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
         return ThermostatScheduleDTO(**kwargs)
 
     @staticmethod
@@ -267,31 +267,48 @@ class ThermostatMapper(object):
 
     @staticmethod
     def _schedule_dto_to_orm(schedule_dto, mode):  # type: (ThermostatScheduleDTO, Literal['cooling', 'heating']) -> Dict[int, float]
+        start_night = 0
+        night_end = int(datetime.timedelta(hours=24, minutes=0, seconds=0).total_seconds())
+
         def get_seconds(hour_timestamp):
-            # type: (str) -> Optional[int]
-            try:
-                x = time.strptime(hour_timestamp, '%H:%M')
-                return int(datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds())
-            except Exception:
-                return None
+            # type: (str) -> int
+            if hour_timestamp == '24:00':
+                return night_end
+            else:
+                t = time.strptime(hour_timestamp, '%H:%M')
+                return int(datetime.timedelta(hours=t.tm_hour, minutes=t.tm_min, seconds=t.tm_sec).total_seconds())
 
-        temperatures = [schedule_dto.temp_night, schedule_dto.temp_day_1, schedule_dto.temp_day_2]
-        times = [0,
-                 get_seconds(schedule_dto.start_day_1),
-                 get_seconds(schedule_dto.end_day_1),
-                 get_seconds(schedule_dto.start_day_2),
-                 get_seconds(schedule_dto.end_day_2)]
+        start_day_1 = get_seconds(schedule_dto.start_day_1)
+        end_day_1 = get_seconds(schedule_dto.end_day_1)
+        start_day_2 = get_seconds(schedule_dto.start_day_2)
+        end_day_2 = get_seconds(schedule_dto.end_day_2)
 
-        if None in temperatures or None in times:
-            # Some partial data and/or parsing errors, fallback to defaults
-            return DaySchedule.DEFAULT_SCHEDULE[mode]
+        # Attempt to resolve overlapping transitions in the schedule
+        offset = 600
+        if start_day_1 <= start_night:
+            start_day_1 = start_night + offset
+        if end_day_1 <= start_day_1:
+            end_day_1 = start_day_1 + offset
+        if start_day_2 <= end_day_1:
+            start_day_2 = end_day_1 + offset
+        if end_day_2 <= start_day_2:
+            end_day_2 = start_day_2 + offset
+        if end_day_2 >= night_end:
+            end_day_2 = night_end - offset
+        if start_day_2 >= end_day_2:
+            start_day_2 = end_day_2 - offset
+        if end_day_1 >= start_day_2:
+            end_day_1 = start_day_2 - offset
+        if start_day_1 >= end_day_1:
+            start_day_1 = end_day_1 - offset
+        if start_day_1 <= start_night:
+            raise ValueError('Invalid schedule')
 
-        # Added `ignore` type annotation below, since mypy couldn't figure out we checked for None above
-        return {times[0]: temperatures[0],  # type: ignore
-                times[1]: temperatures[1],  # type: ignore
-                times[2]: temperatures[0],  # type: ignore
-                times[3]: temperatures[2],  # type: ignore
-                times[4]: temperatures[0]}  # type: ignore
+        return {start_night: schedule_dto.temp_night,
+                start_day_1: schedule_dto.temp_day_1,
+                end_day_1: schedule_dto.temp_night,
+                start_day_2: schedule_dto.temp_day_2,
+                end_day_2: schedule_dto.temp_night}
 
     @staticmethod
     def get_default_dto(thermostat_id, mode):  # type: (int, Literal['cooling', 'heating']) -> ThermostatDTO

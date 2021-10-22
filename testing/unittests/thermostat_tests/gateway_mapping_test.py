@@ -144,9 +144,9 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         day_schedule = next(x for x in thermostat.heating_schedules if x.index == 3)  # type: DaySchedule
         day_schedule.schedule_data = {0: 5.0,
                                       120: 5.5,   # 120 and 1200 are selected because 120 < 1200,
-                                      1200: 6.0,  # but str(120) > str(1200)
+                                      1200: 5.0,  # but str(120) > str(1200)
                                       3600: 6.5,
-                                      7500: 7.0}
+                                      7500: 5.0}
         day_schedule.save()
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
