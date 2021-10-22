@@ -22,6 +22,8 @@ import fakesleep
 import time
 import unittest
 import sqlite3
+import mock
+import logging
 
 import peewee
 from peewee import SqliteDatabase
@@ -31,6 +33,7 @@ from gateway.mappers import ApartmentMapper
 from gateway.models import Apartment
 from gateway.apartment_controller import ApartmentController
 from ioc import SetTestMode, SetUpTestInjections
+from logs import Logs
 
 MODELS = [Apartment]
 
@@ -41,6 +44,8 @@ class ApartmentControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         super(ApartmentControllerTest, cls).setUpClass()
+        Logs.setup_logger(log_level_override=logging.DEBUG)
+        Logs.set_service_loglevel(level=logging.DEBUG, namespace='peewee')
         SetTestMode()
         cls.test_db = SqliteDatabase(':memory:')
 
@@ -53,7 +58,10 @@ class ApartmentControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self.controller = ApartmentController()
-        # self.db_cursor = self.test_db.cursor()  # type: peewee.Database.cursor
+        self.rebus_controller = mock.Mock()
+        self.controller.set_rebus_controller(self.rebus_controller)
+        self.pubsub = mock.Mock()
+        SetUpTestInjections(pubsub=self.pubsub)
 
         self.test_apartment_1 = ApartmentDTO(
             name='Test-Apartment-1',
@@ -114,8 +122,69 @@ class ApartmentControllerTest(unittest.TestCase):
         # Set the id of apartment to id 1 to update the apartment with id 1
         self.test_apartment_2.id = 1
         result = self.controller.update_apartment(self.test_apartment_2)
+        self.assertEqual(result.id, self.test_apartment_2.id)
         loaded = self.controller.load_apartment(result.id)
         self.assertEqual(result, loaded)
+
+    @unittest.skipIf(True, 'Transactions does not work')  # Use skip if because python 2 does not know 'unittest.skip' decorator
+    def test_update_apartments(self):
+        """
+        Test the create apartment functionality
+
+        !!! This test is skipped since the transactions does not work within an unittest. !!!
+        TODO: find out why transactions do not work within an unittest
+        """
+        apartment_1_dto = self.controller.save_apartment(self.test_apartment_1)
+        loaded = self.controller.load_apartment(apartment_1_dto.id)
+        self.assertEqual(apartment_1_dto, loaded)
+
+        apartment_2_dto = self.controller.save_apartment(self.test_apartment_2)
+        loaded = self.controller.load_apartment(apartment_2_dto.id)
+        self.assertEqual(apartment_2_dto, loaded)
+
+        # Switch the mailboxes around to test if they actually get switched in the database
+        self.test_apartment_1.mailbox_rebus_id, self.test_apartment_2.mailbox_rebus_id = self.test_apartment_2.mailbox_rebus_id, self.test_apartment_1.mailbox_rebus_id
+        # Set the id
+        self.test_apartment_1.id = apartment_1_dto.id
+        self.test_apartment_2.id = apartment_2_dto.id
+        result = self.controller.update_apartments([self.test_apartment_1, self.test_apartment_2])
+        self.assertEqual(result[0].id, self.test_apartment_1.id)
+        self.assertEqual(result[1].id, self.test_apartment_2.id)
+        loaded = self.controller.load_apartment(result[0].id)
+        self.assertEqual(result[0], loaded)
+        loaded = self.controller.load_apartment(result[1].id)
+        self.assertEqual(result[1], loaded)
+
+    @unittest.expectedFailure
+    def test_update_apartments_rollback(self):
+        """
+        This test triggers a rollback for the update apartment call to set the same mailbox id to different apartments
+
+        !!! This test is marked as expected failure since the transactions does not work within an unittest. !!!
+        TODO: find out why transactions do not work within an unittest
+        """
+        apartment_1_dto = self.controller.save_apartment(self.test_apartment_1)
+        loaded = self.controller.load_apartment(apartment_1_dto.id)
+        self.assertEqual(apartment_1_dto, loaded)
+
+        apartment_2_dto = self.controller.save_apartment(self.test_apartment_2)
+        loaded = self.controller.load_apartment(apartment_2_dto.id)
+        self.assertEqual(apartment_2_dto, loaded)
+
+        # Set the apartment 1 mailbox the same as the apartment 2, this will trigger a rollback
+        self.test_apartment_1.mailbox_rebus_id = self.test_apartment_2.mailbox_rebus_id
+        # Set the id
+        self.test_apartment_1.id = apartment_1_dto.id
+        self.test_apartment_2.id = apartment_2_dto.id
+        result = self.controller.update_apartments([self.test_apartment_1, self.test_apartment_2])
+        self.assertIsNone(result)
+
+        # Assert nothing changed
+        loaded = self.controller.load_apartment(apartment_1_dto.id)
+        self.assertEqual(apartment_1_dto, loaded)
+        loaded = self.controller.load_apartment(apartment_2_dto.id)
+        self.assertEqual(apartment_2_dto, loaded)
+
 
     def test_delete_apartment(self):
         """ Test the create apartment functionality """

@@ -32,15 +32,15 @@ from gateway.exceptions import CommunicationFailure
 from gateway.models import Database
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware
+from gateway.thermostat.thermostat_controller import ThermostatController
 
 if False:  # MYPY
-    from typing import Dict, Any, List, Optional, Tuple
+    from typing import Dict, Any, List, Optional, Tuple, Union
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.input_controller import InputController
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
     from gateway.module_controller import ModuleController
-    from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO
 
@@ -549,34 +549,39 @@ class MetricsCollector(object):
                                   timestamp=now)
 
     def _run_thermostats(self, metric_type):
+        # type: (str) -> None
         while not self._stopped:
             start = time.time()
             try:
                 now = time.time()
-                thermostats = self._thermostat_controller.get_thermostat_status()
-                self._enqueue_metrics(metric_type=metric_type,
-                                      values={'on': thermostats.on,
-                                              'cooling': thermostats.cooling},
-                                      tags={'id': 'G.0',
-                                            'name': 'Global configuration'},
-                                      timestamp=now)
-                for thermostat in thermostats.statusses:
-                    values = {'setpoint': int(thermostat.setpoint),
-                              'output0': float(thermostat.output_0_level),
-                              'output1': float(thermostat.output_1_level),
-                              'mode': int(thermostat.mode),
-                              'type': 'tbs' if thermostat.sensor_id == 240 else 'normal',
-                              'automatic': thermostat.automatic,
-                              'current_setpoint': thermostat.setpoint_temperature}
-                    if thermostat.outside_temperature is not None:
-                        values['outside'] = thermostat.outside_temperature
-                    if thermostat.sensor_id != 240 and thermostat.actual_temperature is not None:
-                        values['temperature'] = thermostat.actual_temperature
+                # TODO: handle metrics for groups, what's the uscase here other than
+                # tracking current_temperature + output levels?
+                for status in self._thermostat_controller.get_thermostat_group_status():
+                    group_on = False
+                    for thermostat in status.statusses:
+                        values = {'setpoint': int(thermostat.setpoint),
+                                  'output0': convert_float(thermostat.output_0_level),
+                                  'output1': convert_float(thermostat.output_1_level),
+                                  'steering_power': convert_float(thermostat.steering_power),
+                                  'state': thermostat.state,
+                                  'mode': int(thermostat.mode),
+                                  'automatic': thermostat.automatic,
+                                  'current_setpoint': convert_float(thermostat.setpoint_temperature)}
+                        if thermostat.outside_temperature is not None:
+                            values['outside'] = float(thermostat.outside_temperature)
+                        if thermostat.actual_temperature is not None:
+                            values['temperature'] = float(thermostat.actual_temperature)
+                        self._enqueue_metrics(metric_type=metric_type,
+                                              values=values,
+                                              tags={'id': '{0}.{1}'.format('C' if status.cooling is True else 'H',
+                                                                           thermostat.id)},
+                                              timestamp=now)
+                        group_on = group_on or thermostat.state == 'on'
+
                     self._enqueue_metrics(metric_type=metric_type,
-                                          values=values,
-                                          tags={'id': '{0}.{1}'.format('C' if thermostats.cooling is True else 'H',
-                                                                       thermostat.id),
-                                                'name': thermostat.name},
+                                          values={'on': group_on,
+                                                  'cooling': status.cooling},
+                                          tags={'id': 'G.{0}'.format(status.id)},
                                           timestamp=now)
             except CommunicationFailure as ex:
                 logger.error('Error getting thermostat status: {}'.format(ex))
@@ -1121,7 +1126,7 @@ class MetricsCollector(object):
                           'unit': '%'}]},
             # thermostat
             {'type': 'thermostat',
-             'tags': ['id', 'name'],
+             'tags': ['id'],
              'metrics': [{'name': 'on',
                           'description': 'Indicates whether the thermostat is on',
                           'type': 'gauge',
@@ -1299,6 +1304,11 @@ class MetricsCollector(object):
                           'type': 'gauge',
                           'unit': ''}]}
         ]
+
+
+def convert_float(value):
+    # type: (Optional[Union[float, int]]) -> Optional[float]
+    return None if value is None else float(value)
 
 
 def convert_kwh(value):

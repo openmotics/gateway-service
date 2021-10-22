@@ -17,7 +17,7 @@ RFID BLL
 """
 
 import constants
-from gateway.events import EsafeEvent
+from gateway.events import EsafeEvent, EventError
 from gateway.models import RFID
 from gateway.mappers import RfidMapper
 from gateway.dto import RfidDTO, UserDTO
@@ -36,7 +36,7 @@ import six
 from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 
 if False:  # MyPy
-    from typing import List, Optional, Type
+    from typing import List, Optional, Type, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,13 @@ class RfidController(object):
             self.rfid_device.stop()
 
     @staticmethod
+    @Inject
+    def send_config_change_event(error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
+        # type: (Dict[str, Any], PubSub) -> None
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'RFID'}, error=error)
+        pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
+
+    @staticmethod
     def load_rfid(rfid_id):
         # type: (int) -> Optional[RfidDTO]
         rfid_orm = RFID.get_or_none(RFID.id == rfid_id)
@@ -101,6 +108,12 @@ class RfidController(object):
             rfid_dto = RfidMapper.orm_to_dto(rfid_orm)
             rfids.append(rfid_dto)
         return rfids
+
+    @staticmethod
+    def check_if_rfid_exists(rfid_tag):
+        query = RFID.select().where(RFID.tag_string == rfid_tag)
+        rfid_orm = query.first()
+        return rfid_orm is not None
 
     @staticmethod
     def get_rfid_count(user_id=None):
@@ -133,11 +146,13 @@ class RfidController(object):
         if rfid_orm.enter_count is None:
             rfid_orm.enter_count = 0
         rfid_orm.save()
+        RfidController.send_config_change_event()
         return RfidMapper.orm_to_dto(rfid_orm)
 
     @staticmethod
     def delete_rfid(rfid_id):
         RFID.delete().where(RFID.id == rfid_id).execute()
+        RfidController.send_config_change_event()
 
     @staticmethod
     def datetime_to_string_format(timestamp):
@@ -204,7 +219,11 @@ class RfidStandByState(RfidState):
             'uuid': context.last_scanned_uuid,
             'action': 'SCAN'
         }
-        event = EsafeEvent(EsafeEvent.Types.RFID_CHANGE, event_data)
+        error = EventError.ErrorTypes.NO_ERROR
+        if not context.check_if_badge_uuid_exits():
+            error = EventError.ErrorTypes.DOES_NOT_EXIST
+        event = EsafeEvent(EsafeEvent.Types.RFID_CHANGE, event_data, error)
+        logger.info("Sending eSafe event for rfid scan: {}".format(event))
         pubsub.publish_esafe_event(PubSub.EsafeTopics.RFID, event)
 
 
@@ -223,21 +242,25 @@ class RfidAddBadgeState(RfidState):
             'uuid': context.last_scanned_uuid,
             'action': 'REGISTER'
         }
-        event = EsafeEvent(EsafeEvent.Types.RFID_CHANGE, event_data)
+        error = EventError.ErrorTypes.NO_ERROR
+        event = EsafeEvent(EsafeEvent.Types.RFID_CHANGE, event_data, error)
+        logger.info("Sending eSafe event for rfid registration: {}".format(event))
         pubsub.publish_esafe_event(PubSub.EsafeTopics.RFID, event)
         context.rfid_state = RfidStandByState
 
 
 class RfidContext(object):
     def __init__(self, rfid_controller):
+        # type: (RfidController) -> None
         self.rfid_controller = rfid_controller
-        self.last_scanned_uuid = None
+        self.last_scanned_uuid = None  # type: Optional[str]
         self.rfid_state = RfidStandByState  # type: Type[RfidState]
 
-        self.label = None
-        self.user = None
+        self.label = None  # type: Optional[str]
+        self.user = None  # type: Optional[UserDTO]
 
     def handle_rfid_scan(self, rfid_uuid):
+        logger.info("Handling RFID scan: {}".format(rfid_uuid))
         self.last_scanned_uuid = rfid_uuid
         self.rfid_state.handle_rfid_scan(self)
 
@@ -251,4 +274,7 @@ class RfidContext(object):
         self.label = None
         self.user = None
         self.rfid_state = RfidStandByState
+
+    def check_if_badge_uuid_exits(self):
+        return self.rfid_controller.check_if_rfid_exists(self.last_scanned_uuid)
 

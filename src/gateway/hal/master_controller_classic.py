@@ -96,9 +96,7 @@ class MasterClassicController(MasterController):
         self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
-        self._synchronization_thread = DaemonThread(name='mastersync',
-                                                    target=self._synchronize,
-                                                    interval=5, delay=10)
+        self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
         self._output_config = {}  # type: Dict[int, OutputDTO]
@@ -336,7 +334,8 @@ class MasterClassicController(MasterController):
     def _invalidate_caches(self):
         # type: () -> None
         self._shutters_last_updated = 0.0
-        self._synchronization_thread.request_single_run()
+        if self._synchronization_thread is not None:
+            self._synchronization_thread.request_single_run()
 
     #######################
     # Internal management #
@@ -346,11 +345,16 @@ class MasterClassicController(MasterController):
         # type: () -> None
         super(MasterClassicController, self).start()
         self._heartbeat.start()
+        self._synchronization_thread = DaemonThread(name='mastersync',
+                                                    target=self._synchronize,
+                                                    interval=5, delay=10)
         self._synchronization_thread.start()
 
     def stop(self):
         # type: () -> None
-        self._synchronization_thread.stop()
+        if self._synchronization_thread is not None:
+            self._synchronization_thread.stop()
+            self._synchronization_thread = None
         self._heartbeat.stop()
         super(MasterClassicController, self).stop()
 
@@ -988,18 +992,6 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def get_modules_information(self):  # type: () -> List[ModuleDTO]
         """ Gets module information """
-
-        def get_master_version(_module_address):
-            try:
-                _module_version = self._master_communicator.do_command(master_api.get_module_version(),
-                                                                       {'addr': _module_address.bytes},
-                                                                       extended_crc=True,
-                                                                       timeout=5)
-                _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
-                return True, _module_version['hw_version'], _firmware_version
-            except CommunicationTimedOutException:
-                return False, None, None
-
         information = []
         module_type_lookup = {'c': ModuleType.CAN_CONTROL,
                               't': ModuleType.SENSOR,
@@ -1026,7 +1018,7 @@ class MasterClassicController(MasterController):
                             hardware_type=hardware_type,
                             order=i)
             if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+                dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
             information.append(dto)
 
         for i in range(no_modules['out']):
@@ -1041,7 +1033,7 @@ class MasterClassicController(MasterController):
                                            HardwareType.PHYSICAL),
                             order=i)
             if not is_virtual:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+                dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
             information.append(dto)
 
         for i in range(no_modules['shutter']):
@@ -1056,10 +1048,25 @@ class MasterClassicController(MasterController):
                                            HardwareType.PHYSICAL),
                             order=i)
             if not is_virtual:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+                dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
             information.append(dto)
 
         return information
+
+    @communication_enabled
+    def get_module_information(self, address):
+        # type: (bytearray) -> Tuple[bool, Optional[str], Optional[str]]
+        _ = address
+        # TODO: Re-enable this call once the FV call gets fixed in the firmware
+        # try:
+        #     _module_version = self._master_communicator.do_command(master_api.get_module_version(),
+        #                                                            {'addr': address},
+        #                                                            extended_crc=True,
+        #                                                            timeout=5)
+        #     _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
+        #     return True, _module_version['hw_version'], _firmware_version
+        # except CommunicationTimedOutException:
+        return False, None, None
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         old_address_bytes = bytearray([int(part) for part in old_address.split('.')])
@@ -1407,7 +1414,7 @@ class MasterClassicController(MasterController):
                                          'address': address})
             logger.info('Initialize/discovery - {0} module found: {1} ({2})'.format(
                 code_map.get(api_data['instr'], 'Unknown'),
-                api_data['id'][0],
+                module_type,
                 address
             ))
         except Exception:

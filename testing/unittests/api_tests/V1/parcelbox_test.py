@@ -17,6 +17,7 @@ Parcelbox API tests
 """
 from __future__ import absolute_import
 
+import copy
 import cherrypy
 import ujson as json
 
@@ -172,19 +173,24 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
     def test_put_parcelboxes(self):
         with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func, \
                 mock.patch.object(self.rebus_controller, 'open_box', return_value=self.test_parcelbox_1) as open_box_func, \
-                mock.patch.object(self.delivery_controller, 'load_deliveries_filter', return_value=[self.test_delivery]) as load_delivery_func:
+                mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=[self.test_delivery]) as load_delivery_func, \
+                mock.patch.object(self.delivery_controller, 'load_deliveries_filter', return_value=[self.test_delivery]) as load_delivery_func_filter:
+            return_mailbox = copy.deepcopy(self.test_parcelbox_1)
+            return_mailbox.is_open = True
+            open_box_func.return_value = return_mailbox
             # Auth: normal user
             json_body = {'open': True}
             status, headers, response = self.PUT('/api/v1/parcelboxes/32', login_user=self.test_user_1, headers=None, body=json.dumps(json_body))
             self.assertStatus('200 OK')
-            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(self.test_parcelbox_1)))
+            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(return_mailbox)))
             get_parcelbox_func.assert_called_once_with(rebus_id=32)
             get_parcelbox_func.reset_mock()
             open_box_func.assert_called_once_with(32)
             open_box_func.reset_mock()
-            # load_delivery_func.assert_called_once_with(self.test_user_1.id)
-            load_delivery_func.assert_called_once_with(delivery_pickup_user=self.test_user_1.id)
+            load_delivery_func.assert_called_once_with(user_id=self.test_user_1.id)
             load_delivery_func.reset_mock()
+            load_delivery_func_filter.assert_not_called()
+            load_delivery_func_filter.reset_mock()
 
             # Auth: no Auth
             json_body = {'open': True}
@@ -194,6 +200,8 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.reset_mock()
             open_box_func.assert_not_called()
             open_box_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
             load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
 
@@ -206,40 +214,48 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.reset_mock()
             open_box_func.assert_not_called()
             open_box_func.reset_mock()
-            load_delivery_func.assert_called_once_with(delivery_pickup_user=self.test_user_2.id)
+            load_delivery_func.assert_called_once_with(user_id=self.test_user_2.id)
+            load_delivery_func.reset_mock()
+            load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
 
             # Auth: admin user
             json_body = {'open': True}
             status, headers, response = self.PUT('/api/v1/parcelboxes/32', login_user=self.test_admin, headers=None, body=json.dumps(json_body))
             self.assertStatus('200 OK')
-            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(self.test_parcelbox_1)))
+            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(return_mailbox)))
             get_parcelbox_func.assert_called_once_with(rebus_id=32)
             get_parcelbox_func.reset_mock()
             open_box_func.assert_called_once_with(32)
             open_box_func.reset_mock()
             load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
 
             # random box
             status, headers, response = self.PUT('/api/v1/parcelboxes/open?size=m', login_user=self.test_user_1, headers=None)
             self.assertStatus('200 OK')
-            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(self.test_parcelbox_1)))
+            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(return_mailbox)))
             get_parcelbox_func.assert_called_once_with(available=True, size='m')
             get_parcelbox_func.reset_mock()
             open_box_func.assert_called_once_with(self.test_parcelbox_1.id)
             open_box_func.reset_mock()
             load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
 
             # random box
             status, headers, response = self.PUT('/api/v1/parcelboxes/open?size=m', login_user=None, headers=None)
             self.assertStatus('200 OK')
-            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(self.test_parcelbox_1)))
+            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(return_mailbox)))
             get_parcelbox_func.assert_called_once_with(available=True, size='m')
             get_parcelbox_func.reset_mock()
             open_box_func.assert_called_once_with(self.test_parcelbox_1.id)
             open_box_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
             load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
 
@@ -253,6 +269,8 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             open_box_func.reset_mock()
             load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
 
             # random box, no size provided
             get_parcelbox_func.return_value = []
@@ -263,6 +281,8 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.reset_mock()
             open_box_func.assert_not_called()
             open_box_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
             load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
 

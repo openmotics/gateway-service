@@ -23,11 +23,11 @@ import fcntl
 import logging
 import os
 import six
+import sys
 import time
 from contextlib import contextmanager
 from threading import Lock
 
-from peewee_migrate import Router
 from serial import Serial
 from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
@@ -67,22 +67,23 @@ def initialize(message_client_name):
     logger.info('Initializing')
     init_lock = constants.get_init_lockfile()
     logger.info('Waiting for lock')
+    had_factory_reset = False
     with lock_file(init_lock) as fd:
         content = fd.read()
         apply_migrations()
         setup_platform(message_client_name)
-        if content == '':
-            logger.info('Initializing, done')
-        elif content == 'factory_reset':
-            logger.info('Running factory reset...')
-            factory_reset()
-            logger.info('Running factory reset, done')
-        elif content == 'factory_reset_full':
-            logger.info('Running full factory reset [also wiping CC EEPROM]...')
-            factory_reset(can=True)
-            logger.info('Running full factory reset, done')
-        else:
-            logger.warning('unknown initialization {}'.format(content))
+        if 'factory_reset' in content:
+            full = content == 'factory_reset_full'
+            logger.info('Running {0}factory reset...'.format('full ' if full else ''))
+            factory_reset(can=full)
+            logger.info('Running {0}factory reset, done'.format('full ' if full else ''))
+            had_factory_reset = True
+        elif content != '':
+            logger.warning('Unknown initialization {}'.format(content))
+        logger.info('Initializing, done')
+    if had_factory_reset:
+        logger.info('Trigger service restart after factory reset')
+        sys.exit(1)
 
 
 @contextmanager
@@ -100,6 +101,7 @@ def lock_file(file):
 
 def apply_migrations():
     # type: () -> None
+    from peewee_migrate import Router
     logger.info('Applying migrations')
     # Run all unapplied migrations
     db = Database.get_db()
@@ -193,8 +195,9 @@ def setup_target_platform(target_platform, message_client_name):
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
-                         ventilation_controller, webservice_v1, apartment_controller, delivery_controller,
+                         ventilation_controller, apartment_controller, delivery_controller,
                          system_config_controller, rfid_controller, energy_module_controller)
+    from gateway.api.V1.webservice import webservice as webservice_v1
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
          maintenance_controller, base, events, user_controller,
@@ -209,6 +212,7 @@ def setup_target_platform(target_platform, message_client_name):
     # This cannot be in the webservice_v1 file since it creates circular imports due to
     # all the V1 api's including elements from the webservice_v1 file
     from gateway.api import V1
+    _ = V1
 
     # IPC
     message_client = None
@@ -281,7 +285,7 @@ def setup_target_platform(target_platform, message_client_name):
     if controller_serial_port:
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
 
-    if target_platform in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
+    if target_platform in Platform.DummyTypes + Platform.EsafeTypes:
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
         Injectable.value(master_controller=MasterDummyController())
@@ -328,7 +332,7 @@ def setup_target_platform(target_platform, message_client_name):
     else:
         logger.warning('Unhandled master implementation for %s', target_platform)
 
-    if target_platform in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
+    if target_platform in Platform.DummyTypes + Platform.EsafeTypes:
         Injectable.value(frontpanel_controller=None)
     elif target_platform in Platform.CoreTypes:
         Injectable.value(frontpanel_controller=FrontpanelCoreController())
@@ -339,17 +343,28 @@ def setup_target_platform(target_platform, message_client_name):
 
     # eSafe controller
     if target_platform == Platform.Type.ESAFE and six.PY3:
-        from esafe.rebus.rebus_controller import RebusController
-        Injectable.value(rebus_controller=RebusController())
-    elif target_platform == Platform.Type.DUMMY:
+        try:
+            from rebus import Rebus  # Test import to check if rebus is available
+        except ImportError as ex:
+            # when rebus is not available, use an dummy rebus controller
+            logger.warning("Could not load the esafe rebus controller, instantiating dummy rebus controller: {}".format(ex))
+            from esafe.rebus.dummy_rebus_controller import DummyRebusController
+            Injectable.value(rebus_controller=DummyRebusController())
+        else:
+            # when rebus is available, use the real rebus controller
+            from esafe.rebus.rebus_controller import RebusController
+            Injectable.value(rebus_controller=RebusController())
+
+    elif target_platform == Platform.Type.ESAFE_DUMMY:  # for local development purposes, when rebus is available, but dummy rebus controller is enforced
         from esafe.rebus.dummy_rebus_controller import DummyRebusController
         Injectable.value(rebus_controller=DummyRebusController())
     else:
         Injectable.value(rebus_controller=None)
 
     # Thermostats
-    thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
-    thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
+    thermostats_gateway_enabled = Feature.select(Feature.enabled) \
+        .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
+        .scalar()
     if target_platform not in Platform.ClassicTypes or thermostats_gateway_enabled:
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:

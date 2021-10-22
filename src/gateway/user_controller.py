@@ -19,21 +19,28 @@ and authenticating users.
 
 from __future__ import absolute_import
 
+import json
 import logging
+import os
 import random
 import six
+import uuid
 
+import constants
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums, Languages
+from gateway.events import EsafeEvent, EventError
 from gateway.exceptions import GatewayException
 from gateway.mappers.user import UserMapper
 from gateway.models import User
+from gateway.pubsub import PubSub
+from platform_utils import Platform
 
 from ioc import Injectable, Inject, Singleton, INJECTED
 
 if False:  # MYPY
-    from typing import Tuple, List, Optional, Dict, Union
+    from typing import Tuple, List, Optional, Dict, Union, Any
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +65,14 @@ class UserController(object):
         self.authentication_controller = authentication_controller
         self.load_users()
 
+    @Inject
+    def send_event(self, event_error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
+        # type: (Dict[str, Any], PubSub) -> None
+        _ = self
+        event_type = "user"
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': event_type}, error=event_error)
+        pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
+
     def start(self):
         # type: () -> None
         # Create the user for the cloud
@@ -74,6 +89,37 @@ class UserController(object):
         cloud_user_dto.set_password(self._config['password'])
         # Save the user to the DB
         self.save_user(user_dto=cloud_user_dto)
+
+        # Skip the creation of the eSafe users when the platform is not esafe
+        if Platform.get_platform() not in Platform.EsafeTypes + [Platform.Type.ESAFE_DUMMY]:
+            return
+
+        logger.info('Adding the eSafe users')
+        esafe_config_file_location = constants.get_renson_main_config_file()
+
+        if not os.path.exists(esafe_config_file_location):
+            logger.warning('Could not find the eSafe config file, cannot add the initial user codes')
+            return
+
+        with open(esafe_config_file_location, 'rb') as esafe_config:
+            esafe_config_content = json.load(esafe_config)
+        admin_pin = esafe_config_content['esafe_admin_code']
+        technician_pin = esafe_config_content['esafe_technician_code']
+
+        for user_role, pin in [(User.UserRoles.ADMIN, admin_pin), (User.UserRoles.TECHNICIAN, technician_pin)]:
+            if User.select().where(User.role == user_role).count() > 0:
+                logger.info('Skipping the creation of the eSafe {} user, already exists'.format(user_role))
+            else:
+                logger.info('Creating the eSafe {} user'.format(user_role))
+                cloud_user_dto = UserDTO(
+                    username=user_role,
+                    pin_code=pin,
+                    role=user_role,
+                    accepted_terms=AuthenticationController.TERMS_VERSION,
+                    language='en'
+                )
+                cloud_user_dto.set_password(uuid.uuid4().hex)
+                self.save_user(user_dto=cloud_user_dto)
 
     def stop(self):
         # type: () -> None
@@ -98,6 +144,7 @@ class UserController(object):
         if user_orm.apartment is not None:
             user_orm.apartment.save()
         user_dto_saved = UserMapper.orm_to_dto(user_orm)
+        self.send_event()
         return user_dto_saved
 
     def save_users(self, users):
@@ -154,11 +201,13 @@ class UserController(object):
         return users
 
     def activate_user(self, user_id):
-        _ = self
         try:
             user_orm = User.select().where(User.id == user_id).first()
+            user_dto = UserMapper.orm_to_dto(user_orm)
+            self.authentication_controller.remove_tokens_for_user(user_dto)
             user_orm.is_active = True
             user_orm.save()
+            self.send_event()
         except Exception as e:
             raise RuntimeError('Could not save the is_active flag to the database: {}'.format(e))
 
@@ -182,6 +231,7 @@ class UserController(object):
             raise GatewayException(UserEnums.DeleteErrors.LAST_ACCOUNT)
 
         User.delete().where(User.username == username).execute()
+        self.send_event()
 
     def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None):
         # type: (UserDTO, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]

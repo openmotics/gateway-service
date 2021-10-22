@@ -453,6 +453,7 @@ class HeartbeatService(object):
         self._message_client = message_client
         if self._message_client is not None:
             self._message_client.set_state_handler(self._check_state)
+            self._message_client.add_event_handler(self._handle_event)
 
         self._last_successful_heartbeat = None  # type: Optional[float]
         self._last_cycle = 0.0
@@ -481,6 +482,12 @@ class HeartbeatService(object):
                 'sleep_time': self._sleep_time,
                 'vpn_open': self._task_executor.vpn_open,
                 'last_cycle': self._last_cycle}
+
+    def _handle_event(self, event, payload):
+        _ = self, payload
+        if event == OMBusEvents.TIME_CHANGED:
+            time.tzset()  # Refresh timezone
+            logger.info('Timezone changed to {0}'.format(time.tzname[0]))
 
     def start(self):
         # type: () -> None

@@ -17,6 +17,8 @@ Mailbox API tests
 """
 from __future__ import absolute_import
 
+import copy
+
 import cherrypy
 import ujson as json
 
@@ -98,6 +100,7 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
         with mock.patch.object(self.rebus_controller, 'get_mailboxes', return_value=[self.test_mailbox_1]) as get_mailbox_func:
             # Request one specific mailbox
             status, headers, response = self.GET('/api/v1/mailboxes/32', login_user=None, headers=None)
+            self.print_request_result()
             self.assertStatus('200 OK')
             self.assertBody(json.dumps(MailboxSerializer.serialize(self.test_mailbox_1)))
             get_mailbox_func.assert_called_once_with(rebus_id=32)
@@ -120,11 +123,14 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
         with mock.patch.object(self.rebus_controller, 'get_mailboxes', return_value=[self.test_mailbox_1]) as get_mailbox_func, \
                 mock.patch.object(self.rebus_controller, 'open_box', return_value=self.test_mailbox_1) as open_box_func, \
                 mock.patch.object(self.users_controller, 'load_user_by_apartment_id', return_value=self.test_user_1) as get_user_func:
+            return_mailbox = copy.deepcopy(self.test_mailbox_1)
+            return_mailbox.is_open = True
+            open_box_func.return_value = return_mailbox
             # Auth: normal user
             json_body = {'open': True}
             status, headers, response = self.PUT('/api/v1/mailboxes/32', login_user=self.test_user_1, headers=None, body=json.dumps(json_body))
             self.assertStatus('200 OK')
-            self.assertBody(json.dumps(MailboxSerializer.serialize(self.test_mailbox_1)))
+            self.assertBody(json.dumps(MailboxSerializer.serialize(return_mailbox)))
             get_mailbox_func.assert_called_once_with(rebus_id=32)
             get_mailbox_func.reset_mock()
             open_box_func.assert_called_once_with(32)
@@ -158,6 +164,19 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
             json_body = {'open': True}
             status, headers, response = self.PUT('/api/v1/mailboxes/32', login_user=self.test_admin, headers=None, body=json.dumps(json_body))
             self.assertStatus('200 OK')
+            self.assertBody(json.dumps(MailboxSerializer.serialize(return_mailbox)))
+            get_mailbox_func.assert_called_once_with(rebus_id=32)
+            get_mailbox_func.reset_mock()
+            open_box_func.assert_called_once_with(32)
+            open_box_func.reset_mock()
+            get_user_func.assert_not_called()
+            get_user_func.reset_mock()
+
+            # box did not open, status code 500, but return mailbox data
+            open_box_func.return_value = self.test_mailbox_1
+            json_body = {'open': True}
+            status, headers, response = self.PUT('/api/v1/mailboxes/32', login_user=self.test_admin, headers=None, body=json.dumps(json_body))
+            self.assertStatus('500 Internal Server Error')
             self.assertBody(json.dumps(MailboxSerializer.serialize(self.test_mailbox_1)))
             get_mailbox_func.assert_called_once_with(rebus_id=32)
             get_mailbox_func.reset_mock()

@@ -19,6 +19,7 @@ import enum
 from gateway.dto.base import BaseDTO
 
 if False:  # mypy
+    from typing import Optional
     from gateway.dto.apartment import ApartmentDTO
 
 
@@ -47,5 +48,5 @@ class MailBoxDTO(BaseDTO):
     def __init__(self, id=None, label=None, apartment=None, is_open=False):
         self.id = id  # type: int
         self.label = label  # type: str
-        self.apartment = apartment  # type: ApartmentDTO
+        self.apartment = apartment  # type: Optional[ApartmentDTO]
         self.is_open = is_open  # type: bool

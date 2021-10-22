@@ -25,6 +25,7 @@ from gateway.delivery_controller import DeliveryController
 from gateway.dto.box import ParcelBoxDTO, MailBoxDTO
 from gateway.dto.doorbell import DoorbellDTO
 from gateway.events import EsafeEvent
+from gateway.exceptions import ServiceUnavailableException
 from gateway.pubsub import PubSub
 from ioc import Inject, INJECTED, Injectable, Singleton
 
@@ -51,14 +52,22 @@ class RebusController(RebusControllerInterface):
         # type: (str, PubSub, ApartmentController, DeliveryController) -> None
         logger.debug('Creating esafe controller')
         self.rebus_dev_file = rebus_device
+        self._rebus_device = None
         self.pub_sub = pubsub
         self.apartment_controller = apartment_controller
         self.delivery_controller = delivery_controller
         self.devices = {}  # type: Dict[int, RebusComponent]
-        self.polling_thread = DaemonThread(name='eSafe status polling', target=self._get_esafe_status, interval=5, delay=5)
+        self.polling_thread = DaemonThread(name='eSafe status polling', target=self._get_esafe_status, interval=1, delay=5)
         self.lock_ids = []  # type: List[int]
         self.lock_status = defaultdict(lambda: False)  # type: Dict[int, bool]
         self.done_discovering = False
+
+    @property
+    def rebus_device(self):
+        # type: () -> Rebus
+        if self._rebus_device is not None:
+            return self._rebus_device
+        raise ServiceUnavailableException('Rebus device does not exists, first start the rebus controller to create a device')
 
     ######################
     # Controller Functions
@@ -67,7 +76,7 @@ class RebusController(RebusControllerInterface):
     def start(self):
         logger.debug('Starting eSafe controller')
         logger.debug(' -> Creating eSafe device: {}'.format(self.rebus_dev_file))
-        self.rebus_device = Rebus(self.rebus_dev_file, power_off_on_del=True)
+        self._rebus_device = Rebus(self.rebus_dev_file, power_off_on_del=True)
         logger.debug(' -> Toggle power')
         self.toggle_rebus_power()
         logger.debug(' -> Discover devices')
@@ -86,7 +95,7 @@ class RebusController(RebusControllerInterface):
                 continue
             logger.debug("Status: {}".format(is_lock_open))
             if is_lock_open != self.lock_status[lock_id]:
-                event = EsafeEvent(PubSub.EsafeTopics.LOCK, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
+                event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
                 logger.debug("Sending event: {}".format(event))
                 self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
             self.lock_status[lock_id] = is_lock_open
@@ -154,6 +163,10 @@ class RebusController(RebusControllerInterface):
             raise ValueError('Trying to open rebus device that is not a parcelbox of mailbox')
         success = device.open_lock(blocking=True)
         if success:
+            self.lock_status[rebus_id] = True
+            event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': rebus_id, 'status': 'open'})
+            logger.debug("Sending event: {}".format(event))
+            self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
             if device.type == EsafeBoxType.PARCELBOX:
                 return self._rebus_parcelbox_to_dto(device, force_latest_status=True)
             elif device.type == EsafeBoxType.MAILBOX:
@@ -197,7 +210,7 @@ class RebusController(RebusControllerInterface):
         if not force_latest_status:
             is_open = self.lock_status[rebus_device.get_rebus_id()]
         else:
-            is_open = rebus_device.get_lock_status()
+            is_open = self.get_lock_status(rebus_device.get_rebus_id())
         return ParcelBoxDTO(id=rebus_device.get_rebus_id(), label=rebus_device.get_rebus_id(), height=rebus_device.height, width=rebus_device.width, size=rebus_device.size, available=available, is_open=is_open)
 
     def _rebus_mailbox_to_dto(self, rebus_device, force_latest_status=False):
@@ -206,7 +219,7 @@ class RebusController(RebusControllerInterface):
         if not force_latest_status:
             is_open = self.lock_status[rebus_device.get_rebus_id()]
         else:
-            is_open = rebus_device.get_lock_status()
+            is_open = self.get_lock_status(rebus_device.get_rebus_id())
         return MailBoxDTO(id=rebus_device.get_rebus_id(), label=rebus_device.get_rebus_id(), apartment=apartment_dto, is_open=is_open)
 
     ######################
@@ -224,17 +237,33 @@ class RebusController(RebusControllerInterface):
             logger.debug('Discovered device: {}: {}'.format(dev_id, dev))
         self.done_discovering = True
         self.lock_ids = [lock_id for lock_id, lock in self.devices.items() if isinstance(lock, RebusComponentEsafeLock)]
+        self.log_discovered_devices()
         self.polling_thread.start()
+
+    def log_discovered_devices(self):
+        logger.info("Rebus discovered devices:")
+        for dev_id, device in self.devices.items():
+            logger.info(" * {} @ {}".format(dev_id, device.__class__.__name__))
 
     ######################
     # REBUS COMMANDS
     ######################
 
     def get_lock_status(self, lock_id):
-        rebus_component = self.rebus_device.get_basic_component(Utils.convert_rebus_id_to_route(lock_id))
-        rebus_lock = RebusComponentEsafeLock.from_component(rebus_component)
-        status = rebus_lock.get_lock_status()
-        return status
+        if lock_id not in self.devices:
+            raise ValueError("Cannot get lock status: Lock_id: '{}' is not detected".format(lock_id))
+        device = self.devices[lock_id]
+        if not isinstance(device, RebusComponentEsafeLock):
+            raise ValueError("Cannot get lock status: device with id: '{}' is not a lock".format(lock_id))
+        lock_status = False
+        for _ in range(5):
+            try:
+                lock_status = device.get_lock_status()
+                break
+            except RebusException:
+                time.sleep(0.1)
+                continue
+        return lock_status
 
     def toggle_rebus_power(self, duration=0.5):
         self.rebus_device.power_off()
@@ -247,4 +276,11 @@ class RebusController(RebusControllerInterface):
     ########################
 
     def verify_device_exists(self, device_id):
+        if (device_id % 16) != 0:
+            # if the device id is not a multiple of 16, then it could be a doorbell
+            doorbells = self.get_doorbells()
+            for doorbell in doorbells:
+                if device_id == doorbell.id:
+                    return True
+            return False
         return device_id in self.devices

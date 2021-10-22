@@ -27,17 +27,18 @@ import time
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.authentication_controller import AuthenticationToken, AuthenticationController, LoginMethod
 from gateway.exceptions import ItemDoesNotExistException, UnAuthorizedException, \
-    GatewayException, ForbiddenException, ParseException, \
+    ForbiddenException, ParseException, WebServiceException, \
     InvalidOperationException, WrongInputParametersException, \
-    TimeOutException, NotImplementedException
-from gateway.user_controller import UserController
+    TimeOutException, NotImplementedException, StateException
 from gateway.webservice import params_parser
+from gateway.api.V1.webservice import ApiResponse, RestAPIEndpoint
 
 if False:  # MyPy
     from gateway.webservice import WebService
     from typing import Optional, List, Dict, Any, Type, Callable
 
 logger = logging.getLogger(__name__)
+
 
 # ------------------------
 #  api decorator
@@ -49,9 +50,14 @@ logger = logging.getLogger(__name__)
 def _openmotics_api_v1(f, *args, **kwargs):
     start = time.time()
     timings = {}
-    status = 200  # OK
     try:
-        data = f(*args, **kwargs)
+        response = f(*args, **kwargs)
+        if not isinstance(response, ApiResponse):
+            raise WebServiceException("API response needs to be instance of `{}`".format(ApiResponse.__name__))
+        status = response.status_code
+        for header_name, header_value in response.response_headers.items():
+            cherrypy.response.headers[header_name] = header_value
+        data = response.body
     except cherrypy.HTTPError as ex:
         status = ex.status
         data = ex._message
@@ -70,6 +76,9 @@ def _openmotics_api_v1(f, *args, **kwargs):
     except ParseException as ex:
         status = 400
         data = ex.message
+    except StateException as ex:
+        status = 400
+        data = ex.message
     except TimeOutException as ex:
         status = 500
         data = ex.message
@@ -78,6 +87,9 @@ def _openmotics_api_v1(f, *args, **kwargs):
         data = ex.message
     except NotImplementedException as ex:
         status = 503
+        data = ex.message
+    except WebServiceException as ex:
+        status = 500
         data = ex.message
     except Exception as ex:
         status = 500
@@ -88,9 +100,12 @@ def _openmotics_api_v1(f, *args, **kwargs):
 
     timings['process'] = ('Processing', time.time() - start)
     serialization_start = time.time()
+
+    # encode response data
     contents = str(data).encode() if data is not None else None
     timings['serialization'] = 'Serialization', time.time() - serialization_start
-    cherrypy.response.headers['Content-Type'] = 'application/json'
+
+    # Set the server timing header
     cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
                                                            for key, value in timings.items()])
     cherrypy.response.status = status
@@ -151,6 +166,10 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
         check_token = auth_controller.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
 
+        if token is not None and checked_token is None:
+            raise UnAuthorizedException('The passed authentication token is invalid')
+
+
         # check the security level for this call
         if auth:
             if checked_token is None:
@@ -167,7 +186,6 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
         if pass_security_level is True:
             request.params['auth_security_level'] = checked_auth_level
     except UnAuthorizedException as ex:
-        cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
         contents = ex.message
         cherrypy.response.body = contents.encode()
@@ -270,51 +288,11 @@ def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=Fals
 # REST API
 # ----------------------------
 
-class RestAPIEndpoint(object):
-    exposed = True  # Cherrypy specific flag to set the class as exposed
-    API_ENDPOINT = None  # type: Optional[str]
-
-    @Inject
-    def __init__(self, user_controller=INJECTED, authentication_controller=INJECTED):
-        # type: (UserController, AuthenticationController) -> None
-        self.user_controller = user_controller
-        self.authentication_controller = authentication_controller
-
-    def GET(self):
-        raise NotImplementedException
-
-    def POST(self):
-        raise NotImplementedException
-
-    def PUT(self):
-        raise NotImplementedException
-
-    def DELETE(self):
-        raise NotImplementedException
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __str__(self):
-        return 'Rest Endpoint class: "{}"'.format(self.__class__.__name__)
-
-
-@Inject
-def expose(cls, api_endpoint_register=INJECTED):
-    """
-    Decorator to expose a RestAPIEndpoint subclass
-    This will register the api class to the V1 webservice
-    """
-    if not issubclass(cls, RestAPIEndpoint):
-        raise GatewayException('Cannot expose a non "RestAPIEndpoint" subclass')
-    api_endpoint_register.register(cls)
-    return cls
-
-
 @Injectable.named('api_endpoint_register')
 @Singleton
 class APIEndpointRegister(object):
     """ A class that will hold all the endpoints. This is to not have to include the complete webservice when registering an api"""
+
     def __init__(self):
         self.endpoints = []
 
@@ -388,4 +366,3 @@ class WebServiceV1(object):
 
     def __repr__(self):
         return self.__str__()
-

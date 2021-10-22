@@ -59,16 +59,10 @@ class Logs(object):
             update_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
             openmotics_log_level = min(openmotics_log_level, logging.DEBUG)
 
-        syslog_handler = None
-        if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-            syslog_handler = handlers.SysLogHandler(address='/dev/log')
-            syslog_handler.setLevel(openmotics_log_level)
-            syslog_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
-
         Logs.set_service_loglevel(openmotics_log_level)
 
         for _logger in Logs._get_service_loggers():
-            for extra_handler in [update_handler, syslog_handler]:
+            for extra_handler in [update_handler]:
                 # Add extra handlers, where available
                 if extra_handler is not None:
                     _logger.addHandler(extra_handler)

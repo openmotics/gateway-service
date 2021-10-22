@@ -21,20 +21,24 @@ from platform_utils import System
 System.import_libs()
 
 import logging.handlers
-import time
 import sys
+import time
 from signal import SIGTERM, signal
 
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
-from gateway.migrations import RoomsMigrator, FeatureMigrator, InputMigrator, \
-    ScheduleMigrator, UserMigrator, ConfigMigrator, EnergyModulesMigrator
+from gateway.migrations import ConfigMigrator, EnergyModulesMigrator, \
+    EsafeMigrator, FeatureMigrator, InputMigrator, RoomsMigrator, \
+    ScheduleMigrator, ThermostatsMigrator, UserMigrator
+from gateway.models import Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
 
+
 if False:  # MYPY
+    from gateway.apartment_controller import ApartmentController
     from gateway.authentication_controller import AuthenticationController
     from gateway.delivery_controller import DeliveryController
     from gateway.energy_module_controller import EnergyModuleController
@@ -54,7 +58,7 @@ if False:  # MYPY
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.ventilation_controller import VentilationController
     from gateway.webservice import WebInterface, WebService
-    from gateway.webservice_v1 import WebServiceV1
+    from gateway.api.V1.webservice import WebServiceV1
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
     from gateway.user_controller import UserController
@@ -88,16 +92,16 @@ class OpenmoticsService(object):
                 rebus_controller=INJECTED,  # type: RebusController
                 delivery_controller=INJECTED,  # type: DeliveryController
                 authentication_controller=INJECTED,  # type: AuthenticationController
-                user_controller=INJECTED  # type: UserController
+                user_controller=INJECTED,  # type: UserController
+                apartment_controller=INJECTED  # type: ApartmentController
             ):
 
         # TODO: Fix circular dependencies
 
         # Forward esafe events to consumers.
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.CONFIG, event_sender.enqueue_event)
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.LOCK, event_sender.enqueue_event)
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.DELIVERY, event_sender.enqueue_event)
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.RFID, event_sender.enqueue_event)
+        for topic in PubSub.EsafeTopics.get_values():
+            pubsub.subscribe_esafe_events(topic, event_sender.enqueue_event)
+            pubsub.subscribe_esafe_events(topic, web_interface.send_event_websocket)
 
         # Forward config change events to consumers.
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, event_sender.enqueue_event)
@@ -122,6 +126,7 @@ class OpenmoticsService(object):
         master_controller.set_plugin_controller(plugin_controller)
         delivery_controller.set_rebus_controller(rebus_controller)
         authentication_controller.set_user_controller(user_controller)
+        apartment_controller.set_rebus_controller(rebus_controller)
 
         if frontpanel_controller:
             message_client.add_event_handler(frontpanel_controller.event_receiver)
@@ -181,6 +186,13 @@ class OpenmoticsService(object):
         UserMigrator.migrate()
         ConfigMigrator.migrate()
         EnergyModulesMigrator.migrate()
+        EsafeMigrator.migrate()
+
+        thermostats_gateway_enabled = Feature.select(Feature.enabled) \
+            .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
+            .scalar()
+        if thermostats_gateway_enabled:
+            ThermostatsMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

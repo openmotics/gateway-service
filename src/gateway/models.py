@@ -99,6 +99,8 @@ class Feature(BaseModel):
     name = CharField(unique=True)
     enabled = BooleanField()
 
+    THERMOSTATS_GATEWAY = 'thermostats_gateway'
+
 
 class Output(BaseModel):
     id = AutoField()
@@ -182,6 +184,8 @@ class DataMigration(BaseModel):
 
 class Schedule(BaseModel):
     id = AutoField()
+    source = CharField()  # Options: 'gateway' or 'thermostats'
+    external_id = CharField(null=True)
     name = CharField()
     start = FloatField()
     repeat = CharField(null=True)
@@ -190,6 +194,15 @@ class Schedule(BaseModel):
     action = CharField()
     arguments = CharField(null=True)
     status = CharField()
+
+    class Sources:
+        GATEWAY = 'gateway'
+        THERMOSTATS = 'thermostats'
+
+    class Meta:
+        indexes = (
+            (('source', 'external_id'), True),
+        )
 
 
 class Config(BaseModel):
@@ -315,7 +328,6 @@ class ThermostatGroup(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
-    on = BooleanField(default=True)
     threshold_temperature = FloatField(null=True, default=None)
     sensor = ForeignKeyField(Sensor, null=True, backref='thermostat_groups', on_delete='SET NULL')
     mode = CharField(default=Modes.HEATING)  # Options: 'heating' or 'cooling'
@@ -397,6 +409,7 @@ class Thermostat(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(default='Thermostat')
+    state = CharField(default='on')
     sensor = ForeignKeyField(Sensor, null=True, backref='thermostats', on_delete='SET NULL')
     pid_heating_p = FloatField(default=120)
     pid_heating_i = FloatField(default=0)
@@ -417,6 +430,9 @@ class Thermostat(BaseModel):
                                     (Preset.thermostat_id == self.id))
         if preset is None:
             preset = Preset(thermostat=self, type=preset_type)
+            if preset_type in Preset.DEFAULT_PRESET_TYPES:
+                preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
+                preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
             preset.save()
         return preset
 
@@ -428,7 +444,7 @@ class Thermostat(BaseModel):
     def active_preset(self):
         preset = Preset.get_or_none(thermostat=self.id, active=True)
         if preset is None:
-            preset = self.get_preset(Preset.Types.SCHEDULE)
+            preset = self.get_preset(Preset.Types.AUTO)
             preset.active = True
             preset.save()
         return preset
@@ -471,6 +487,7 @@ class Thermostat(BaseModel):
                                                (ValveToThermostat.mode == mode))
                                         .order_by(ValveToThermostat.priority)]
 
+    @property
     def heating_schedules(self):  # type: () -> List[DaySchedule]
         return [schedule for schedule in
                 DaySchedule.select()
@@ -478,6 +495,7 @@ class Thermostat(BaseModel):
                                   (DaySchedule.mode == ThermostatGroup.Modes.HEATING))
                            .order_by(DaySchedule.index)]
 
+    @property
     def cooling_schedules(self):  # type: () -> List[DaySchedule]
         return [x for x in
                 DaySchedule.select()
@@ -501,12 +519,12 @@ class ValveToThermostat(BaseModel):
 class Preset(BaseModel):
     class Types(object):
         MANUAL = 'manual'
-        SCHEDULE = 'schedule'
+        AUTO = 'auto'
         AWAY = 'away'
         VACATION = 'vacation'
         PARTY = 'party'
 
-    ALL_TYPES = [Types.MANUAL, Types.SCHEDULE, Types.AWAY, Types.VACATION, Types.PARTY]
+    ALL_TYPES = [Types.MANUAL, Types.AUTO, Types.AWAY, Types.VACATION, Types.PARTY]
     DEFAULT_PRESET_TYPES = [Types.AWAY, Types.VACATION, Types.PARTY]
     DEFAULT_PRESETS = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_PRESET_TYPES, [16.0, 15.0, 22.0])),
                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_PRESET_TYPES, [25.0, 38.0, 25.0]))}
@@ -525,9 +543,9 @@ class Preset(BaseModel):
 
 
 class DaySchedule(BaseModel):
-    DEFAULT_SCHEDULE_TIMES = [0, 7 * 3600, 9 * 3600, 17 * 3600, 22 * 3600]
-    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [16.0, 20.0, 16.0, 21.0, 16.0])),
-                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [25.0, 24.0, 25.0, 23.0, 25.0]))}
+    DEFAULT_SCHEDULE_TIMES = [0, 6 * 3600, 8 * 3600, 16 * 3600, 22 * 3600]
+    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [17.0, 21.0, 17.0, 21.0, 17.0])),
+                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [26.0, 23.0, 26.0, 23.0, 26.0]))}
 
     id = AutoField()
     index = IntegerField()
@@ -552,29 +570,6 @@ class DaySchedule(BaseModel):
                 break
             last_value = data[key]
         return last_value
-
-
-@post_save(sender=Thermostat)
-def on_thermostat_save_handler(model_class, instance, created):
-    _ = model_class
-    if created:
-        for preset_type in Preset.ALL_TYPES:
-            try:
-                preset = Preset.get(type=preset_type, thermostat=instance)
-            except DoesNotExist:
-                preset = Preset(type=preset_type, thermostat=instance)
-                if preset_type in Preset.DEFAULT_PRESET_TYPES:
-                    preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
-                    preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
-            preset.active = False
-            if preset_type == Preset.Types.SCHEDULE:
-                preset.active = True
-            preset.save()
-        for mode in [ThermostatGroup.Modes.HEATING, ThermostatGroup.Modes.COOLING]:
-            for day_index in range(7):
-                day_schedule = DaySchedule(thermostat=instance, index=day_index, mode=mode)
-                day_schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
-                day_schedule.save()
 
 
 class Apartment(BaseModel):

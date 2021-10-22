@@ -86,6 +86,14 @@ class SensorControllerTest(unittest.TestCase):
 
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 22.5}) in events
         assert len(events) == 1
+        events.pop()
+
+        master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'TEMPERATURE', 'value': None})
+        self.pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+        self.pubsub._publish_all_events(blocking=False)
+
+        assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': None}) in events
+        assert len(events) == 1
 
     def test_sync(self):
         events = []
@@ -162,7 +170,6 @@ class SensorControllerTest(unittest.TestCase):
         assert sensor.room == room
         assert Sensor.select().where(Sensor.physical_quantity == 'brightness').count() == 0
         assert Sensor.select().count() == 2
-
 
     def test_sync_max_id(self):
         Sensor.create(id=239, source='master', external_id='2', name='')  # id out of range
@@ -361,17 +368,6 @@ class SensorControllerTest(unittest.TestCase):
         assert values[sensor.id].value == 21.0
         assert GatewayEvent('SENSOR_CHANGE', {'id': sensor.id, 'value': 21.0}) in events
         assert len(events) == 3
-
-    def test_sensor_status_expire(self):
-        sensor = Sensor.create(id=512, source='plugin', external_id='0', physical_quantity='brightness', name='')
-        with mock.patch.object(self.master_controller, 'load_sensors', return_value=[]), \
-             mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[]), \
-             mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[]), \
-             mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[]):
-            self.controller.set_sensor_status(SensorStatusDTO(sensor.id, value=21))
-            self.controller._status[sensor.id].last_value = 0.0
-            values = {s.id: s for s in self.controller.get_sensors_status()}
-        assert values == {}
 
     def test_set_sensor_status(self):
         sensor = Sensor.create(id=512, source='plugin', external_id='0', physical_quantity='brightness', name='')

@@ -18,14 +18,13 @@ RFID api description
 
 import cherrypy
 import logging
-import ujson as json
 
 from ioc import INJECTED, Inject
 from gateway.api.serializers import RfidSerializer
 from gateway.exceptions import ItemDoesNotExistException, UnAuthorizedException, WrongInputParametersException
 from gateway.models import User
 from gateway.rfid_controller import RfidController
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel, ApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ class Rfid(RestAPIEndpoint):
             rfids = [rfid for rfid in rfids if rfid.user.id == auth_token.user.id]
 
         rfids_serial = [RfidSerializer.serialize(rfid) for rfid in rfids]
-        return json.dumps(rfids_serial)
+        return ApiResponse(body=rfids_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True)
     def get_rfid(self, rfid_id, auth_token=None):
@@ -83,7 +82,7 @@ class Rfid(RestAPIEndpoint):
                 raise UnAuthorizedException('As a non admin or technician, you cannot request an rfid that is not yours')
 
         rfid_serial = RfidSerializer.serialize(rfid)
-        return json.dumps(rfid_serial)
+        return ApiResponse(body=rfid_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', auth_level=AuthenticationLevel.HIGH,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.USER])
@@ -105,6 +104,7 @@ class Rfid(RestAPIEndpoint):
 
         user = self.user_controller.load_user(user_id)
         self.rfid_controller.start_add_rfid_session(user, label)
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None, auth_level=AuthenticationLevel.HIGH,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.USER])
@@ -115,12 +115,13 @@ class Rfid(RestAPIEndpoint):
         current_rfid_user_id = self.rfid_controller.get_current_add_rfid_session_info()
         # When there is no session running, simply return
         if current_rfid_user_id is None:
-            return
+            return ApiResponse(status_code=204)
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             if current_rfid_user_id != auth_token.user.id:
                 raise UnAuthorizedException('Cannot start an add_rfid_badge session: As a normal user, you only can add a badge to yourselves')
 
         self.rfid_controller.stop_add_rfid_session()
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=True, pass_token=True)
     def delete_rfid(self, rfid_id, auth_token=None):
@@ -134,4 +135,4 @@ class Rfid(RestAPIEndpoint):
                 raise UnAuthorizedException('As a non admin or technician, you cannot delete an rfid that is not yours')
 
         self.rfid_controller.delete_rfid(rfid_id)
-        return 'OK'
+        return ApiResponse(status_code=204)

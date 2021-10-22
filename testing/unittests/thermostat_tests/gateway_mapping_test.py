@@ -16,17 +16,17 @@
 import logging
 import unittest
 
-import xmlrunner
 from mock import Mock
 from peewee import SqliteDatabase
 
-from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, SensorStatusDTO
+from gateway.dto import SensorStatusDTO, ThermostatDTO, ThermostatScheduleDTO
 from gateway.models import DaySchedule, Feature, Output, \
     OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
     Thermostat, ThermostatGroup, Valve, ValveToThermostat
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.sensor_controller import SensorController
+from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
 from ioc import SetTestMode, SetUpTestInjections
@@ -58,8 +58,12 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(x, value=10.0)
 
+        scheduling_controller = Mock(SchedulingController)
+        scheduling_controller.load_schedules.return_value = []
+
         SetUpTestInjections(message_client=Mock(),
                             output_controller=Mock(OutputController),
+                            scheduling_controller=scheduling_controller,
                             sensor_controller=sensor_controller,
                             pubsub=Mock(PubSub))
         thermostat_controller = ThermostatControllerGateway()
@@ -69,9 +73,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_load(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
-        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', mode=ThermostatGroup.Modes.HEATING)
         thermostat = Thermostat(number=10,
                                 start=0,
+                                state='on',
                                 name='thermostat',
                                 thermostat_group=group)
         thermostat.save()
@@ -100,24 +105,21 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_orm_to_dto_mapping(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
-        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
-        thermostat = Thermostat(number=10,
-                                start=0,  # 0 is on a thursday
-                                name='thermostat',
-                                thermostat_group=group)
-        thermostat.save()
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', mode=ThermostatGroup.Modes.HEATING)
+        controller.save_heating_thermostats([ThermostatDTO(id=10, name='thermostat')])
+        thermostat = Thermostat.get(number=10)
 
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
-        schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
-                                             start_day_1='07:00',
-                                             end_day_1='09:00',
+        schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
+                                             start_day_1='06:00',
+                                             end_day_1='08:00',
                                              temp_day_2=21.0,
-                                             start_day_2='17:00',
+                                             start_day_2='16:00',
                                              end_day_2='22:00',
-                                             temp_night=16.0)
+                                             temp_night=17.0)
 
         self.assertEqual(ThermostatDTO(id=10,
                                        name='thermostat',
@@ -129,6 +131,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_i=0.0,
                                        pid_d=0.0,
                                        room=None,
+                                       thermostat_group=0,
                                        permanent_manual=True,
                                        auto_mon=schedule_dto,
                                        auto_tue=schedule_dto,
@@ -138,12 +141,12 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        auto_sat=schedule_dto,
                                        auto_sun=schedule_dto), dto)
 
-        day_schedule = thermostat.heating_schedules()[0]  # type: DaySchedule
+        day_schedule = next(x for x in thermostat.heating_schedules if x.index == 3)  # type: DaySchedule
         day_schedule.schedule_data = {0: 5.0,
                                       120: 5.5,   # 120 and 1200 are selected because 120 < 1200,
-                                      1200: 6.0,  # but str(120) > str(1200)
+                                      1200: 5.0,  # but str(120) > str(1200)
                                       3600: 6.5,
-                                      7500: 7.0}
+                                      7500: 5.0}
         day_schedule.save()
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
@@ -181,13 +184,13 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
-        default_schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
-                                                     start_day_1='07:00',
-                                                     end_day_1='09:00',
+        default_schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
+                                                     start_day_1='06:00',
+                                                     end_day_1='08:00',
                                                      temp_day_2=21.0,
-                                                     start_day_2='17:00',
+                                                     start_day_2='16:00',
                                                      end_day_2='22:00',
-                                                     temp_night=16.0)
+                                                     temp_night=17.0)
 
         sensor = Sensor.create(id=15, source='master', external_id='0', physical_quantity='temperature', name='')
 
@@ -220,6 +223,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_i=0.0,
                                        pid_d=0.0,
                                        room=5,
+                                       thermostat_group=0,
                                        output0=5,
                                        permanent_manual=True,
                                        auto_mon=default_schedule_dto,
@@ -235,7 +239,3 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        auto_fri=default_schedule_dto,
                                        auto_sat=default_schedule_dto,
                                        auto_sun=default_schedule_dto), dto)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

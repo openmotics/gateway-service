@@ -37,39 +37,44 @@ from peewee import DoesNotExist
 
 import constants
 import gateway
-from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
-    ModuleSerializer, OutputSerializer, OutputStateSerializer, InputStateSerializer, \
-    PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
-    SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatAircoStatusSerializer, PumpGroupSerializer, \
-    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
-    LegacyStartupActionSerializer, LegacyScheduleSerializer, \
-    DimmerConfigurationSerializer, SensorStatusSerializer, \
-    EnergyModuleSerializer
+from gateway.api.serializers import DimmerConfigurationSerializer, \
+    EnergyModuleSerializer, GlobalFeedbackSerializer, GlobalRTD10Serializer, \
+    GroupActionSerializer, InputSerializer, InputStateSerializer, \
+    LegacyScheduleSerializer, LegacyStartupActionSerializer, \
+    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
+    PulseCounterSerializer, PumpGroupSerializer, RoomSerializer, \
+    RTD10Serializer, ScheduleSerializer, SensorSerializer, \
+    SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
+    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
+    ThermostatGroupStatusSerializer, ThermostatSerializer, \
+    VentilationSerializer, VentilationStatusSerializer, \
+    LegacyThermostatGroupStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
-from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
-    UserDTO, InputStatusDTO
-from gateway.enums import ShutterEnums, UserEnums, ModuleType
-from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
-    ItemDoesNotExistException, WrongInputParametersException, ParseException
-from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
+from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
+    RoomDTO, ScheduleDTO, UserDTO
+from gateway.energy.energy_communicator import InAddressModeException
+from gateway.enums import ModuleType, ShutterEnums, UserEnums
+from gateway.events import BaseEvent
+from gateway.exceptions import CommunicationFailure, \
+    FeatureUnavailableException, InMaintenanceModeException, \
+    ItemDoesNotExistException, ParseException, UnsupportedException, \
+    WrongInputParametersException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, User
+from gateway.models import Config, Database, Feature, Schedule, User
+from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
-    MetricsSocket, OMPlugin, OMSocketTool
+    MetricsSocket, OMPlugin, OMSocketTool, WebSocketEncoding
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
-from gateway.energy.energy_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
+    from esafe.rebus.rebus_controller import RebusController
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -85,7 +90,6 @@ if False:  # MYPY
     from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
     from gateway.system_controller import SystemController
-    from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.user_controller import UserController
     from gateway.ventilation_controller import VentilationController
     from plugins.base import PluginController
@@ -236,7 +240,9 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             else _self.webinterface.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
         # check if the call is done from localhost, and then verify the token
-        if request.remote.ip != '127.0.0.1':
+        # The toggle check added for development purposes.
+        # Do NOT enable unless you know what you're doing and understand the risks.
+        if not Config.get_entry('disable_api_authentication_very_insecure', False) and request.remote.ip != '127.0.0.1':
             if checked_token is None:
                 raise RuntimeError('Call is not performed from localhost and no token is provided')
             if checked_token.user.role != 'SUPER':
@@ -351,7 +357,8 @@ class WebInterface(object):
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
-                 uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED):
+                 uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
+                 rebus_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -377,6 +384,8 @@ class WebInterface(object):
         self._plugin_controller = None  # type: Optional[PluginController]
         self._metrics_collector = None  # type: Optional[MetricsCollector]
         self._metrics_controller = None  # type: Optional[MetricsController]
+
+        self._rebus_controller = rebus_controller  # type: Optional[RebusController]
 
         self._ws_metrics_registered = False
         self._energy_dirty = False
@@ -408,7 +417,8 @@ class WebInterface(object):
                     sources = self._metrics_controller.get_filter('source', receiver_info['source'])
                     metric_types = self._metrics_controller.get_filter('metric_type', receiver_info['metric_type'])
                     if metric['source'] in sources and metric['type'] in metric_types:
-                        receiver_info['socket'].send(msgpack.dumps(metric), binary=True)
+                        receiver_info['socket'].send_encoded(metric)
+                        # receiver_info['socket'].send(msgpack.dumps(metric), binary=True)
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function
                     receiver_info['socket'].close(ex.code, ex.message)
                 except Exception as ex:
@@ -418,11 +428,12 @@ class WebInterface(object):
             logger.error('Failed to distribute metrics to WebSockets: %s', ex)
 
     def send_event_websocket(self, event):
+        # type: (BaseEvent) -> None
         try:
             answers = cherrypy.engine.publish('get-events-receivers')
             if not answers:
                 return
-            receivers = answers.pop()
+            receivers = answers.pop()  # type: Dict[str, Dict[str, Any]]  # unpop since cherrypy bus returns reply of publish in a list
             for client_id in receivers.keys():
                 receiver_info = receivers.get(client_id)
                 if receiver_info is None:
@@ -430,9 +441,16 @@ class WebInterface(object):
                 try:
                     if event.type not in receiver_info['subscribed_types']:
                         continue
-                    if cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
+                    # check if the namespace matches,
+                    # only do this when a namespace is defined in the websocket metadata
+                    if 'namespace' in receiver_info and \
+                            (event.namespace != receiver_info['namespace']):
+                        continue
+                    # The toggle check added for development purposes.
+                    # Do NOT enable unless you know what you're doing and understand the risks.
+                    if not Config.get_entry('disable_api_authentication_very_insecure', False) and cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
                         raise cherrypy.HTTPError(401, 'invalid_token')
-                    receiver_info['socket'].send(msgpack.dumps(event.serialize()), binary=True)
+                    receiver_info['socket'].send_encoded(event.serialize())
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function
                     receiver_info['socket'].close(ex.code, ex.message)
                 except Exception as ex:
@@ -540,6 +558,15 @@ class WebInterface(object):
         users = self._user_controller.load_users()
         usernames = [user.username for user in users]
         return {'usernames': usernames}
+
+    @openmotics_api(auth=True, check=types(amount=int))
+    def get_master_debug_buffer(self, amount=10):
+        debug_buffer = self._module_controller.get_master_debug_buffer()
+        filtered_buffer = {}
+        for direction in ['read', 'write']:
+            buffer = debug_buffer[direction]
+            filtered_buffer[direction] = {key: buffer[key] for key in sorted(buffer.keys())[-amount:]}
+        return filtered_buffer
 
     @openmotics_api(plugin_exposed=False)
     def remove_user(self, username):
@@ -668,10 +695,12 @@ class WebInterface(object):
         if master_version >= (3, 143, 88):
             features.append('input_states')
 
-        for name in ('thermostats_gateway',):
-            feature = Feature.get_or_none(name=name)
-            if feature and feature.enabled:
-                features.append(name)
+        feature = Feature.get_or_none(name=Feature.THERMOSTATS_GATEWAY)
+        if feature and feature.enabled:
+            features.extend([Feature.THERMOSTATS_GATEWAY, 'thermostat_groups'])
+
+        if self._rebus_controller is not None:
+            features.append('esafe')
 
         return {'features': features}
 
@@ -896,18 +925,86 @@ class WebInterface(object):
 
     # Thermostats
 
+    @openmotics_api(auth=True, check=types(fields='json'))
+    def get_thermostat_group_configurations(self, fields=None):
+        """
+        Get the thermostat_group_configurations.
+        """
+        config = self._thermostat_controller.load_thermostat_groups()
+        return {'config': [ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
+                                                               fields=fields)
+                           for thermostat_group_dto in config]}
+
+    @openmotics_api(auth=True, check=types(id=int, fields='json'))
+    def get_thermostat_group_configuration(self, id, fields=None):
+        """
+        Get the thermostat_group_configuration.
+        """
+        thermostat_group_dto = self._thermostat_controller.load_thermostat_group(id)
+        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
+                                                              fields=fields)}
+
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_thermostat_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one thermostat_group_configuration. """
+        data = ThermostatGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_thermostat_groups([data])
+        return {}
+
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_thermostat_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple thermostat_group_configuration. """
+        data = [ThermostatGroupSerializer.deserialize(entry) for entry in config]
+        self._thermostat_controller.save_thermostat_groups(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(config='json'))
+    def delete_thermostat_group_configuration(self, id):  # type: (int) -> Dict
+        """ Remove thermostat_group_configuration. """
+        self._thermostat_controller.remove_thermostat_groups([id])
+        return {}
+
     @openmotics_api(auth=True)
+    def get_thermostat_group_status(self):  # type: () -> Dict[str, Any]
+        """ Get the status of the thermostats groups. """
+        status = self._thermostat_controller.get_thermostat_group_status()
+        return {'status': [ThermostatGroupStatusSerializer.serialize(status_dto)
+                           for status_dto in status]}
+
+    @openmotics_api(auth=True, check=types(fields='json'), deprecated='get_thermostat_group_configuration')
+    def get_global_thermostat_configuration(self, fields=None):
+        """
+        Get the global_thermostat_configuration.
+        :param fields: The field of the cooling_configuration to get, None if all
+        """
+        thermostat_group_dto = self._thermostat_controller.load_thermostat_group(ThermostatController.GLOBAL_THERMOSTAT)
+        config = ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto, fields=fields)
+        config.pop('id', None)
+        config.pop('name', None)
+        return {'config': config}
+
+    @openmotics_api(auth=True, check=types(config='json'), deprecated='set_thermostat_group_configurations')
+    def set_global_thermostat_configuration(self, config):
+        """ Set the global_thermostat_configuration. """
+        data = ThermostatGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_thermostat_groups([data])
+        return {}
+
+    @openmotics_api(auth=True, check=types(id=int, state=str, mode=str))
+    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
+        """
+        Sets a thermsotat group on a given mode (e.g. cooling or heating) and/or all child thermostats on a given state (e.g. on or off)
+        """
+        self._thermostat_controller.set_thermostat_group(thermostat_group_id, state, mode)
+        return {}
+
+    @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
     def get_thermostat_status(self):  # type: () -> Dict[str, Any]
         """ Get the status of the thermostats. """
-        return ThermostatGroupStatusSerializer.serialize(thermostat_group_status_dto=self._thermostat_controller.get_thermostat_status())
+        status = self._thermostat_controller.get_thermostat_group_status()
+        return LegacyThermostatGroupStatusSerializer.serialize(status[0])
 
-    @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))
-    def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
-        """ Set the current setpoint of a thermostat. """
-        self._thermostat_controller.set_current_setpoint(thermostat, temperature)
-        return {'status': 'OK'}
-
-    @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool))
+    @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool), deprecated='set_thermostat_group')
     def set_thermostat_mode(self, thermostat_on, automatic=None, setpoint=None, cooling_mode=False, cooling_on=False):
         """
         Set the global mode of the thermostats. Thermostats can be on or off (thermostat_on),
@@ -916,10 +1013,29 @@ class WebInterface(object):
         applied to all thermostats. To control the automatic and setpoint parameters per thermostat
         use the set_per_thermostat_mode call instead.
         """
-        self._thermostat_controller.set_thermostat_mode(thermostat_on, cooling_mode, cooling_on, automatic, setpoint)
+        self._thermostat_controller.set_thermostat_mode(thermostat_on=thermostat_on,
+                                                        cooling_mode=cooling_mode,
+                                                        cooling_on=cooling_on,
+                                                        automatic=automatic,
+                                                        setpoint=setpoint)
         return {'status': 'OK'}
 
-    @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int))
+    @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))
+    def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
+        """ Set the current setpoint of a thermostat. """
+        self._thermostat_controller.set_current_setpoint(thermostat, temperature)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(thermostat=int, heating_temperature=float, cooling_temperature=float))
+    def set_setpoint_from_scheduler(self, thermostat, heating_temperature=None, cooling_temperature=None):
+        # type: (int, Optional[float], Optional[float]) -> Dict[str, str]
+        """ Set the scheduled setpoint of a thermostat. """
+        self._thermostat_controller.set_setpoint_from_scheduler(thermostat,
+                                                                heating_temperature=heating_temperature,
+                                                                cooling_temperature=cooling_temperature)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int), deprecated='set_thermostat')
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
         # type: (int, bool, int) -> Dict[str,Any]
         """
@@ -927,6 +1043,15 @@ class WebInterface(object):
         manual, in case of manual a setpoint (0 to 5) can be provided.
         """
         self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(thermostat_id=int, preset=str, state=str, setpoint=float))
+    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+        # type: (int, Optional[str], Optional[str], Optional[float]) -> Dict[str, str]
+        self._thermostat_controller.set_thermostat(thermostat_id=thermostat_id,
+                                                   preset=preset,
+                                                   state=state,
+                                                   temperature=temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
@@ -1418,7 +1543,7 @@ class WebInterface(object):
         sensor_dto = SensorSerializer.deserialize(config)
         saved_sensors_dtos = self._sensor_controller.save_sensors([sensor_dto])
         data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+                for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
         return {'config': data}
 
     @openmotics_api(auth=True, check=types(config='json'))
@@ -1427,7 +1552,7 @@ class WebInterface(object):
         sensor_dtos = [SensorSerializer.deserialize(entry) for entry in config]
         saved_sensors_dtos = self._sensor_controller.save_sensors(sensor_dtos)
         data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+                for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
         return {'config': data}
 
     # Heating Pump Group
@@ -1449,9 +1574,12 @@ class WebInterface(object):
         Get all heating pump_group_configurations.
         :param fields: The field of the heating pump_group_configuration to get, None if all
         """
-        pump_group_dtos = self._thermostat_controller.load_heating_pump_groups()
-        return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
-                           for pump_group in pump_group_dtos]}
+        config = []  # type: List[Dict[str, Any]]
+        pump_group_dtos = {x.id: x for x in self._thermostat_controller.load_heating_pump_groups()}
+        for pump_group_id in set(list(pump_group_dtos.keys()) + list(range(8))):
+            pump_group_dto = pump_group_dtos.get(pump_group_id, PumpGroupDTO(pump_group_id))
+            config.append(PumpGroupSerializer.serialize(pump_group_dto, fields=fields))
+        return {'config': config}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
@@ -1534,8 +1662,12 @@ class WebInterface(object):
         Get all cooling pump_group_configurations.
         :param fields: The field of the cooling pump_group_configuration to get, None if all
         """
-        return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
-                           for pump_group in self._thermostat_controller.load_cooling_pump_groups()]}
+        config = []  # type: List[Dict[str, Any]]
+        pump_group_dtos = {x.id: x for x in self._thermostat_controller.load_cooling_pump_groups()}
+        for pump_group_id in set(list(pump_group_dtos.keys()) + list(range(8))):
+            pump_group_dto = pump_group_dtos.get(pump_group_id, PumpGroupDTO(pump_group_id))
+            config.append(PumpGroupSerializer.serialize(pump_group_dto, fields=fields))
+        return {'config': config}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_cooling_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
@@ -1796,23 +1928,6 @@ class WebInterface(object):
         """ Set the dimmer_configuration. """
         data = DimmerConfigurationSerializer.deserialize(config)
         self._output_controller.save_dimmer_configuration(data)
-        return {}
-
-    @openmotics_api(auth=True, check=types(fields='json'))
-    def get_global_thermostat_configuration(self, fields=None):
-        """
-        Get the global_thermostat_configuration.
-        :param fields: The field of the cooling_configuration to get, None if all
-        """
-        thermostat_group_dto = self._thermostat_controller.load_thermostat_group()
-        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
-                                                              fields=fields)}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_global_thermostat_configuration(self, config):
-        """ Set the global_thermostat_configuration. """
-        data = ThermostatGroupSerializer.deserialize(config)
-        self._thermostat_controller.save_thermostat_group(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
@@ -2214,6 +2329,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
         schedule_dto = ScheduleDTO(id=None,
+                                   source=Schedule.Sources.GATEWAY,
                                    name=name,
                                    start=start,
                                    action=schedule_type,
@@ -2413,10 +2529,16 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
-    def ws_events(self, token):
-        cherrypy.request.ws_handler.metadata = {'token': token,
-                                                'client_id': uuid.uuid4().hex,
-                                                'interface': self}
+    def ws_events(self, token, serialization=WebSocketEncoding.MSGPACK):
+        if serialization not in WebSocketEncoding.get_values():
+            raise ValueError('Cannot create a websocket with serialization: {}'.format(serialization))
+        handler = cherrypy.request.ws_handler
+        handler.metadata = {
+            'token': token,
+            'client_id': uuid.uuid4().hex,
+            'interface': self,
+            'serialization': serialization
+        }
 
     @cherrypy.expose
     @cherrypy.tools.cors()

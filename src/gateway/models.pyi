@@ -135,8 +135,13 @@ class ShutterGroup(BaseModel):
 
 class Sensor(BaseModel):
     id: MixedPrimaryKeyField
-    number: MixedIntegerField
-    room: Any
+    source: str
+    plugin: PluginForeignKeyField
+    external_id: MixedCharField
+    physical_quantity: MixedCharField
+    unit: MixedCharField
+    name: str
+    room: RoomForeignKeyField
 
 
 class SensorForeignKeyField(Sensor, ForeignKeyField): ...
@@ -254,9 +259,8 @@ class ThermostatGroup(BaseModel):
 
     id: MixedPrimaryKeyField
     number: MixedIntegerField
-    name: MixedCharField
-    on: bool
-    threshold_temperature: Optional[MixedFloatField]
+    name: str
+    threshold_temperature: Optional[float]
     sensor: Optional[SensorForeignKeyField]
     mode: Literal['heating', 'cooling']
 
@@ -299,7 +303,7 @@ class PumpForeignKeyField(Pump, ForeignKeyField): ...
 class Valve(BaseModel):
     id: MixedPrimaryKeyField
     name: MixedCharField
-    delay: MixedIntegerField
+    delay: int
     output: OutputForeignKeyField
 
     @property
@@ -323,6 +327,7 @@ class Thermostat(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
     name: MixedCharField
+    state: MixedCharField
     sensor: Optional[SensorForeignKeyField]
     pid_heating_p: MixedFloatField
     pid_heating_i: MixedFloatField
@@ -379,7 +384,7 @@ class ValveToThermostat(BaseModel):
 class Preset(BaseModel):
     class Types(object):
         MANUAL: Literal['manual']
-        SCHEDULE: Literal['schedule']
+        AUTO: Literal['auto']
         AWAY: Literal['away']
         VACATION: Literal['vacation']
         PARTY: Literal['party']
@@ -414,8 +419,8 @@ class DaySchedule(BaseModel):
 class Apartment(BaseModel):
     id: MixedPrimaryKeyField
     name: MixedCharField
-    mailbox_rebus_id: MixedIntegerField
-    doorbell_rebus_id: MixedIntegerField
+    mailbox_rebus_id: Optional[MixedIntegerField]
+    doorbell_rebus_id: Optional[MixedIntegerField]
 
 class ApartmentForeignKeyField(Apartment, ForeignKeyField): ...
 

@@ -53,8 +53,9 @@ class DummyRebusController(RebusControllerInterface):
         self.parcelboxes = {}  # type: Dict[int, ParcelBoxDTO]
         self.doorbells = {}  # type: Dict[int, DoorbellDTO]
         self._lock_status = {}  # type: Dict[int, int]  # int counter to check how many ticks it stays open
-        self._lock_open_ticks = 2
-        self.lock_tick_thread = DaemonThread(name='fake lock tick', target=self._lock_close_tick_check, interval=2, delay=2)
+        self.stuck_devices = []  # type: List[int]
+        self._lock_open_ticks = 1
+        self.lock_tick_thread = DaemonThread(name='fake lock tick', target=self._lock_close_tick_check, interval=1, delay=2)
 
         self.current_path = os.path.dirname(os.path.abspath(__file__))
         self.dummy_rebus_json_file = os.path.join(self.current_path, "dummy_rebus_devices.json")
@@ -74,7 +75,7 @@ class DummyRebusController(RebusControllerInterface):
         # self.polling_thread.stop()
 
     def _send_lock_event(self, lock_id, status):
-        event = EsafeEvent(PubSub.EsafeTopics.LOCK, {'lock_id': lock_id, 'status': 'open' if status else 'closed'})
+        event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': lock_id, 'status': 'open' if status else 'closed'})
         logger.debug("Sending event: {}".format(event))
         self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
 
@@ -91,13 +92,15 @@ class DummyRebusController(RebusControllerInterface):
     def get_mailboxes(self, rebus_id=None):
         # type: (Optional[int]) -> List[MailBoxDTO]
         logger.debug('Getting mailboxes')
+        for mailbox in self.mailboxes.values():
+            mailbox.apartment = ApartmentController.load_apartment_by_mailbox_id(mailbox.id)
         if rebus_id is None:
             return list(self.mailboxes.values())
         return [self.mailboxes[rebus_id]]
 
     # ParcelBox Functions
 
-    def get_parcelboxes(self, rebus_id=None, size=None, available=False):
+    def get_parcelboxes(self, rebus_id=None, size=None, available=None):
         # type: (Optional[int], Optional[str], Optional[bool]) -> List[ParcelBoxDTO]
         logger.debug('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
         # if no rebus id is given, get all the parcelboxes
@@ -113,6 +116,9 @@ class DummyRebusController(RebusControllerInterface):
             size = size.lower()
             parcelboxes = [parcelbox for parcelbox in parcelboxes if parcelbox.size.name.lower() == size]
 
+        for parcelbox in parcelboxes:
+            box_available = self.delivery_controller.parcel_id_available(parcelbox.id)
+            parcelbox.available = box_available
         # filter out the available packages
         if available is True:
             parcelboxes = [box for box in parcelboxes if box.available]
@@ -131,11 +137,14 @@ class DummyRebusController(RebusControllerInterface):
 
     def open_box(self, rebus_id):
         device = self.get_lock(rebus_id)
-        self._send_lock_event(rebus_id, True)
-        device.is_open = True
-        # initiate a lock countdown
-        self._lock_status[rebus_id] = 0
-        return device
+        if rebus_id not in self.stuck_devices:
+            self._send_lock_event(rebus_id, True)
+            device.is_open = True
+            # initiate a lock countdown
+            self._lock_status[rebus_id] = 0
+            return device
+        else:
+            return None
 
     def _close_box(self, rebus_id):
         device = self.get_lock(rebus_id)
@@ -146,6 +155,9 @@ class DummyRebusController(RebusControllerInterface):
     # Doorbells
 
     def get_doorbells(self):
+        # Renew the apartments linked to the doorbell
+        for doorbell in self.doorbells.values():
+            doorbell.apartment = ApartmentController.load_apartment_by_doorbell_id(doorbell.id)
         return list(self.doorbells.values())
 
     def ring_doorbell(self, doorbell_id):
@@ -173,6 +185,9 @@ class DummyRebusController(RebusControllerInterface):
             logger.info("Found device: {}".format(json_device))
             dev_id = json_device['id']
             dev_type = json_device['type']
+            simulate_stuck = json_device.get('simulate_stuck', None)
+            if simulate_stuck is not None:
+                self.stuck_devices.append(dev_id)
             if dev_type == 'mailbox':
                 apartment_dto = self.apartment_controller.load_apartment_by_mailbox_id(dev_id)
                 initial_state = json_device['initial_state'] == 'open'

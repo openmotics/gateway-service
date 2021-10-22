@@ -81,13 +81,12 @@ class SchedulingController(object):
         self._web_interface = None  # type: Optional[WebInterface]
         self._schedules = {}  # type: Dict[int, ScheduleDTO]
         self._jobs = {}  # type: Dict[str, Job]
-        timezone = system_controller.get_timezone()
+        timezone = system_controller.get_python_timezone()
         self._scheduler = BackgroundScheduler(timezone=timezone, job_defaults={
             'coalesce': True,
             'misfire_grace_time': 3600  # 1h
         })
         self._scheduler.add_listener(self._handle_schedule_event, EVENT_JOB_EXECUTED)
-        self.reload_schedules()
 
     def set_webinterface(self, web_interface):
         # type: (WebInterface) -> None
@@ -96,6 +95,7 @@ class SchedulingController(object):
     def start(self):
         # type: () -> None
         self._scheduler.start()
+        self.reload_schedules()
 
     def stop(self):
         # type: () -> None
@@ -168,9 +168,10 @@ class SchedulingController(object):
             raise Schedule.DoesNotExist('Schedule {0} does not exist'.format(schedule_id))
         return schedule_dto
 
-    def load_schedules(self):
-        # type: () -> List[ScheduleDTO]
-        return [schedule_dto for schedule_dto in self._schedules.values()]
+    def load_schedules(self, source=Schedule.Sources.GATEWAY):
+        # type: (str) -> List[ScheduleDTO]
+        return [schedule_dto for schedule_dto in self._schedules.values()
+                if schedule_dto.source == source]
 
     def save_schedules(self, schedules):
         # type: (List[ScheduleDTO]) -> None

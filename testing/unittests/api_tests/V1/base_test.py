@@ -18,7 +18,7 @@ import ujson as json
 import cherrypy
 
 from gateway.dto import UserDTO
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, AuthenticationLevel, LoginMethod
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, AuthenticationLevel, LoginMethod, ApiResponse
 
 from .base import BaseCherryPyUnitTester
 
@@ -94,47 +94,47 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
             @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
             def get_rest(self):
-                return 'get_method'
+                return ApiResponse(body='get_method', is_json=False)
 
             @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
                                allowed_user_roles=['ADMIN'])
             def get_rest_auth_admin(self):
-                return 'get_method_auth_admin'
+                return ApiResponse(body='get_method_auth_admin', is_json=False)
 
             @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
                                allowed_user_roles=['TECHNICIAN'])
             def get_rest_auth_technician(self):
-                return 'get_method_auth_technician'
+                return ApiResponse(body='get_method_auth_technician', is_json=False)
 
             @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
                                allowed_user_roles=['COURIER'])
             def get_rest_auth_courier(self):
-                return 'get_method_auth_courier'
+                return ApiResponse(body='get_method_auth_courier', is_json=False)
 
             @openmotics_api_v1(auth=False,
                                auth_level=AuthenticationLevel.HIGH,
                                pass_role=False,
                                pass_token=False)
             def get_rest_auth_level_high(self):
-                return 'get_method_auth_level_high'
+                return ApiResponse(body='get_method_auth_level_high', is_json=False)
 
             @openmotics_api_v1(auth=False, pass_role=True, pass_token=False)
             def post_rest_no_auth_no_body(self, auth_role):
-                return json.dumps({'role': auth_role})
+                return ApiResponse(body={'role': auth_role})
 
             @openmotics_api_v1(auth=True, pass_role=True, pass_token=False,
                                expect_body_type='JSON')
             def post_rest_auth_json(self, auth_role, request_body):
-                return json.dumps({'role': auth_role, 'request_body': request_body})
+                return ApiResponse(body={'role': auth_role, 'request_body': request_body})
 
             @openmotics_api_v1(auth=True, pass_role=False, pass_token=True,
                                expect_body_type='RAW')
             def put_rest_auth_raw(self, auth_token, request_body):
-                return json.dumps({'token_userrole': auth_token.user.role, 'request_body': request_body})
+                return ApiResponse(body={'token_userrole': auth_token.user.role, 'request_body': request_body})
 
             @openmotics_api_v1(auth=True, pass_role=False, pass_token=False)
             def delete_rest_auth(self):
-                return "Delete"
+                return ApiResponse(body='Delete', is_json=False)
 
         restTest = RestTest()
         cherrypy.tree.mount(root=restTest,
@@ -145,6 +145,7 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
         resp = self.GET('/rest')
         self.assertStatus('200 OK')
         self.assertBody('get_method')
+        self.assertNoHeaderItemValue('Content-Type', 'application/json')
 
     def test_get_auth_admin(self):
         resp = self.GET('/rest/auth/admin', login_user=self.test_admin)
@@ -183,6 +184,7 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
         resp = self.POST('/rest', login_user=None)
         self.assertStatus('200 OK')
         self.assertBody(json.dumps({'role': None}))
+        self.assertHeaderItemValue('Content-Type', 'application/json')
 
     def test_post_json(self):
         body_dict = {'body': 'test'}

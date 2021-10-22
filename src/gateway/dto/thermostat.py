@@ -30,7 +30,7 @@ class ThermostatDTO(BaseDTO):
                  setp0=None, setp1=None, setp2=None, setp3=None, setp4=None, setp5=None,
                  sensor=None, output0=None, output1=None,
                  pid_p=None, pid_i=None, pid_d=None, pid_int=None,
-                 room=None,
+                 room=None, thermostat_group=None,
                  auto_mon=None, auto_tue=None, auto_wed=None, auto_thu=None, auto_fri=None, auto_sat=None, auto_sun=None):
         self.id = id  # type: int
         self.name = name  # type: str
@@ -49,6 +49,7 @@ class ThermostatDTO(BaseDTO):
         self.pid_int = pid_int  # type: Optional[int]
         self.permanent_manual = permanent_manual  # type: bool
         self.room = room  # type: Optional[int]
+        self.thermostat_group = thermostat_group  # type: int
         self.auto_mon = auto_mon  # type: Optional[ThermostatScheduleDTO]
         self.auto_tue = auto_tue  # type: Optional[ThermostatScheduleDTO]
         self.auto_wed = auto_wed  # type: Optional[ThermostatScheduleDTO]
@@ -66,12 +67,13 @@ class ThermostatDTO(BaseDTO):
 
 
 class ThermostatGroupDTO(BaseDTO):
-    def __init__(self, id, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
+    def __init__(self, id, name=None, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
                  switch_to_heating_0=None, switch_to_heating_1=None, switch_to_heating_2=None, switch_to_heating_3=None,
                  switch_to_cooling_0=None, switch_to_cooling_1=None, switch_to_cooling_2=None, switch_to_cooling_3=None):
         self.id = id  # type: int
+        self.name = name  # type: str
         self.outside_sensor_id = outside_sensor_id  # type: Optional[int]
-        self.pump_delay = pump_delay  # type: Optional[int]
+        self.pump_delay = 60 if pump_delay in (None, 255) else pump_delay  # type: int
         self.threshold_temperature = threshold_temperature  # type: Optional[float]
         self.switch_to_heating_0 = switch_to_heating_0  # type: Optional[Tuple[int, int]]
         self.switch_to_heating_1 = switch_to_heating_1  # type: Optional[Tuple[int, int]]
@@ -84,28 +86,28 @@ class ThermostatGroupDTO(BaseDTO):
 
 
 class ThermostatStatusDTO(BaseDTO):
-    def __init__(self, id, actual_temperature, setpoint_temperature, automatic, setpoint, sensor_id, mode,
-                 outside_temperature=None, name='', airco=None, output_0_level=None, output_1_level=None):
-        # type: (int, Optional[float], float, bool, int, int, int, Optional[float], str, Optional[int], Optional[int], Optional[int]) -> None
+    def __init__(self, id, actual_temperature, setpoint_temperature, automatic, setpoint, mode, state, preset,
+                 outside_temperature=None, output_0_level=None, output_1_level=None, steering_power=None):
+        # type: (int, Optional[float], float, bool, int, int, str, str, Optional[float], Optional[int], Optional[int], Optional[int]) -> None
         self.id = id
         self.actual_temperature = actual_temperature
         self.setpoint_temperature = setpoint_temperature
         self.automatic = automatic
         self.setpoint = setpoint
-        self.sensor_id = sensor_id
         self.mode = mode
+        self.state = state
+        self.preset = preset
         self.outside_temperature = outside_temperature
-        self.name = name
-        self.airco = airco
         self.output_0_level = output_0_level
         self.output_1_level = output_1_level
+        self.steering_power = steering_power
 
 
 class ThermostatGroupStatusDTO(BaseDTO):
-    def __init__(self, id, on, automatic, cooling, setpoint=None, statusses=None):
-        # type: (int, bool, bool, bool, Optional[int], Optional[List[ThermostatStatusDTO]]) -> None
+    def __init__(self, id, mode, automatic, cooling, setpoint=None, statusses=None):
+        # type: (int, str, bool, bool, Optional[int], Optional[List[ThermostatStatusDTO]]) -> None
         self.id = id
-        self.on = on
+        self.mode = mode
         self.automatic = automatic
         self.cooling = cooling
         self.setpoint = setpoint if setpoint is not None else 0  # type: int

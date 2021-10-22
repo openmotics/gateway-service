@@ -26,6 +26,7 @@ from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.thermostat.master.thermostat_controller_master import \
     ThermostatControllerMaster
+from master.classic.eeprom_controller import EepromController
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -39,6 +40,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
         self._master_controller = mock.Mock(MasterClassicController)
         SetUpTestInjections(pubsub=self.pubsub,
                             master_controller=self._master_controller,
+                            eeprom_controller=mock.Mock(EepromController),
                             output_controller=mock.Mock(OutputController))
         self.controller = ThermostatControllerMaster()
 
@@ -54,17 +56,22 @@ class ThermostatControllerMasterTest(unittest.TestCase):
             status = {'act': None,
                       'csetp': None,
                       'setpoint': None,
+                      'preset': 'AUTO',
                       'output0': None,
-                      'output1': None}
+                      'output1': None,
+                      'state': 'on',
+                      'steering_power': None}
             self.controller._thermostats_config = {1: ThermostatDTO(1)}
             self.controller._thermostat_status._report_change(1, status)
             self.pubsub._publish_all_events(blocking=False)
             event_data = {'id': 1,
                           'status': {'preset': 'AUTO',
+                                     'state': 'ON',
                                      'current_setpoint': None,
                                      'actual_temperature': None,
                                      'output_0': None,
-                                     'output_1': None},
+                                     'output_1': None,
+                                     'steering_power': None},
                           'location': {'room_id': 255}}
             assert GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, event_data) in events
 
@@ -86,7 +93,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                 self.assertEqual(20.0 if mode == 'heating' else 24.0,
                                  getattr(thermostat_dto, 'auto_{0}'.format(day)).temp_day_1)  # Validate internal `_build_thermostat_dto` method
                 self.assertEqual(expected_dto, thermostat_dto)
-                getattr(thermostat_dto, 'auto_{0}'.format(day)).temp_day_1 = None  # Set single value invalid
+                getattr(thermostat_dto, 'auto_{0}'.format(day)).temp_day_1 = 0.0  # Set single value invalid
                 changed = self.controller._patch_thermostat(thermostat_dto, mode=mode)
                 self.assertTrue(changed)
                 self.assertEqual(expected_dto, thermostat_dto)  # Must be restored
