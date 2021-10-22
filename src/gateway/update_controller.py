@@ -902,8 +902,10 @@ class UpdateController(object):
         checksum = metadata['sha256']
 
         # Fetch file
-        if os.path.exists(target_filename) and UpdateController._is_checksum_valid(target_filename, checksum):
-            return  # File exists and is valid, no need to redownload
+        if os.path.exists(target_filename):
+            actual_checksum = UpdateController._calculate_checksum(filename=target_filename)
+            if actual_checksum == checksum:
+                return  # File exists and is valid, no need to redownload
         if not urls:
             raise ValueError('Could not find any download url in firmware metadata for {0} {1}'.format(firmware_type, version))
         UpdateController._download_urls(urls=urls,
@@ -927,20 +929,21 @@ class UpdateController(object):
                     logger.error('Could not download firmware from {0}: {1}'.format(url, ex))
         if not downloaded:
             raise RuntimeError('No update could be downloaded')
-        if not UpdateController._is_checksum_valid(target_filename, checksum):
-            raise RuntimeError('Downloaded firmware {0} checksum does not match'.format(target_filename))
+        actual_checksum = UpdateController._calculate_checksum(filename=target_filename)
+        if actual_checksum != checksum:
+            raise RuntimeError('Downloaded firmware {0} checksum {1} does not match expected {1}'.format(target_filename, actual_checksum, checksum))
 
     @staticmethod
-    def _is_checksum_valid(filename, checksum):  # type: (str, str) -> bool
+    def _calculate_checksum(filename):  # type: (str) -> Optional[str]
         try:
             hasher = hashlib.sha256()
             with open(filename, 'rb') as f:
                 hasher.update(f.read())
             calculated_hash = hasher.hexdigest()
-            return calculated_hash == checksum
+            return calculated_hash
         except Exception:
             pass
-        return False
+        return None
 
     def _get_update_metadata_url(self, version):
         query = 'uuid={0}'.format(self._gateway_uuid)
