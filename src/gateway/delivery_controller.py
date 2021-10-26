@@ -21,6 +21,7 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
+from gateway.api.serializers import DeliverySerializer
 from gateway.dto import DeliveryDTO
 from gateway.events import EsafeEvent
 from gateway.models import Delivery, User
@@ -147,16 +148,15 @@ class DeliveryController(object):
 
         delivery_orm = DeliveryMapper.dto_to_orm(delivery_dto)
         delivery_orm.save()
-        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
-            'id': delivery_orm.id,
-            'type': delivery_dto.type,
-            'action': 'DELIVERY',
-            'user_delivery_id': delivery_dto.user_id_delivery,
-            'user_pickup_id': delivery_dto.user_id_pickup,
-            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
-        })
-        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
-        return DeliveryMapper.orm_to_dto(delivery_orm)
+        delivery_dto_saved = DeliveryMapper.orm_to_dto(delivery_orm)
+        if delivery_dto_saved.timestamp_pickup is None:
+            event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+                'id': delivery_orm.id,
+                'action': 'DELIVERY',
+                'delivery': DeliverySerializer.serialize(delivery_dto_saved)
+            })
+            self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
+        return delivery_dto_saved
 
     @staticmethod
     def parcel_id_available(parcelbox_id, delivery_id=None):
@@ -199,11 +199,8 @@ class DeliveryController(object):
 
         event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
             'id': delivery_dto_saved.id,
-            'type': delivery_dto.type,
             'action': 'PICKUP',
-            'user_delivery_id': delivery_dto.user_id_delivery,
-            'user_pickup_id': delivery_dto.user_id_pickup,
-            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
+            'delivery': DeliverySerializer.serialize(delivery_dto),
         })
         self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
 
