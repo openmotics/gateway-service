@@ -165,7 +165,8 @@ class EsafeEvent(BaseEvent):
     Data formats:
 
     * CONFIG_CHANGE
-      {'type': str}  # config type: Global, Doorbell, RFID, User, Apartment
+      {'type': str,   # config type: Global, Doorbell, RFID, User, Apartment
+       'value': dict} # OPTIONAL: The new value of the config change: For example: when a user is updated, the new user value is populated in this field
 
     * DELIVERY_CHANGE
       {'id': int,                # The id of the delivery
