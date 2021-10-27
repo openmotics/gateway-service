@@ -280,12 +280,12 @@ _INPUT_MODULE_LAYOUTS = {
         #                Input(input_id=13, tester_output_id=53),
         #                Input(input_id=14, tester_output_id=54),
         #                Input(input_id=15, tester_output_id=55)]),  # TODO: Disabled, wiring to be checked
-        Module(name='CC emulated input module',
-               module_type='input', is_can=True,
-               hardware_type=Module.HardwareType.EMULATED,
-               inputs=[Input(input_id=16, tester_output_id=45),
-                       Input(input_id=17, tester_output_id=46),
-                       Input(input_id=18, tester_output_id=47)])
+        # Module(name='CC emulated input module',
+        #        module_type='input', is_can=True,
+        #        hardware_type=Module.HardwareType.EMULATED,
+        #        inputs=[Input(input_id=16, tester_output_id=45),
+        #                Input(input_id=17, tester_output_id=46),
+        #                Input(input_id=18, tester_output_id=47)])  # TODO: Disabled, uCAN discovery process to be checked
     ],
     TestPlatform.DEBIAN: [
         Module(name='input module',
@@ -335,10 +335,10 @@ INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 
 _TEMPERATURE_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='CC emulated temperature module',
-               module_type='sensor', is_can=True,
-               hardware_type=Module.HardwareType.EMULATED,
-               temps=[])
+        # Module(name='CC emulated temperature module',
+        #        module_type='sensor', is_can=True,
+        #        hardware_type=Module.HardwareType.EMULATED,
+        #        temps=[])  # TODO: Disabled, uCAN discovery process to be checked
     ],
     TestPlatform.DEBIAN: [
         Module(name='temperature module',
