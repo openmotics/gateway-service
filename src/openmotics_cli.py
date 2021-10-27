@@ -27,6 +27,34 @@ from ioc import INJECTED, Inject
 logger = logging.getLogger('openmotics')
 
 
+def cmd_feature_thermostats(args):
+    from platform_utils import System
+    System.import_libs()
+
+    from gateway.models import DataMigration, Feature
+    if args.enable and args.disable:
+      logger.error('--enable and --disable are mutually exclusive')
+    if args.enable or args.disable:
+        logger.info('Updating feature thermostats_gateway')
+        enabled = args.enable and not args.disable
+        feature, _ = Feature.get_or_create(name='thermostats_gateway')
+        feature.enabled = enabled
+        feature.save()
+    if args.migrate:
+        logger.info('Updating data migration for thermostats')
+        migration = DataMigration.get_or_none(name='thermostats')
+        if migration:
+            migration.migrated = False
+            migration.save()
+
+    logger.info('')
+    feature = Feature.get_or_none(name='thermostats_gateway')
+    logger.info('    feature:   thermostats_gateway enabled=%s', feature and feature.enabled)
+    migration = DataMigration.get_or_none(name='thermostats')
+    logger.info('    migration: thermostats migrated=%s', migration and migration.migrated)
+    logger.info('')
+
+
 def cmd_factory_reset(args):
     lock_file = constants.get_init_lockfile()
     if os.path.isfile(lock_file) and not args.force:
@@ -127,9 +155,20 @@ def cmd_scan_energy_bus(args):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', action='version', version=gateway.__version__)
+parser.set_defaults(func=lambda args: parser.print_help())
 subparsers = parser.add_subparsers()
 
+feature_parser = subparsers.add_parser('feature')
+feature_parser.set_defaults(func=lambda args: feature_parser.print_help())
+feature_subparsers = feature_parser.add_subparsers()
+feature_thermostats_parser = feature_subparsers.add_parser('thermostats')
+feature_thermostats_parser.set_defaults(func=cmd_feature_thermostats)
+feature_thermostats_parser.add_argument('--enable', action='store_true')
+feature_thermostats_parser.add_argument('--disable', action='store_true')
+feature_thermostats_parser.add_argument('--migrate', action='store_true')
+
 operator_parser = subparsers.add_parser('operator')
+operator_parser.set_defaults(func=lambda args: operator_parser.print_help())
 operator_subparsers = operator_parser.add_subparsers()
 factory_reset_parser = operator_subparsers.add_parser('factory-reset')
 factory_reset_parser.set_defaults(func=cmd_factory_reset)

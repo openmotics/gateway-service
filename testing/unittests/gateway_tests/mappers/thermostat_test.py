@@ -17,8 +17,71 @@ from __future__ import absolute_import
 import unittest
 
 from gateway.dto.thermostat import PumpGroupDTO
+from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 from gateway.hal.mappers_classic import PumpGroupMapper
+from gateway.mappers.thermostat import ThermostatMapper
 from master.classic.eeprom_models import PumpGroupConfiguration
+
+
+class ThermostatGatewayMapperTest(unittest.TestCase):
+    def test_simple_schedule(self):
+        schedule_dto = ThermostatScheduleDTO(temp_night=10.0,
+                                             temp_day_1=26.0,
+                                             start_day_1='07:00',
+                                             end_day_1='09:00',
+                                             temp_day_2=25.0,
+                                             start_day_2='17:00',
+                                             end_day_2='22:00')
+        data = ThermostatMapper._schedule_dto_to_orm(schedule_dto, 'heating')
+        expected_data = {0: 10.0, 25200: 26.0, 32400: 10.0, 61200: 25.0, 79200: 10.0}
+        self.assertEqual(data, expected_data)
+        schedule_dto = ThermostatMapper._schedule_to_dto(data, 'heating')
+        self.assertEqual(schedule_dto.temp_night, 10.0)
+        self.assertEqual(schedule_dto.temp_day_1, 26.0)
+        self.assertEqual(schedule_dto.start_day_1, '07:00')
+        self.assertEqual(schedule_dto.end_day_1, '09:00')
+        self.assertEqual(schedule_dto.temp_day_2, 25.0)
+        self.assertEqual(schedule_dto.start_day_2, '17:00')
+        self.assertEqual(schedule_dto.end_day_2, '22:00')
+
+    def test_from_overlapping_schedule(self):
+        schedule_dto = ThermostatScheduleDTO(temp_night=10.0,
+                                             temp_day_1=26.0,
+                                             start_day_1='00:00',
+                                             end_day_1='12:00',
+                                             temp_day_2=25.0,
+                                             start_day_2='12:00',
+                                             end_day_2='24:00')
+        data = ThermostatMapper._schedule_dto_to_orm(schedule_dto, 'heating')
+        expected_data = {0: 10.0, 600: 26.0, 43200: 10.0, 43800: 25.0, 85800: 10.0}
+        self.assertEqual(len(data), 5)
+        self.assertEqual(data, expected_data)
+        schedule_dto = ThermostatMapper._schedule_to_dto(data, 'heating')
+        self.assertEqual(schedule_dto.temp_night, 10.0)
+        self.assertEqual(schedule_dto.temp_day_1, 26.0)
+        self.assertEqual(schedule_dto.start_day_1, '00:10')
+        self.assertEqual(schedule_dto.end_day_1, '12:00')
+        self.assertEqual(schedule_dto.temp_day_2, 25.0)
+        self.assertEqual(schedule_dto.start_day_2, '12:10')
+        self.assertEqual(schedule_dto.end_day_2, '23:50')
+
+    def test_to_partial_schedule(self):
+        data = {'0': 10.0, '21600': 26.0}
+        schedule_dto = ThermostatMapper._schedule_to_dto(data, 'heating')
+        self.assertEqual(schedule_dto.temp_night, 10.0)
+        self.assertEqual(schedule_dto.temp_day_1, 26.0)
+        self.assertEqual(schedule_dto.start_day_1, '06:00')
+        self.assertEqual(schedule_dto.end_day_1, '08:00')  # from default schedule
+        self.assertEqual(schedule_dto.temp_day_2, 21.0)
+        self.assertEqual(schedule_dto.start_day_2, '16:00')
+        self.assertEqual(schedule_dto.end_day_2, '22:00')
+
+    def test_to_invalid_schedule(self):
+        data = {'0': 10.0, '25200': 26.0, '32400': 11.0, '61200': 25.0, '79200': 12.0}
+        schedule_dto = ThermostatMapper._schedule_to_dto(data, 'heating')
+        self.assertEqual(schedule_dto.temp_day_1, 21.0)  # from default schedule
+        self.assertEqual(schedule_dto.temp_day_2, 21.0)
+
 
 
 class ThermostatClassicMapperTest(unittest.TestCase):
