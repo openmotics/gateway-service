@@ -556,6 +556,9 @@ class UpdateController(object):
                                           output_dir=os.path.join(new_version_folder, 'static'),
                                           logger=logger)
 
+            # Remove old archive
+            shutil.rmtree(filename)
+
         # Symlink to new version
         logger.info('Symlink to new version')
         os.unlink(UpdateController.FRONTEND_CURRENT)
@@ -590,16 +593,26 @@ class UpdateController(object):
         old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
         old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
         new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
+        success_marker = os.path.join(new_version_folder, 'run.success')
+
+        if os.path.exists(new_version_folder) and not os.path.exists(success_marker):
+            # Remove the existing `new_version_folder` if the contents could not be started
+            shutil.rmtree(new_version_folder)
 
         if not os.path.exists(new_version_folder):
+
             os.mkdir(new_version_folder)
 
             # Extract new version
             logger.info('Extracting archive')
             os.makedirs(os.path.join(new_version_folder, 'python'))
-            UpdateController._extract_tgz(filename=UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version)),
+            archive = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version))
+            UpdateController._extract_tgz(filename=archive,
                                           output_dir=os.path.join(new_version_folder, 'python'),
                                           logger=logger)
+
+            # Remove old archive
+            shutil.rmtree(archive)
 
             # Copy `etc`
             logger.info('Copy `etc` folder')
@@ -673,8 +686,11 @@ class UpdateController(object):
             # Raise with actual reason
             raise RuntimeError('Failed to start {0}'.format(new_version))
 
+        # Save success marker
+        with open(success_marker, 'w') as marker:
+            marker.write('success')
+
         # Cleanup
-        os.unlink(UpdateController.SERVICE_PREVIOUS)
         UpdateController._clean_old_versions(base_template=UpdateController.SERVICE_BASE_TEMPLATE,
                                              logger=logger)
 
