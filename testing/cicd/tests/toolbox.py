@@ -425,7 +425,7 @@ class Toolbox(object):
         self.dut.get('/module_discover_stop')
 
     def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
-        logger.debug('Discovering modules')
+        logger.info('Discovering modules')
         since = time.time()
         expected_ucan_emulated_modules = {'I': 0, 'T': 0}
         if ucans:
@@ -433,11 +433,11 @@ class Toolbox(object):
             for module in INPUT_MODULE_LAYOUT:
                 if module.is_can:
                     ucan_inputs += module.inputs
-                    expected_ucan_emulated_modules[module.mtype] += 1
+                    expected_ucan_emulated_modules[module.module_type] += 1
             for module in TEMPERATURE_MODULE_LAYOUT:
                 if module.is_can:
-                    expected_ucan_emulated_modules[module.mtype] += 1
-            logger.debug('Toggle uCAN inputs %s', ucan_inputs)
+                    expected_ucan_emulated_modules[module.module_type] += 1
+            logger.info('* Toggle uCAN inputs for discovery: %s', ucan_inputs)
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
                 time.sleep(0.5)
@@ -449,21 +449,27 @@ class Toolbox(object):
         try:
             addresses = []
             if output_modules:
+                logger.info('* Discover output module')
                 self.tester.toggle_output(TESTER.Button.output, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'O': 1}, addresses=addresses)
             if shutter_modules:
+                logger.info('* Discover shutter module')
                 self.tester.toggle_output(TESTER.Button.shutter, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'R': 1}, addresses=addresses)
             if input_modules:
+                logger.info('* Discover input module')
                 self.tester.toggle_output(TESTER.Button.input, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'I': 1}, addresses=addresses)
             if dimmer_modules:
+                logger.info('* Discover dim control module')
                 self.tester.toggle_output(TESTER.Button.dimmer, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
             if temp_modules:
+                logger.info('* Discover temperature module')
                 self.tester.toggle_output(TESTER.Button.temp, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
             if can_controls or ucans:
+                logger.info('* Discover can control')
                 self.tester.toggle_output(TESTER.Button.can, delay=0.5)
                 # TODO: Fix these hardcoded values.
                 module_amounts = {'C': 1}
