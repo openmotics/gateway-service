@@ -578,95 +578,99 @@ class UpdateController(object):
         System.run_service_action('stop', 'openmotics')
         System.run_service_action('stop', 'vpn_service')
 
-        # Migrate legacy folder structure, if needed
-        if not os.path.exists(UpdateController.SERVICE_CURRENT):
-            old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(gateway.__version__)
-            os.makedirs(old_version_folder)
-            os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+        try:
+            # Migrate legacy folder structure, if needed
+            if not os.path.exists(UpdateController.SERVICE_CURRENT):
+                old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(gateway.__version__)
+                os.makedirs(old_version_folder)
+                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
 
-            for folder in ['python', 'etc', 'python-deps']:
-                old_location = os.path.join(UpdateController.PREFIX, folder)
-                new_location = os.path.join(UpdateController.SERVICE_CURRENT, folder)
-                shutil.move(old_location, new_location)
-                os.symlink(new_location, old_location)
+                for folder in ['python', 'etc', 'python-deps']:
+                    old_location = os.path.join(UpdateController.PREFIX, folder)
+                    new_location = os.path.join(UpdateController.SERVICE_CURRENT, folder)
+                    shutil.move(old_location, new_location)
+                    os.symlink(new_location, old_location)
 
-        old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
-        old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
-        new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
-        success_marker = os.path.join(new_version_folder, 'run.success')
+            old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
+            old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
+            new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
+            success_marker = os.path.join(new_version_folder, 'run.success')
 
-        if os.path.exists(new_version_folder) and not os.path.exists(success_marker):
-            # Remove the existing `new_version_folder` if the contents could not be started
-            shutil.rmtree(new_version_folder)
+            if os.path.exists(new_version_folder) and not os.path.exists(success_marker):
+                # Remove the existing `new_version_folder` if the contents could not be started
+                shutil.rmtree(new_version_folder)
 
-        if not os.path.exists(new_version_folder):
+            if not os.path.exists(new_version_folder):
 
-            os.mkdir(new_version_folder)
+                os.mkdir(new_version_folder)
 
-            # Extract new version
-            logger.info('Extracting archive')
-            os.makedirs(os.path.join(new_version_folder, 'python'))
-            archive = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version))
-            UpdateController._extract_tgz(filename=archive,
-                                          output_dir=os.path.join(new_version_folder, 'python'),
-                                          logger=logger)
+                # Extract new version
+                logger.info('Extracting archive')
+                os.makedirs(os.path.join(new_version_folder, 'python'))
+                archive = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version))
+                UpdateController._extract_tgz(filename=archive,
+                                              output_dir=os.path.join(new_version_folder, 'python'),
+                                              logger=logger)
 
-            # Remove old archive
-            os.remove(archive)
+                # Remove old archive
+                os.remove(archive)
 
-            # Copy `etc`
-            logger.info('Copy `etc` folder')
-            shutil.copytree(os.path.join(old_version_folder, 'etc'), os.path.join(new_version_folder, 'etc'))
+                # Copy `etc`
+                logger.info('Copy `etc` folder')
+                shutil.copytree(os.path.join(old_version_folder, 'etc'), os.path.join(new_version_folder, 'etc'))
 
-            # Restore plugins
-            logger.info('Copy plugins...')
-            plugins = glob.glob('{0}{1}*{1}'.format(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), os.path.sep))
-            for plugin_path in plugins:
-                plugin = plugin_path.strip('/').rsplit('/', 1)[-1]
-                logger.info('Copy plugin {0}'.format(plugin))
-                UpdateController._execute(command=['cp', '-R',
-                                                   os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
-                                                   os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')],
-                                          logger=logger)
+                # Restore plugins
+                logger.info('Copy plugins...')
+                plugins = glob.glob('{0}{1}*{1}'.format(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), os.path.sep))
+                for plugin_path in plugins:
+                    plugin = plugin_path.strip('/').rsplit('/', 1)[-1]
+                    logger.info('Copy plugin {0}'.format(plugin))
+                    UpdateController._execute(command=['cp', '-R',
+                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
+                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')],
+                                              logger=logger)
 
-            # Install pip dependencies
-            logger.info('Installing pip dependencies')
-            os.makedirs(os.path.join(new_version_folder, 'python-deps'))
-            operating_system = System.get_operating_system()['ID']
-            if operating_system != System.OS.BUILDROOT:
-                temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
-                UpdateController._execute(
-                    command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
-                        temp_dir, new_version_folder, operating_system
-                    ),
-                    logger=logger,
-                    shell=True
-                )
-                os.rmdir(temp_dir)
+                # Install pip dependencies
+                logger.info('Installing pip dependencies')
+                os.makedirs(os.path.join(new_version_folder, 'python-deps'))
+                operating_system = System.get_operating_system()['ID']
+                if operating_system != System.OS.BUILDROOT:
+                    temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
+                    UpdateController._execute(
+                        command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
+                            temp_dir, new_version_folder, operating_system
+                        ),
+                        logger=logger,
+                        shell=True
+                    )
+                    os.rmdir(temp_dir)
 
-        # Keep track of the old version, so it can be manually restored if something goes wrong
-        logger.info('Tracking previous version')
-        if os.path.exists(UpdateController.SERVICE_PREVIOUS):
-            os.unlink(UpdateController.SERVICE_PREVIOUS)
-        os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
+            # Keep track of the old version, so it can be manually restored if something goes wrong
+            logger.info('Tracking previous version')
+            if os.path.exists(UpdateController.SERVICE_PREVIOUS):
+                os.unlink(UpdateController.SERVICE_PREVIOUS)
+            os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
 
-        # Symlink to new version
-        logger.info('Symlink to new version')
-        os.unlink(UpdateController.SERVICE_CURRENT)
-        os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
+            # Symlink to new version
+            logger.info('Symlink to new version')
+            os.unlink(UpdateController.SERVICE_CURRENT)
+            os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
 
-        # Prepare new code for first startup
-        logger.info('Preparing for first startup')
-        UpdateController._execute(command=['python',
-                                           os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
-                                           '--prepare-gateway-service-for-first-startup',
-                                           new_version],
-                                  logger=logger)
-
-        # Startup
-        logger.info('Starting services')
-        System.run_service_action('start', 'openmotics')
-        System.run_service_action('start', 'vpn_service')
+            # Prepare new code for first startup
+            logger.info('Preparing for first startup')
+            UpdateController._execute(command=['python',
+                                               os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
+                                               '--prepare-gateway-service-for-first-startup',
+                                               new_version],
+                                      logger=logger)
+        except Exception as ex:
+            logger.exception('Unexpected exception setting up new version: {0}'.format(ex))
+            raise
+        finally:
+            # Startup
+            logger.info('Starting services')
+            System.run_service_action('start', 'openmotics')
+            System.run_service_action('start', 'vpn_service')
 
         # Health-check
         logger.info('Checking health')
