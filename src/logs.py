@@ -111,13 +111,12 @@ class Logs(object):
         return logger
 
     @staticmethod
-    def set_loglevel(level, namespace):  # type: (Union[int, str], Optional[str]) -> Generator[Logger, None, None]
+    def set_loglevel(level, namespace):  # type: (Union[int, str], Optional[str]) -> None
         for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
-            if re.match("^{}.*".format(namespace), logger_namespace):
+            if namespace is None or re.match("^{}.*".format(namespace), logger_namespace):
                 logger = logging.getLogger(logger_namespace)
                 logger.setLevel(level)
                 logger.propagate = True
-                yield logger
 
     @staticmethod
     def _get_service_namespaces():

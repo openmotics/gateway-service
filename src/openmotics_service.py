@@ -33,7 +33,6 @@ from gateway.migrations import ConfigMigrator, EnergyModulesMigrator, \
     ScheduleMigrator, ThermostatsMigrator, UserMigrator
 from gateway.models import Feature
 from gateway.pubsub import PubSub
-from constants import OPENMOTICS_PREFIX
 from ioc import INJECTED, Inject
 from logs import Logs
 
