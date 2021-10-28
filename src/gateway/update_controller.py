@@ -557,7 +557,7 @@ class UpdateController(object):
                                           logger=logger)
 
             # Remove old archive
-            shutil.rmtree(filename)
+            os.remove(filename)
 
         # Symlink to new version
         logger.info('Symlink to new version')
@@ -612,7 +612,7 @@ class UpdateController(object):
                                           logger=logger)
 
             # Remove old archive
-            shutil.rmtree(archive)
+            os.remove(archive)
 
             # Copy `etc`
             logger.info('Copy `etc` folder')
@@ -822,7 +822,7 @@ class UpdateController(object):
                 logger.info('Keeping {0}'.format(version))
                 continue
             logger.info('Removing {0}'.format(version))
-            shutil.rmtree(base_template.format(version))
+            os.remove(base_template.format(version))
 
     @staticmethod
     def _clean_old_versions(base_template, logger):
@@ -850,7 +850,7 @@ class UpdateController(object):
                 logger.info('Keeping {0}'.format(version))
                 continue
             logger.info('Removing {0}'.format(version))
-            shutil.rmtree(base_template.format(version))
+            os.remove(base_template.format(version))
 
     @staticmethod
     def _check_gateway_service_health(logger, timeout=60):
