@@ -44,14 +44,14 @@ def add_virtual_modules(request, toolbox_session):
     toolbox.add_virtual_modules(module_amounts=module_amounts)
     time.sleep(10)
 
-    virtual_module = Module(name='virtual module', mtype='o')
+    virtual_module = Module(name='virtual module', module_type='output')
     statuses = toolbox.dut.get('/get_output_status')['status']
     max_id = max(x['id'] for x in statuses)
     if next(x['status'] == 0 for x in statuses if x['id'] == max_id):
         logger.info('setting all outputs to on')
         for status in statuses:
             if status['status'] == 0:
-                output = Output(output_id=status['id'], module=virtual_module)
+                output = Output(output_id=status['id'], module=virtual_module, tester_input_id=None)
                 toolbox.set_output(output, True)
     time.sleep(10)
 

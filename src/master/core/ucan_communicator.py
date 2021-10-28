@@ -40,6 +40,8 @@ class UCANCommunicator(object):
     Uses a CoreCommunicator to communicate with uCANs
     """
 
+    # TODO: Hold communications when master is rebooting
+
     @Inject
     def __init__(self, master_communicator=INJECTED, verbose=False):  # type: (CoreCommunicator, bool) -> None
         """
