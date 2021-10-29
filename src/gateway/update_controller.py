@@ -870,7 +870,7 @@ class UpdateController(object):
                     logger.info('Keeping {0}'.format(version))
                     continue
                 logger.info('Removing {0}'.format(version))
-                os.remove(base_template.format(version))
+                shutil.rmtree(base_template.format(version))
         except Exception as ex:
             logger.warning('Could not clean up old versions with base_template {0}: {1}'.format(base_template, ex))
 
