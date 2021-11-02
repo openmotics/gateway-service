@@ -368,7 +368,7 @@ class UpdateController(object):
         # Update
         successes, failures = 0, 0
         hold_versions = {target_version}
-        for module in modules:
+        for module in modules_to_update:
             module_address = module.address
             if module.firmware_version is not None:
                 hold_versions.add(module.firmware_version)
