@@ -41,7 +41,9 @@ To be able to run to your local dev-setup, modify following files:
     vpn_check_url=http://host.docker.internal:9000/portal/check_vpn/?uuid=%%s
     cloud_user=YOUR-GATEWAY-USERNAME
     cloud_pass=YOUR-GATEWAY-PASSWORD
+    platform=ESAFE
     ```
+    The last line is only applicable for eSafe.
 
 > Note: those config changes have only been tested on macOS. For Linux, please look at: https://stackoverflow.com/questions/24319662
 

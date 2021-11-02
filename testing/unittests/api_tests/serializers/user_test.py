@@ -12,17 +12,37 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import absolute_import
-
+"""
+User serializer tests
+"""
 import mock
 import unittest
-from gateway.dto import UserDTO, ApartmentDTO
-from gateway.api.serializers import UserSerializer
+
+from gateway.api.serializers import UserSerializer, ApartmentSerializer
 from gateway.apartment_controller import ApartmentController
+from gateway.dto import UserDTO, ApartmentDTO
 
+if False:
+    from typing import Dict, Any
 
-class UserSerializerTest(unittest.TestCase):
-    def test_serialize(self):
+class userSerializerTest(unittest.TestCase):
+
+    def assert_dto_match_serial(self, user_dto, user_serial, include_pin=False, deserialzed=False):
+        # type: (UserDTO, Dict[Any, Any], bool) -> None
+        for field in user_dto.loaded_fields:
+            if field == 'apartment' and user_dto.apartment is not None:
+                apartment_generated = ApartmentSerializer.serialize(user_dto.apartment)
+                apartment_serial = user_serial['apartment']
+                if not deserialzed:
+                    self.assertEqual(apartment_generated, apartment_serial)
+                else:
+                    self.assertEqual(apartment_generated['id'], apartment_serial)
+            elif field != 'pin_code' or include_pin:
+                self.assertEqual(getattr(user_dto, field), user_serial[field])
+            else:
+                self.assertNotIn('pin_code', user_serial)
+
+    def test_user_serialize(self):
         # empty
         dto = UserDTO()
         data = UserSerializer.serialize(dto)
@@ -121,18 +141,95 @@ class UserSerializerTest(unittest.TestCase):
                              'name': 'test_app',
                              'mailbox_rebus_id': 37,
                              'doorbell_rebus_id': 37
-                           },
-                          'username': 'first.last',
-                          'first_name': 'first',
-                          'last_name': 'last',
-                          'id': 37,
-                          'is_active': False,
-                          'language': 'Nederlands',
-                          'role': 'USER',
-                          'accepted_terms': 1,
-                          'email': None})
+                         },
+                             'username': 'first.last',
+                             'first_name': 'first',
+                             'last_name': 'last',
+                             'id': 37,
+                             'is_active': False,
+                             'language': 'Nederlands',
+                             'role': 'USER',
+                             'accepted_terms': 1,
+                             'email': None})
+        user_dto = UserDTO(
+            id=37,
+            first_name='first',
+            last_name='last',
+            role='ADMIN',
+            pin_code='1234',
+            apartment=None,
+            language='en',
+            accepted_terms=1,
+            is_active=True,
+            email='test@test.com'
+        )
+        # validate the basic serialization usecase
+        user_serial = UserSerializer.serialize(user_dto)
+        self.assert_dto_match_serial(user_dto, user_serial, include_pin=False)
 
-    def test_deserialize(self):
+        # validate that when the pin_code is included it is added
+        user_serial_with_pin = UserSerializer.serialize(user_dto, show_pin_code=True)
+        self.assert_dto_match_serial(user_dto, user_serial_with_pin, include_pin=True)
+
+        user_dto.apartment = ApartmentDTO(
+            id=5,
+            name='test-app',
+            mailbox_rebus_id=16,
+            doorbell_rebus_id=17
+        )
+        # validate the apartment serialization
+        user_serial = UserSerializer.serialize(user_dto)
+        self.assert_dto_match_serial(user_dto, user_serial, include_pin=False)
+
+    def test_user_deserialize(self):
+        user_serial = {
+            'username': 'first.last',
+            'last_name': 'last',
+            'accepted_terms': 1,
+            'is_active': True,
+            'id': 37,
+            'pin_code': '1234',
+            'first_name': 'first',
+            'apartment': None,
+            'language': 'en',
+            'role': 'ADMIN',
+            'email': 'test@test.com'
+        }
+        # validate the basic use case without apartment
+        user_dto = UserSerializer.deserialize(user_serial)
+        self.assert_dto_match_serial(user_dto, user_serial, include_pin=True, deserialzed=True)
+
+        user_serial_with_apartment = {
+            'username': 'first.last',
+            'last_name': 'last',
+            'accepted_terms': 1,
+            'is_active': True,
+            'id': 37,
+            'first_name': 'first',
+            'apartment': 5,
+            'language': 'en',
+            'role': 'ADMIN',
+            'email': 'test@test.com'
+        }
+
+        apartment_dto = ApartmentDTO(
+            id=5,
+            name='test-app',
+            mailbox_rebus_id=16,
+            doorbell_rebus_id=17
+        )
+
+        # check that with an apartment the deserialization can handle just one ID
+        with mock.patch.object(ApartmentController, 'apartment_id_exists', return_value=True), \
+                mock.patch.object(ApartmentController, 'load_apartment', return_value=apartment_dto):
+            user_dto = UserSerializer.deserialize(user_serial_with_apartment)
+            self.assert_dto_match_serial(user_dto, user_serial_with_apartment, include_pin=False, deserialzed=True)
+
+        # check that with a list an error got raised
+        with self.assertRaises(ValueError):
+            user_serial_with_apartment['apartment'] = [5]
+            UserSerializer.deserialize(user_serial_with_apartment)
+
         # only first name
         serial = {
             'first_name': 'first'
@@ -186,7 +283,7 @@ class UserSerializerTest(unittest.TestCase):
             'last_name': 'last',
             'role': 'USER',
             'id': 37,
-            'apartment': [2],
+            'apartment': 2,
             'pin_code': '1234',
             'is_active': False,
         }
