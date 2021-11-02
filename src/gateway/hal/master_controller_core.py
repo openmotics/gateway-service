@@ -1151,16 +1151,12 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_can_controls):
             can_control_module_info = CanControlModuleConfiguration(module_id)
             device_type = can_control_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if module_id == 0:
-                hardware_type = HardwareType.INTERNAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=can_control_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=HardwareType.PHYSICAL,
                             order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _get_version(can_control_module_info.address)
+            dto.online, dto.hardware_version, dto.firmware_version = _get_version(can_control_module_info.address)
             information.append(dto)
 
         nr_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
