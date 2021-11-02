@@ -218,9 +218,6 @@ class SlaveUpdater(object):
             current_version = '{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3'])
             gen3_module = result['f1'] >= 6
             logger.info('Current version: v{0}'.format(current_version))
-            if current_version == version:
-                logger.info('Firmware up-to-date. Skipping')
-                return current_version
         except Exception:
             logger.info('Version call not (yet) implemented or module unavailable')
 
