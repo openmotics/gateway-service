@@ -80,10 +80,6 @@ class SlaveUpdater(object):
             firmware_version, hardware_version = current_version
             logger.info('Current version: {0} ({1})'.format(firmware_version, hardware_version))
 
-            if version == firmware_version:
-                logger.info('Already up-to-date. Skipping')
-                return version
-
             gen3_module = int(firmware_version.split('.')[0]) >= 6
             if gen3_firmware and not gen3_module:
                 logger.info('Skip flashing Gen3 firmware on Gen2 module')

@@ -1151,16 +1151,12 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_can_controls):
             can_control_module_info = CanControlModuleConfiguration(module_id)
             device_type = can_control_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if module_id == 0:
-                hardware_type = HardwareType.INTERNAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=can_control_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=HardwareType.PHYSICAL,
                             order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _get_version(can_control_module_info.address)
+            dto.online, dto.hardware_version, dto.firmware_version = _get_version(can_control_module_info.address)
             information.append(dto)
 
         nr_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
@@ -1332,19 +1328,28 @@ class MasterCoreController(MasterController):
 
     def update_slave_module(self, firmware_type, address, hex_filename, version):
         # type: (str, str, str, str) -> Optional[str]
-        individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
         if firmware_type == 'ucan':
-            amount = GlobalConfiguration().number_of_ucan_modules
-            for module_id in range(amount if amount != 255 else 0):
-                ucan_configuration = UCanModuleConfiguration(module_id)
-                if ucan_configuration.address == address:
-                    cc_module = ucan_configuration.module
-                    cc_address = cc_module.address if cc_module is not None else '000.000.000.000'
-                    return SlaveUpdater.update_ucan(ucan_address=address,
-                                                    cc_address=cc_address,
-                                                    hex_filename=hex_filename,
-                                                    version=version)
-            return None
+            cc_address = None  # type: Optional[str]
+            if '@' in address:
+                address, cc_address = address.split('@')
+                individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
+            else:
+                individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
+                amount = GlobalConfiguration().number_of_ucan_modules
+                for module_id in range(amount if amount != 255 else 0):
+                    ucan_configuration = UCanModuleConfiguration(module_id)
+                    if ucan_configuration.address == address:
+                        cc_module = ucan_configuration.module
+                        cc_address = cc_module.address if cc_module is not None else '000.000.000.000'
+                        break
+            if cc_address is None:
+                individual_logger.info('Could not find linked CC')
+                return None
+            return SlaveUpdater.update_ucan(ucan_address=address,
+                                            cc_address=cc_address,
+                                            hex_filename=hex_filename,
+                                            version=version)
+        individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
         parsed_version = tuple(int(part) for part in version.split('.'))
         gen3_firmware = parsed_version >= (6, 0, 0)
         return SlaveUpdater.update(address=address,

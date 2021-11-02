@@ -65,6 +65,7 @@ class UpdateController(object):
     SERVICE_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('service', '{0}')  # e.g. /x/versions/service/{0}
     SERVICE_CURRENT = VERSIONS_CURRENT_TEMPLATE.format('service')  # e.g. /x/versions/service/current
     SERVICE_PREVIOUS = VERSIONS_PREVIOUS_TEMPLATE.format('service')  # e.g. /x/versions/service/previous
+    SERVICE_CURRENT_UPDATE_RUNNING_MARKER = os.path.join(SERVICE_CURRENT, 'update.running')
     PLUGINS_DIRECTORY_TEMPLATE = os.path.join(SERVICE_BASE_TEMPLATE, 'python', 'plugins')  # e.g. /x/versions/service/{0}/python/plugins
 
     FRONTEND_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('frontend', '{0}')  # e.g. /x/versions/frontend/{0}
@@ -193,8 +194,12 @@ class UpdateController(object):
         Config.set_entry('firmware_target_versions', target_versions)
 
     def _execute_pending_updates(self):
+        if os.path.exists(UpdateController.SERVICE_CURRENT_UPDATE_RUNNING_MARKER):
+            global_logger.info('Waiting for the update process to finish')
+            return
         if self._update_threshold > time.time():
-            return  # Wait a bit, making sure the service is completely up-and-running before starting updates
+            global_logger.info('Waiting for update startup threshold')
+            return
 
         success, target_version, _ = UpdateController._get_target_version_info('gateway_service')
         gateway_service_current_version = self._fetch_version(firmware_type='gateway_service', logger=global_logger)
@@ -339,8 +344,12 @@ class UpdateController(object):
         where_expression = ((Module.source == ModuleDTO.Source.MASTER) &
                             (Module.hardware_type == HardwareType.PHYSICAL) &
                             (Module.module_type.in_(module_types)))
+        address_suffix = None  # type: Optional[str]
         if module_address is not None:
-            where_expression &= (Module.address == module_address)
+            filter_address = module_address
+            if '@' in module_address:
+                filter_address, address_suffix = module_address.split('@')
+            where_expression &= (Module.address == filter_address)
         modules = Module.select().where(where_expression)  # type: List[Module]
 
         modules_to_update = UpdateController._filter_modules_to_update(all_modules=modules,
@@ -363,14 +372,16 @@ class UpdateController(object):
         # Update
         successes, failures = 0, 0
         hold_versions = {target_version}
-        for module in modules:
-            module_address = module.address
+        for module in modules_to_update:
+            address = module.address
+            if address_suffix is not None:
+                address = '{0}@{1}'.format(address, address_suffix)
             if module.firmware_version is not None:
                 hold_versions.add(module.firmware_version)
-            individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module_address))
+            individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module.address))
             try:
                 new_version = self._master_controller.update_slave_module(firmware_type=firmware_type,
-                                                                          address=module_address,
+                                                                          address=address,
                                                                           hex_filename=target_filename,
                                                                           version=target_version)
                 if new_version is not None:
@@ -594,15 +605,17 @@ class UpdateController(object):
             old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
             old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
             new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
-            success_marker = os.path.join(new_version_folder, 'run.success')
+
+            success_marker = os.path.join(new_version_folder, 'update.success')
+            running_marker = os.path.join(new_version_folder, 'update.running')
 
             if os.path.exists(new_version_folder) and not os.path.exists(success_marker):
                 # Remove the existing `new_version_folder` if the contents could not be started
                 shutil.rmtree(new_version_folder)
 
             if not os.path.exists(new_version_folder):
-
                 os.mkdir(new_version_folder)
+                UpdateController._touch(running_marker)
 
                 # Extract new version
                 logger.info('Extracting archive')
@@ -644,6 +657,8 @@ class UpdateController(object):
                         shell=True
                     )
                     os.rmdir(temp_dir)
+
+            UpdateController._touch(running_marker)  # Make sure the running marker exists
 
             # Keep track of the old version, so it can be manually restored if something goes wrong
             logger.info('Tracking previous version')
@@ -690,13 +705,14 @@ class UpdateController(object):
             # Raise with actual reason
             raise RuntimeError('Failed to start {0}'.format(new_version))
 
-        # Save success marker
-        with open(success_marker, 'w') as marker:
-            marker.write('success')
-
         # Cleanup
         UpdateController._clean_old_versions(base_template=UpdateController.SERVICE_BASE_TEMPLATE,
                                              logger=logger)
+
+        # Update markers
+        UpdateController._touch(success_marker)
+        if os.path.exists(running_marker):
+            os.remove(running_marker)
 
         logger.info('Update completed')
 
@@ -781,6 +797,11 @@ class UpdateController(object):
                 'status_detail': states}
 
     @staticmethod
+    def _touch(filename):
+        with open(filename, 'w') as file_:
+            file_.write('{0}\n'.format(filename))
+
+    @staticmethod
     def _get_target_version_info(firmware_type):
         # type: (str) -> Tuple[Optional[bool], Optional[str], Optional[Dict[str, Any]]]
         target_versions = Config.get_entry('firmware_target_versions', None)  # type: Optional[Dict[str, Dict[str, Any]]]
@@ -831,33 +852,36 @@ class UpdateController(object):
     @staticmethod
     def _clean_old_versions(base_template, logger):
         logger.info('Clean up old versions')
-        versions = set()  # type: Set[str]
-        current_version = None  # type: Optional[str]
-        previous_version = None  # type: Optional[str]
-        for version_path in glob.glob(base_template.format('*')):
-            version = version_path.strip('/').rsplit('/', 1)[-1]
-            if 'tgz' in version:
-                continue
-            if version == 'current':
-                current_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
-            elif version == 'previous':
-                previous_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
-            else:
-                versions.add(version)
-        versions_to_keep = set(sorted(versions, reverse=True)[:3])
-        if current_version is not None:
-            versions_to_keep.add(current_version)
-        if previous_version is not None:
-            versions_to_keep.add(previous_version)
-        for version in versions:
-            if version in versions_to_keep:
-                logger.info('Keeping {0}'.format(version))
-                continue
-            logger.info('Removing {0}'.format(version))
-            os.remove(base_template.format(version))
+        try:
+            versions = set()  # type: Set[str]
+            current_version = None  # type: Optional[str]
+            previous_version = None  # type: Optional[str]
+            for version_path in glob.glob(base_template.format('*')):
+                version = version_path.strip('/').rsplit('/', 1)[-1]
+                if 'tgz' in version:
+                    continue
+                if version == 'current':
+                    current_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
+                elif version == 'previous':
+                    previous_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
+                else:
+                    versions.add(version)
+            versions_to_keep = set(sorted(versions, reverse=True)[:3])
+            if current_version is not None:
+                versions_to_keep.add(current_version)
+            if previous_version is not None:
+                versions_to_keep.add(previous_version)
+            for version in versions:
+                if version in versions_to_keep:
+                    logger.info('Keeping {0}'.format(version))
+                    continue
+                logger.info('Removing {0}'.format(version))
+                shutil.rmtree(base_template.format(version))
+        except Exception as ex:
+            logger.warning('Could not clean up old versions with base_template {0}: {1}'.format(base_template, ex))
 
     @staticmethod
-    def _check_gateway_service_health(logger, timeout=60):
+    def _check_gateway_service_health(logger, timeout=300):
         since = time.time()
         pending = ['unknown']
         http_port = Platform.http_port()
