@@ -1336,6 +1336,7 @@ class MasterCoreController(MasterController):
             cc_address = None  # type: Optional[str]
             if '@' in address:
                 address, cc_address = address.split('@')
+                individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
             else:
                 individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
                 amount = GlobalConfiguration().number_of_ucan_modules

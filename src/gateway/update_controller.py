@@ -344,11 +344,12 @@ class UpdateController(object):
         where_expression = ((Module.source == ModuleDTO.Source.MASTER) &
                             (Module.hardware_type == HardwareType.PHYSICAL) &
                             (Module.module_type.in_(module_types)))
-        full_module_address = module_address
-        if full_module_address is not None and '@' in full_module_address:
-            module_address = full_module_address.split('@')[0]
+        address_suffix = None  # type: Optional[str]
         if module_address is not None:
-            where_expression &= (Module.address == module_address)
+            filter_address = module_address
+            if '@' in module_address:
+                filter_address, address_suffix = module_address.split('@')
+            where_expression &= (Module.address == filter_address)
         modules = Module.select().where(where_expression)  # type: List[Module]
 
         modules_to_update = UpdateController._filter_modules_to_update(all_modules=modules,
@@ -372,13 +373,15 @@ class UpdateController(object):
         successes, failures = 0, 0
         hold_versions = {target_version}
         for module in modules_to_update:
-            module_address = module.address
+            address = module.address
+            if address_suffix is not None:
+                address = '{0}@{1}'.format(address, address_suffix)
             if module.firmware_version is not None:
                 hold_versions.add(module.firmware_version)
-            individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module_address))
+            individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module.address))
             try:
                 new_version = self._master_controller.update_slave_module(firmware_type=firmware_type,
-                                                                          address=full_module_address,
+                                                                          address=address,
                                                                           hex_filename=target_filename,
                                                                           version=target_version)
                 if new_version is not None:
