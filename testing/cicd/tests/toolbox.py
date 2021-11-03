@@ -497,7 +497,7 @@ class Toolbox(object):
             data = self.dut.get('/get_modules_information')
             for entry in data['modules'].get('master', {}).values():
                 if entry['hardware_type'] == 'virtual':
-                    virtual_modules.setdefault(entry['type'], set()).add(entry['address'])
+                    virtual_modules.setdefault(entry['module_type'], set()).add(entry['address'])
             return virtual_modules
         previous_virtual_modules = _get_current_virtual_modules()
 
