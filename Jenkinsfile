@@ -87,8 +87,8 @@ pipeline {
             steps {
                 script {
                     build(job: 'gateway-integration', wait: false, parameters: [
-                        [$class: 'StringParameterValue', name: 'BRANCH_NAME', value: env.BRANCH_NAME],
-                        [$class: 'StringParameterValue', name: 'GIT_COMMIT', value: env.GIT_COMMIT],
+                        [$class: 'StringParameterValue', name: 'TESTS_BRANCH_NAME', value: env.BRANCH_NAME],
+                        [$class: 'StringParameterValue', name: 'GATEWAY_BRANCH_NAME', value: env.BRANCH_NAME],
                     ])
                 }
             }

@@ -281,7 +281,7 @@ class Toolbox(object):
                                   input_modules='input' in missing_modules,
                                   shutter_modules='shutter' in missing_modules,
                                   dimmer_modules='dim_control' in missing_modules,
-                                  temp_modules='temperature' in missing_modules,
+                                  sensor_modules='sensor' in missing_modules,
                                   can_controls='can_control' in missing_modules,
                                   ucans='ucan' in missing_modules)
 
@@ -424,7 +424,7 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
+    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, ucans=False, timeout=120):
         logger.info('Discovering modules')
         since = time.time()
         expected_ucan_emulated_modules = {'I': 0, 'T': 0}
@@ -464,8 +464,8 @@ class Toolbox(object):
                 logger.info('* Discover dim control module')
                 self.tester.toggle_output(TESTER.Button.dimmer, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
-            if temp_modules:
-                logger.info('* Discover temperature module')
+            if sensor_modules:
+                logger.info('* Discover sensor module')
                 self.tester.toggle_output(TESTER.Button.temp, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
             if can_controls or ucans:
@@ -489,31 +489,34 @@ class Toolbox(object):
 
     def add_virtual_modules(self, module_amounts, timeout=120):
         since = time.time()
-        desired_new_outputs = module_amounts.get('o', 0)
-        desired_new_inputs = module_amounts.get('i', 0)
+        desired_new_outputs = module_amounts.get('output', 0)
+        desired_new_inputs = module_amounts.get('input', 0)
 
         def _get_current_virtual_modules():
             virtual_modules = {}
             data = self.dut.get('/get_modules_information')
             for entry in data['modules'].get('master', {}).values():
                 if entry['hardware_type'] == 'virtual':
-                    virtual_modules.setdefault(entry['type'], set()).add(entry['address'])
+                    virtual_modules.setdefault(entry['module_type'], set()).add(entry['address'])
             return virtual_modules
         previous_virtual_modules = _get_current_virtual_modules()
 
         for _ in range(desired_new_outputs):
+            logger.info('* Adding virtual output module')
             self.dut.get('/add_virtual_output_module')
             time.sleep(2)
         for _ in range(desired_new_inputs):
+            logger.info('* Adding virtual input module')
             self.dut.get('/add_virtual_input_module')
             time.sleep(2)
+
         # TODO: We should/could use the module discover log as well, but adding virtual modules isn't generate events
 
         new_outputs, new_inputs = (0, 0)
         while since > time.time() - timeout:
             current_virtual_modules = _get_current_virtual_modules()
-            new_outputs = len(current_virtual_modules.get('o', set()) - previous_virtual_modules.get('o', set()))
-            new_inputs = len(current_virtual_modules.get('i', set()) - previous_virtual_modules.get('i', set()))
+            new_outputs = len(current_virtual_modules.get('output', set()) - previous_virtual_modules.get('output', set()))
+            new_inputs = len(current_virtual_modules.get('input', set()) - previous_virtual_modules.get('input', set()))
             if new_outputs == desired_new_outputs and new_inputs == desired_new_inputs:
                 return True
             time.sleep(5)
@@ -532,6 +535,9 @@ class Toolbox(object):
         all_entries = []
         desired_entries = []
         found_module_amounts = {}
+        required_module_amounts = {module_type: amount
+                                   for module_type, amount in module_amounts.items()
+                                   if amount > 0}
         if addresses is None:
             addresses = []
         while since > time.time() - timeout:
@@ -546,7 +552,7 @@ class Toolbox(object):
                 if entry['code'] in ['DUPLICATE', 'UNKNOWN']:
                     continue
                 module_type = entry['module_type']
-                if module_type not in module_amounts:
+                if module_type not in required_module_amounts:
                     continue
                 address = entry['address']
                 if address not in addresses:
@@ -558,12 +564,12 @@ class Toolbox(object):
                     logger.debug('Discovered {} module: {} ({})'.format(entry['code'],
                                                                         entry['module_type'],
                                                                         entry['address']))
-            if found_module_amounts == module_amounts:
+            if found_module_amounts == required_module_amounts:
                 logger.debug('Discovered required modules: {}'.format(format_module_amounts(found_module_amounts)))
                 return desired_entries
             time.sleep(2)
         raise AssertionError('Did not discover required modules: {}. Raw log: {}'.format(
-            format_module_amounts(module_amounts), all_entries
+            format_module_amounts(required_module_amounts), all_entries
         ))
 
     def discover_energy_module(self):
