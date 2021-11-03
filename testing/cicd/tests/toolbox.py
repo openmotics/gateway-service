@@ -532,6 +532,9 @@ class Toolbox(object):
         all_entries = []
         desired_entries = []
         found_module_amounts = {}
+        required_module_amounts = {module_type: amount
+                                   for module_type, amount in module_amounts.items()
+                                   if amount > 0}
         if addresses is None:
             addresses = []
         while since > time.time() - timeout:
@@ -546,7 +549,7 @@ class Toolbox(object):
                 if entry['code'] in ['DUPLICATE', 'UNKNOWN']:
                     continue
                 module_type = entry['module_type']
-                if module_type not in module_amounts:
+                if module_type not in required_module_amounts:
                     continue
                 address = entry['address']
                 if address not in addresses:
@@ -558,12 +561,12 @@ class Toolbox(object):
                     logger.debug('Discovered {} module: {} ({})'.format(entry['code'],
                                                                         entry['module_type'],
                                                                         entry['address']))
-            if found_module_amounts == module_amounts:
+            if found_module_amounts == required_module_amounts:
                 logger.debug('Discovered required modules: {}'.format(format_module_amounts(found_module_amounts)))
                 return desired_entries
             time.sleep(2)
         raise AssertionError('Did not discover required modules: {}. Raw log: {}'.format(
-            format_module_amounts(module_amounts), all_entries
+            format_module_amounts(required_module_amounts), all_entries
         ))
 
     def discover_energy_module(self):
