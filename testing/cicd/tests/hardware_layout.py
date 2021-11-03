@@ -300,7 +300,7 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=6, tester_output_id=30),
                        Input(input_id=7, tester_output_id=31)]),
         Module(name='CC module',
-               module_type='input',
+               module_type='can_control',
                hardware_type=Module.HardwareType.PHYSICAL,
                inputs=[]),
         Module(name='CC emulated input module 0',
