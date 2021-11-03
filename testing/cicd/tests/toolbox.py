@@ -489,8 +489,8 @@ class Toolbox(object):
 
     def add_virtual_modules(self, module_amounts, timeout=120):
         since = time.time()
-        desired_new_outputs = module_amounts.get('o', 0)
-        desired_new_inputs = module_amounts.get('i', 0)
+        desired_new_outputs = module_amounts.get('output', 0)
+        desired_new_inputs = module_amounts.get('input', 0)
 
         def _get_current_virtual_modules():
             virtual_modules = {}
@@ -502,18 +502,21 @@ class Toolbox(object):
         previous_virtual_modules = _get_current_virtual_modules()
 
         for _ in range(desired_new_outputs):
+            logger.info('* Adding virtual output module')
             self.dut.get('/add_virtual_output_module')
             time.sleep(2)
         for _ in range(desired_new_inputs):
+            logger.info('* Adding virtual input module')
             self.dut.get('/add_virtual_input_module')
             time.sleep(2)
+
         # TODO: We should/could use the module discover log as well, but adding virtual modules isn't generate events
 
         new_outputs, new_inputs = (0, 0)
         while since > time.time() - timeout:
             current_virtual_modules = _get_current_virtual_modules()
-            new_outputs = len(current_virtual_modules.get('o', set()) - previous_virtual_modules.get('o', set()))
-            new_inputs = len(current_virtual_modules.get('i', set()) - previous_virtual_modules.get('i', set()))
+            new_outputs = len(current_virtual_modules.get('output', set()) - previous_virtual_modules.get('output', set()))
+            new_inputs = len(current_virtual_modules.get('input', set()) - previous_virtual_modules.get('input', set()))
             if new_outputs == desired_new_outputs and new_inputs == desired_new_inputs:
                 return True
             time.sleep(5)
