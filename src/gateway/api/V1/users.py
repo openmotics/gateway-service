@@ -134,14 +134,11 @@ class Users(RestAPIEndpoint):
         if tmp_password is not None:
             user_dto.set_password(tmp_password)
 
-        if 'pin_code' in user_dto.loaded_fields:
-            user_dto.pin_code = None
-            user_dto.loaded_fields.remove('pin_code')
-
         if user_dto.username is None:
             user_dto.username = str(uuid.uuid4())
         # add a custom user code
-        user_dto.pin_code = str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
+        if 'pin_code' not in user_dto.loaded_fields:
+            user_dto.pin_code = str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
         user_dto.accepted_terms = True
         # Generate a random password as a dummy to fill in the gap
         random_password = uuid.uuid4().hex
