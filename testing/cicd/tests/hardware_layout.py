@@ -342,15 +342,15 @@ _TEMPERATURE_MODULE_LAYOUTS = {
     ],
     TestPlatform.DEBIAN: [
         Module(name='temperature module',
-               module_type='temperature',
+               module_type='sensor',
                hardware_type=Module.HardwareType.PHYSICAL,
                temps=[]),
         Module(name='CC emulated temperature module 0',
-               module_type='temperature', is_can=True,
+               module_type='sensor', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                temps=[]),
         # Module(name='CC emulated temperature module 1',
-        #        module_type='temperature', is_can=True,
+        #        module_type='sensor', is_can=True,
         #        hardware_type=Module.HardwareType.EMULATED,
         #        temps=[])
     ],

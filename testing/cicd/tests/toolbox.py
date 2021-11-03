@@ -281,7 +281,7 @@ class Toolbox(object):
                                   input_modules='input' in missing_modules,
                                   shutter_modules='shutter' in missing_modules,
                                   dimmer_modules='dim_control' in missing_modules,
-                                  temp_modules='temperature' in missing_modules,
+                                  sensor_modules='sensor' in missing_modules,
                                   can_controls='can_control' in missing_modules,
                                   ucans='ucan' in missing_modules)
 
@@ -424,7 +424,7 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
+    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, ucans=False, timeout=120):
         logger.info('Discovering modules')
         since = time.time()
         expected_ucan_emulated_modules = {'I': 0, 'T': 0}
@@ -464,8 +464,8 @@ class Toolbox(object):
                 logger.info('* Discover dim control module')
                 self.tester.toggle_output(TESTER.Button.dimmer, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
-            if temp_modules:
-                logger.info('* Discover temperature module')
+            if sensor_modules:
+                logger.info('* Discover sensor module')
                 self.tester.toggle_output(TESTER.Button.temp, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
             if can_controls or ucans:

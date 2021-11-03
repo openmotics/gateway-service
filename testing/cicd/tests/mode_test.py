@@ -169,5 +169,5 @@ def test_factory_reset(toolbox, authorized_mode, factory_reset):
     assert None not in [x['firmware_version'] for x in modules
                         if x['module_type'] in ['input', 'output',
                                                 'shutter', 'dim_control',
-                                                'temperature']
+                                                'sensor']
                         and x['hardware_type'] != 'emulated']
