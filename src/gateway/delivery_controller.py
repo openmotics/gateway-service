@@ -189,20 +189,23 @@ class DeliveryController(object):
             raise RuntimeError('Cannot update the delivery with id: {}: Delivery has already been picked up'.format(delivery_id))
 
         delivery_dto.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
-        if delivery_dto.type == Delivery.DeliveryType.RETURN:
-            pickup_user_dto = delivery_dto.user_pickup
-            delivery_dto.user_pickup = delivery_dto.user_delivery
-            delivery_dto_saved = self.save_delivery(delivery_dto)
-            self.user_controller.remove_user(pickup_user_dto)
-        else:
-            delivery_dto_saved = self.save_delivery(delivery_dto)
 
+        # first send the event to get the return_pickup_code if needed
         event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
-            'id': delivery_dto_saved.id,
+            'id': delivery_id,
             'action': 'PICKUP',
             'delivery': DeliverySerializer.serialize(delivery_dto),
         })
         self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
+
+        # if applicable, delete the courier user in case it is an return
+        # else, just save the delivery
+        if delivery_dto.type == Delivery.DeliveryType.RETURN:
+            pickup_user_dto = delivery_dto.user_pickup
+            delivery_dto_saved = self.save_delivery(delivery_dto)
+            self.user_controller.remove_user(pickup_user_dto)
+        else:
+            delivery_dto_saved = self.save_delivery(delivery_dto)
 
         return delivery_dto_saved
 
