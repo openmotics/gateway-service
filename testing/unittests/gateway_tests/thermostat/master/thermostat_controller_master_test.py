@@ -56,6 +56,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
             status = {'act': None,
                       'csetp': None,
                       'setpoint': None,
+                      'preset': 'AUTO',
                       'output0': None,
                       'output1': None,
                       'state': 'on',
@@ -92,7 +93,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                 self.assertEqual(20.0 if mode == 'heating' else 24.0,
                                  getattr(thermostat_dto, 'auto_{0}'.format(day)).temp_day_1)  # Validate internal `_build_thermostat_dto` method
                 self.assertEqual(expected_dto, thermostat_dto)
-                getattr(thermostat_dto, 'auto_{0}'.format(day)).temp_day_1 = None  # Set single value invalid
+                getattr(thermostat_dto, 'auto_{0}'.format(day)).temp_day_1 = 0.0  # Set single value invalid
                 changed = self.controller._patch_thermostat(thermostat_dto, mode=mode)
                 self.assertTrue(changed)
                 self.assertEqual(expected_dto, thermostat_dto)  # Must be restored

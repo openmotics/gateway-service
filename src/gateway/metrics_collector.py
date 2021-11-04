@@ -35,7 +35,7 @@ from platform_utils import Hardware
 from gateway.thermostat.thermostat_controller import ThermostatController
 
 if False:  # MYPY
-    from typing import Dict, Any, List, Optional, Tuple
+    from typing import Dict, Any, List, Optional, Tuple, Union
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.input_controller import InputController
     from gateway.output_controller import OutputController
@@ -560,17 +560,17 @@ class MetricsCollector(object):
                     group_on = False
                     for thermostat in status.statusses:
                         values = {'setpoint': int(thermostat.setpoint),
-                                  'output0': thermostat.output_0_level and float(thermostat.output_0_level),
-                                  'output1': thermostat.output_1_level and float(thermostat.output_1_level),
-                                  'steering_power': thermostat.steering_power,
+                                  'output0': convert_float(thermostat.output_0_level),
+                                  'output1': convert_float(thermostat.output_1_level),
+                                  'steering_power': convert_float(thermostat.steering_power),
                                   'state': thermostat.state,
                                   'mode': int(thermostat.mode),
                                   'automatic': thermostat.automatic,
-                                  'current_setpoint': thermostat.setpoint_temperature}
+                                  'current_setpoint': convert_float(thermostat.setpoint_temperature)}
                         if thermostat.outside_temperature is not None:
-                            values['outside'] = thermostat.outside_temperature
+                            values['outside'] = float(thermostat.outside_temperature)
                         if thermostat.actual_temperature is not None:
-                            values['temperature'] = thermostat.actual_temperature
+                            values['temperature'] = float(thermostat.actual_temperature)
                         self._enqueue_metrics(metric_type=metric_type,
                                               values=values,
                                               tags={'id': '{0}.{1}'.format('C' if status.cooling is True else 'H',
@@ -1126,7 +1126,7 @@ class MetricsCollector(object):
                           'unit': '%'}]},
             # thermostat
             {'type': 'thermostat',
-             'tags': ['id', 'name'],
+             'tags': ['id'],
              'metrics': [{'name': 'on',
                           'description': 'Indicates whether the thermostat is on',
                           'type': 'gauge',
@@ -1304,6 +1304,11 @@ class MetricsCollector(object):
                           'type': 'gauge',
                           'unit': ''}]}
         ]
+
+
+def convert_float(value):
+    # type: (Optional[Union[float, int]]) -> Optional[float]
+    return None if value is None else float(value)
 
 
 def convert_kwh(value):

@@ -20,8 +20,6 @@ from __future__ import absolute_import
 import binascii
 import logging
 import os
-import shutil
-import subprocess
 import sys
 import time
 import uuid
@@ -53,14 +51,14 @@ from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
 from gateway.energy.energy_communicator import InAddressModeException
-from gateway.enums import ModuleType, ShutterEnums, UserEnums
+from gateway.enums import ModuleType, ShutterEnums, UpdateEnums, UserEnums
 from gateway.events import BaseEvent
 from gateway.exceptions import CommunicationFailure, \
     FeatureUnavailableException, InMaintenanceModeException, \
     ItemDoesNotExistException, ParseException, UnsupportedException, \
     WrongInputParametersException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, Schedule, User
+from gateway.models import Config, Database, Feature, Schedule, User, Module
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
@@ -68,6 +66,7 @@ from gateway.websockets import EventsSocket, MaintenanceSocket, \
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
+from gateway.update_controller import UpdateController
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -358,7 +357,7 @@ class WebInterface(object):
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
                  uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
-                 rebus_controller=INJECTED):
+                 update_controller=INJECTED, rebus_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -378,6 +377,7 @@ class WebInterface(object):
         self._uart_controller = uart_controller  # type: UARTController
         self._system_controller = system_controller  # type: SystemController
         self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
+        self._update_controller = update_controller  # type: UpdateController
 
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._message_client = message_client  # type: Optional[MessageClient]
@@ -559,6 +559,15 @@ class WebInterface(object):
         usernames = [user.username for user in users]
         return {'usernames': usernames}
 
+    @openmotics_api(auth=True, check=types(amount=int))
+    def get_master_debug_buffer(self, amount=10):
+        debug_buffer = self._module_controller.get_master_debug_buffer()
+        filtered_buffer = {}
+        for direction in ['read', 'write']:
+            buffer = debug_buffer[direction]
+            filtered_buffer[direction] = {key: buffer[key] for key in sorted(buffer.keys())[-amount:]}
+        return filtered_buffer
+
     @openmotics_api(plugin_exposed=False)
     def remove_user(self, username):
         """
@@ -641,19 +650,23 @@ class WebInterface(object):
         return self._module_controller.get_modules()
 
     @openmotics_api(auth=True, check=types(address=str, fields='json'))
-    def get_modules_information(self, address=None, fields=None, refresh=False):  # type: (Optional[str], Optional[List[str]], bool) -> Dict[str, Any]
+    def get_modules_information(self, source=None, address=None, fields=None, refresh=False):  # type: (Optional[str], Optional[str], Optional[List[str]], bool) -> Dict[str, Any]
         """
         Gets an overview of all modules and information
+        :param source: Optional source filter
         :param address: Optional address filter
         :param fields: The field of the module information to get, None if all
         :param refresh: Indicates whether data should be refreshed before returning it
         """
         if refresh:
             self._module_controller.run_sync_orm()
-        return {'modules': {'master': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
-                                       for module_dto in self._module_controller.load_master_modules(address)},
-                            'energy': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
-                                       for module_dto in self._module_controller.load_energy_modules(address)}}}
+        modules = {}  # type: Dict[str, Dict[str, Dict[str, Any]]]
+        for module_dto in self._module_controller.load_modules(source=source, address=address):
+            if module_dto.source not in modules:
+                modules[module_dto.source] = {}
+            modules[module_dto.source][module_dto.address] = ModuleSerializer.serialize(module_dto=module_dto,
+                                                                                        fields=fields)
+        return {'modules': modules}
 
     @openmotics_api(auth=True, check=types(old_address=str, new_address=str))
     def replace_module(self, old_address, new_address):  # type: (str, str) -> Dict[str, Any]
@@ -675,7 +688,9 @@ class WebInterface(object):
             'isolated_plugins',  # Plugins run in a separate process, so allow fine-graded control
             'websocket_maintenance',  # Maintenance over websockets
             'shutter_positions',  # Shutter positions
-            'ventilation',
+            'ventilation',  # Native ventilation
+            'modules_information',  # Clean module information
+            'dynamic_updates',  # Dynamic updates
         ]
 
         master_version = self._module_controller.get_master_version()
@@ -724,6 +739,10 @@ class WebInterface(object):
         return self._module_controller.get_master_status()
 
     @openmotics_api(auth=True)
+    def get_system_status(self):
+        return {'updates': self._update_controller.get_update_state()}
+
+    @openmotics_api(auth=True)
     def get_input_status(self):
         # type: () -> Dict[str, List[Dict[str, Any]]]
         """
@@ -731,8 +750,8 @@ class WebInterface(object):
 
         :returns: 'status': list of dictionaries with the following keys: id, status.
         """
-        return {'status': [InputStateSerializer.serialize(input, None)
-                           for input in self._input_controller.get_input_statuses()]}
+        return {'status': [InputStateSerializer.serialize(input_, None)
+                           for input_ in self._input_controller.get_input_statuses()]}
 
     @openmotics_api(auth=True, check=types(id=int, is_on=bool))
     def set_input(self, id, is_on):
@@ -2018,7 +2037,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(level=str, logger_name=str))
     def set_loglevel(self, level='INFO', logger_name=None):  # type: (str, Optional[str]) -> Dict
         level = level.upper()
-        Logs.set_service_loglevel(level, namespace=logger_name)
+        Logs.set_loglevel(level, logger_name)
         return {'loglevel': level}
 
     # UART
@@ -2191,9 +2210,11 @@ class WebInterface(object):
         master_version = self._module_controller.get_master_version()
         if master_version is not None:
             master_version = ".".join([str(n) for n in master_version] if len(master_version) else None)
-        return {'version': self._system_controller.get_main_version(),
+        return {'version': gateway.__version__,
                 'gateway': gateway.__version__,
                 'master': master_version}
+
+    # TODO: def get_versions(self):  # Something more generic that can return a general version overview (service, frontend, modules, os, ...)
 
     @openmotics_api(auth=True)
     def get_system_info(self):
@@ -2207,29 +2228,10 @@ class WebInterface(object):
                                      'name': str(name)},
                 'platform': str(Platform.get_platform())}
 
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def update(self, version, md5, update_data=None):
-        """
-        Perform an update.
-
-        :param version: the new version number.
-        :type version: str
-        :param md5: the md5 sum of update_data.
-        :type md5: str
-        :param update_data: a tgz file containing the update script (update.sh) and data.
-        :type update_data: multipart/form-data encoded byte string.
-        """
-        if not os.path.exists(constants.get_update_dir()):
-            os.mkdir(constants.get_update_dir())
-
-        if update_data:
-            logger.info('using old style update.tgz')
-            update_data = update_data.file.read()
-            with open(constants.get_update_file(), "wb") as update_file:
-                update_file.write(update_data)
-
-        subprocess.Popen(constants.get_update_cmd(version, md5), close_fds=True)
-
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(version=str, metadata='json'))
+    def update(self, version, metadata=None):
+        """ Request to update to a given version """
+        self._update_controller.request_update(version, metadata)
         return {}
 
     @openmotics_api(auth=True)
@@ -2240,19 +2242,18 @@ class WebInterface(object):
         :returns: 'output': String with the output from the update script.
         :rtype: dict
         """
-        with open(constants.get_update_output_file(), "r") as output_file:
-            output = output_file.read()
-        version = self._system_controller.get_main_version()
+        return {'output': '',
+                'version': gateway.__version__}
 
-        return {'output': output,
-                'version': version}
-
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def update_firmware(self, module_type, firmware_version):
-        self._module_controller.update_firmware(module_type=module_type,
-                                                firmware_version=firmware_version)
-        self._module_controller.request_sync_orm()
-        return {}
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(module_type=str, firmware_version=str, module_address=str, force=bool))
+    def update_firmware(self, module_type, firmware_version, module_address=None, force=False):
+        mode = UpdateEnums.Modes.FORCED if force else UpdateEnums.Modes.MANUAL
+        successes, failures = self._update_controller.update_module_firmware(module_type=module_type,
+                                                                             target_version=firmware_version,
+                                                                             mode=mode,
+                                                                             module_address=module_address)
+        return {'successes': successes,
+                'failures': failures}
 
     @openmotics_api(auth=True)
     def set_timezone(self, timezone):

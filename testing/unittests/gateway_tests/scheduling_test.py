@@ -40,6 +40,7 @@ from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Schedule]
 
+
 class SchedulingControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -75,6 +76,7 @@ class SchedulingControllerTest(unittest.TestCase):
                             group_action_controller=self.group_action_controller,
                             energy_module_controller=Mock(),
                             uart_controller=Mock(),
+                            update_controller=Mock(),
                             rebus_controller=None)
         self.controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=self.controller)

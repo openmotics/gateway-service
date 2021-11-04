@@ -21,6 +21,7 @@ from master.core.system_value import Humidity, Temperature
 
 if False:  # MYPY
     from typing import Any, Optional, List, Tuple, Union, Callable
+    from master.core.serial_number import SerialNumber
 
 
 class Field(object):
@@ -288,6 +289,23 @@ class VersionField(AddressField):
 
     def decode(self, data):  # type: (bytearray) -> str
         return '.'.join(str(item) for item in data)
+
+
+class SerialNumberField(Field):
+    def __init__(self, name):
+        super(SerialNumberField, self).__init__(name, 7)
+
+    def encode(self, value):  # type: (SerialNumber) -> bytearray
+        from master.core.serial_number import SerialNumber  # Prevent circular import
+
+        if not isinstance(value, SerialNumber):
+            raise ValueError('Value `{0}` should be a SerialNumber'.format(value))
+        return value.encode()
+
+    def decode(self, data):  # type: (bytearray) -> SerialNumber
+        from master.core.serial_number import SerialNumber  # Prevent circular import
+
+        return SerialNumber.decode(data)
 
 
 class PaddingField(Field):

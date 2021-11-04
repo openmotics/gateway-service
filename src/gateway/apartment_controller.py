@@ -45,7 +45,7 @@ class ApartmentController(object):
     @Inject
     def send_config_change_event(msg, error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
         # type: (str, Dict[str, Any], PubSub) -> None
-        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'Apartment', 'msg': msg}, error=error)
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'apartment', 'msg': msg}, error=error)
         pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
 
     @staticmethod

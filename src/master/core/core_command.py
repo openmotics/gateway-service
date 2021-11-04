@@ -50,6 +50,10 @@ class CoreCommandSpec(object):
         self.response_fields = [] if response_fields is None else response_fields
         self.response_instruction = bytearray([ord(c) for c in response_instruction]) if response_instruction is not None else self.instruction
 
+    @property
+    def expects_response(self):
+        return len(self.response_fields) > 0
+
     def create_request_payload(self, fields):  # type: (Dict[str, Any]) -> bytearray
         """
         Create the request payload for the Core using this spec and the provided fields.

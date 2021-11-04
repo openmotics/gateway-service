@@ -79,6 +79,7 @@ class WebInterfaceTest(unittest.TestCase):
                             module_controller=self.module_controller,
                             energy_module_controller=self.energy_module_controller,
                             uart_controller=mock.Mock(),
+                            update_controller=mock.Mock(),
                             rebus_controller=None)
         self.web = WebInterface()
 
@@ -425,23 +426,24 @@ class WebInterfaceTest(unittest.TestCase):
                                     hardware_type=HardwareType.PHYSICAL,
                                     firmware_version='1.2.3',
                                     order=0)]
-        with mock.patch.object(self.module_controller, 'load_master_modules', return_value=master_modules) as load_master_modules, \
-                mock.patch.object(self.module_controller, 'load_energy_modules', return_value=energy_modules) as load_energy_modules:
+        with mock.patch.object(self.module_controller, 'load_modules', return_value=master_modules + energy_modules) as load_modules:
             api_response = json.loads(self.web.get_modules_information())
-            load_master_modules.assert_called()
-            load_energy_modules.assert_called()
-            self.assertDictEqual(api_response, {"modules": {"energy": {'2': {'address': '2',
-                                                                             'firmware': '1.2.3',
-                                                                             'id': 0,
-                                                                             'type': 'E'}},
-                                                            "master": {"079.000.000.001": {"category": "OUTPUT",
-                                                                                           "is_can": False,
-                                                                                           "hardware_type": "internal",
-                                                                                           "module_nr": 0,
-                                                                                           "is_virtual": False,
-                                                                                           "address": "079.000.000.001",
-                                                                                           "type": "O"}}},
-                                                "success": True})
+            load_modules.assert_called()
+            self.assertEqual(api_response, {'modules': {'gateway': {'2': {'source': 'gateway',
+                                                                          'module_type': 'energy',
+                                                                          'address': '2',
+                                                                          'hardware_type': 'physical',
+                                                                          'firmware_version': '1.2.3',
+                                                                          'order': 0,
+                                                                          'update_success': None}},
+                                                        'master': {'079.000.000.001': {'source': 'master',
+                                                                                       'module_type': 'output',
+                                                                                       'hardware_type': 'internal',
+                                                                                       'firmware_version': '3.1.0',
+                                                                                       'order': 0,
+                                                                                       'update_success': None,
+                                                                                       'address': '079.000.000.001'}}},
+                                            'success': True})
 
     def test_scheduled_action_configurations(self):
         dtos = [LegacyScheduleDTO(id=0, hour=1, day=2, minute=3, action=[4, 5])]

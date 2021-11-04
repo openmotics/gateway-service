@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
 import logging
-import os
 import subprocess
 import sys
 import time
@@ -12,11 +11,7 @@ import cherrypy
 import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
-
-import constants
-
 from gateway.daemon_thread import BaseThread
-from platform_utils import System
 from toolbox import PluginIPCReader, PluginIPCWriter
 from plugin_runtime.base import PluginWebRequest, PluginWebResponse
 
@@ -25,6 +20,7 @@ if False:  # MYPY
     from gateway.webservice import WebInterface
 
 logger_ = logging.getLogger(__name__)
+
 
 class Service(object):
     def __init__(self, runner, webinterface):

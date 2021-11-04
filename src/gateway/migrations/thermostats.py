@@ -373,13 +373,16 @@ class ThermostatsMigrator(BaseMigrator):
 
     @classmethod
     def _migrate_schedules(cls, thermostat, mode, eeprom_object):
+        start_night = 0
+        night_end = int(timedelta(hours=24, minutes=0, seconds=0).total_seconds())
+
         def get_seconds(hour_timestamp):
-            # type: (str) -> Optional[int]
-            try:
-                x = time.strptime(hour_timestamp, '%H:%M')
-                return int(timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds())
-            except Exception:
-                return None
+            # type: (str) -> int
+            if hour_timestamp == '24:00':
+                return night_end
+            else:
+                t = time.strptime(hour_timestamp, '%H:%M')
+                return int(timedelta(hours=t.tm_hour, minutes=t.tm_min, seconds=t.tm_sec).total_seconds())
 
         for i, schedule in cls._enumerate_schedules(eeprom_object):
             temp_night = schedule[0]
@@ -389,6 +392,27 @@ class ThermostatsMigrator(BaseMigrator):
             start_day_2 = get_seconds(schedule[4])
             end_day_2 = get_seconds(schedule[5])
             temp_day_2 = schedule[6]
+
+            # Attempt to resolve overlapping transitions in the schedule
+            offset = 600
+            if start_day_1 <= start_night:
+                start_day_1 = start_night + offset
+            if end_day_1 <= start_day_1:
+                end_day_1 = start_day_1 + offset
+            if start_day_2 <= end_day_1:
+                start_day_2 = end_day_1 + offset
+            if end_day_2 <= start_day_2:
+                end_day_2 = start_day_2 + offset
+            if end_day_2 >= night_end:
+                end_day_2 = night_end - offset
+            if start_day_2 >= end_day_2:
+                start_day_2 = end_day_2 - offset
+            if end_day_1 >= start_day_2:
+                end_day_1 = start_day_2 - offset
+            if start_day_1 >= end_day_1:
+                start_day_1 = end_day_1 - offset
+            if start_day_1 <= start_night:
+                raise ValueError('Invalid schedule')
 
             schedule_data = {0: temp_night,
                              start_day_1: temp_day_1,

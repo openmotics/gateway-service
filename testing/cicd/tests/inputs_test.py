@@ -23,6 +23,7 @@ import ujson as json
 from hypothesis.strategies import booleans, integers, just
 
 from tests.hardware import inputs, multiple_outputs, outputs
+from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, Input, Module, TestPlatform
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ DEFAULT_INPUT_CONFIG = {'invert': 255}
 
 @pytest.mark.smoke
 @hypothesis.given(inputs(), outputs(), booleans())
+# Doing a reset_master API call helps if the test is flaky
 def test_actions(toolbox, _input, output, to_status):
     from_status = not to_status
     logger.debug('input action {} to {}, expect event {} -> {}'.format(

@@ -58,9 +58,10 @@ from master.classic.eeprom_models import CoolingConfiguration, \
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator
 from master.classic.master_heartbeat import MasterHeartbeat
-from master.classic.slave_updater import bootload_modules
+from master.classic.slave_updater import SlaveUpdater
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
+from logs import Logs
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -96,9 +97,7 @@ class MasterClassicController(MasterController):
         self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
-        self._synchronization_thread = DaemonThread(name='mastersync',
-                                                    target=self._synchronize,
-                                                    interval=5, delay=10)
+        self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
         self._output_config = {}  # type: Dict[int, OutputDTO]
@@ -215,7 +214,6 @@ class MasterClassicController(MasterController):
         # type: () -> None
         """
         Checks master settings such as:
-        * Enable large installation
         * Enable async messages
         * Enable multi-tenancy
         * Enable 32 thermostats
@@ -336,7 +334,8 @@ class MasterClassicController(MasterController):
     def _invalidate_caches(self):
         # type: () -> None
         self._shutters_last_updated = 0.0
-        self._synchronization_thread.request_single_run()
+        if self._synchronization_thread is not None:
+            self._synchronization_thread.request_single_run()
 
     #######################
     # Internal management #
@@ -346,11 +345,16 @@ class MasterClassicController(MasterController):
         # type: () -> None
         super(MasterClassicController, self).start()
         self._heartbeat.start()
+        self._synchronization_thread = DaemonThread(name='mastersync',
+                                                    target=self._synchronize,
+                                                    interval=5, delay=10)
         self._synchronization_thread.start()
 
     def stop(self):
         # type: () -> None
-        self._synchronization_thread.stop()
+        if self._synchronization_thread is not None:
+            self._synchronization_thread.stop()
+            self._synchronization_thread = None
         self._heartbeat.stop()
         super(MasterClassicController, self).stop()
 
@@ -1052,15 +1056,17 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def get_module_information(self, address):
         # type: (bytearray) -> Tuple[bool, Optional[str], Optional[str]]
-        try:
-            _module_version = self._master_communicator.do_command(master_api.get_module_version(),
-                                                                   {'addr': address},
-                                                                   extended_crc=True,
-                                                                   timeout=5)
-            _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
-            return True, _module_version['hw_version'], _firmware_version
-        except CommunicationTimedOutException:
-            return False, None, None
+        _ = address
+        # TODO: Re-enable this call once the FV call gets fixed in the firmware
+        # try:
+        #     _module_version = self._master_communicator.do_command(master_api.get_module_version(),
+        #                                                            {'addr': address},
+        #                                                            extended_crc=True,
+        #                                                            timeout=5)
+        #     _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
+        #     return True, _module_version['hw_version'], _firmware_version
+        # except CommunicationTimedOutException:
+        return False, None, None
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         old_address_bytes = bytearray([int(part) for part in old_address.split('.')])
@@ -1195,12 +1201,11 @@ class MasterClassicController(MasterController):
     @Inject
     def update_master(self, hex_filename, version, controller_serial=INJECTED):
         # type: (str, str, Serial) -> None
+        individual_logger = Logs.get_update_logger('master_classic')
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
             self._master_communicator.update_mode_start()
-
-            _ = version  # TODO: Skip if version is identical
 
             port = controller_serial.port  # type: ignore
             baudrate = str(controller_serial.baudrate)  # type: ignore
@@ -1209,8 +1214,8 @@ class MasterClassicController(MasterController):
                        [2, 2, 3, 2], [2, 2, 3, 1],
                        [2, 2, 4, 2], [2, 2, 4, 1]]
 
-            logger.info('Updating master...')
-            logger.info('* Enter bootloader...')
+            individual_logger.info('Updating master to {0}'.format(version))
+            individual_logger.info('* Enter bootloader...')
             bootloader_active = False
             for timing in timings:
                 # Setting this condition will assert a break condition on TX to which the bootloader will react.
@@ -1224,7 +1229,7 @@ class MasterClassicController(MasterController):
                 controller_serial.break_condition = False
                 time.sleep(timing[3])
 
-                logger.info('* Verify bootloader...')
+                individual_logger.info('* Verify bootloader...')
                 try:
                     response = str(subprocess.check_output(base_command + ['-s']))
                     # Expected response:
@@ -1239,42 +1244,42 @@ class MasterClassicController(MasterController):
                                        string=response,
                                        flags=re.DOTALL)
                     if not match:
-                        logger.info('Bootloader response did not match: {0}'.format(response))
+                        individual_logger.info('Bootloader response did not match: {0}'.format(response))
                         continue
-                    logger.debug(response)
-                    logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
+                    individual_logger.debug(response)
+                    individual_logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
                     bootloader_active = True
                     break
                 except subprocess.CalledProcessError as ex:
-                    logger.info(ex.output)
+                    individual_logger.info(ex.output)
                     raise
             if bootloader_active is False:
                 raise RuntimeError('Failed to go into Bootloader - try other timings')
-            logger.info('* Flashing...')
+            individual_logger.info('* Flashing...')
             try:
                 response = str(subprocess.check_output(base_command + ['-p ', '-c', hex_filename]))
-                logger.debug(response)
+                individual_logger.debug(response)
             except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
+                individual_logger.info(ex.output)
                 raise
 
-            logger.info('* Verifying...')
+            individual_logger.info('* Verifying...')
             try:
                 response = str(subprocess.check_output(base_command + ['-v', hex_filename]))
-                logger.debug(response)
+                individual_logger.debug(response)
             except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
+                individual_logger.info(ex.output)
                 raise
 
-            logger.info('* Entering application...')
+            individual_logger.info('* Entering application...')
             try:
                 response = str(subprocess.check_output(base_command + ['-r']))
-                logger.debug(response)
+                individual_logger.debug(response)
             except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
+                individual_logger.info(ex.output)
                 raise
 
-            logger.info('Update completed')
+            individual_logger.info('Update completed')
 
         finally:
             self._master_communicator.update_mode_stop()
@@ -1282,18 +1287,19 @@ class MasterClassicController(MasterController):
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, module_type, hex_filename, version):
-        # type: (str, str, str) -> None
+    def update_slave_module(self, firmware_type, address, hex_filename, version):
+        # type: (str, str, str, str) -> Optional[str]
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
             parsed_version = tuple(int(part) for part in version.split('.'))
             gen3_firmware = parsed_version >= (6, 0, 0)
-            bootload_modules(module_type=module_type,
-                             filename=hex_filename,
-                             gen3_firmware=gen3_firmware,
-                             version=version,
-                             raise_exception=True)
+            individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
+            return SlaveUpdater.bootload(address=address,
+                                         filename=hex_filename,
+                                         gen3_firmware=gen3_firmware,
+                                         version=version,
+                                         logger=individual_logger)
         finally:
             self._heartbeat.start()
             self._communication_enabled = True
@@ -1408,7 +1414,7 @@ class MasterClassicController(MasterController):
                                          'address': address})
             logger.info('Initialize/discovery - {0} module found: {1} ({2})'.format(
                 code_map.get(api_data['instr'], 'Unknown'),
-                api_data['id'][0],
+                module_type,
                 address
             ))
         except Exception:

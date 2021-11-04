@@ -38,6 +38,8 @@ class SlaveCommunicator(object):
     Uses a CoreCommunicator to communicate with the slave bus
     """
 
+    # TODO: Hold communications when master is rebooting
+
     @Inject
     def __init__(self, master_communicator=INJECTED, verbose=False):
         """
