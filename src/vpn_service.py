@@ -22,6 +22,7 @@ from __future__ import absolute_import
 from platform_utils import System, Hardware
 System.import_libs()
 
+import tempfile
 import glob
 import logging
 import logging.handlers
@@ -30,6 +31,8 @@ import signal
 import subprocess
 import time
 import traceback
+import shutil
+from datetime import datetime, timedelta
 from collections import deque
 from threading import Lock
 
@@ -37,8 +40,10 @@ import requests
 import six
 from requests import ConnectionError
 from requests.adapters import HTTPAdapter
+from requests.exceptions import HTTPError
 import ujson as json
 from six.moves.configparser import ConfigParser, NoOptionError
+from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 from bus.om_bus_client import MessageClient
@@ -127,32 +132,115 @@ class VpnController(object):
 
 class Cloud(object):
     """ Connects to the cloud """
+    request_kwargs = {
+        'timeout': 10.0,
+        'verify': System.get_operating_system().get('ID') != System.OS.ANGSTROM
+    }
 
-    def __init__(self, url=None):
+    def __init__(self, url=None, uuid=None):
         self._session = requests.Session()
         self._url = url
-        if self._url is None:
+        self._uuid = uuid
+        self._auth_retries = 0
+        self._refresh_timeout = 0.0
+        if url is None:
             config = ConfigParser()
             config.read(constants.get_config_file())
             try:
-                self._url = config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid')
+                self._uuid = config.get('OpenMotics', 'uuid')
+                url = config.get('OpenMotics', 'vpn_check_url')
+                if '%' in url:
+                    url = url % self._uuid
             except NoOptionError:
                 pass
+        if url:
+            self._url = urlparse(url)
+
+    def _build_url(self, path, query=None):
+        return urlunparse((self._url.scheme, self._url.netloc, path, '', query, ''))
+
+    def authenticate(self, key_path=None, raise_exception=False):
+        if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
+            return
+        try:
+            import jwt
+            payload = {'iss': 'OM',
+                       'sub': 'gateway',
+                       'aud': self._url.hostname,
+                       'exp': int(time.time() + 60),
+                       'registration_key': self._uuid}
+            key_path = key_path or CertificateFiles.cert_path(CertificateFiles.CURRENT, 'client.key')
+            with open(key_path, 'rb') as fd:
+                client_key = fd.read()
+            token = jwt.encode(payload, client_key, algorithm='RS256')
+            data = {'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    'assertion': token.decode(),
+                    'scope': 'device'}
+            response = requests.post(self._build_url('/api/v1/authentication/oauth2/token'), data=data)
+            response.raise_for_status()
+            data = response.json()
+            logger.info('Authenticated until %s', datetime.now() + timedelta(seconds=data['expires_in']))
+            self._session.headers.update({'Authorization': 'JWT {0}'.format(data['access_token'])})
+            self._auth_retries = 0
+            self._refresh_timeout = time.time() + data['expires_in']
+        except Exception as exc:
+            backoff = 4 ** self._auth_retries
+            self._auth_retries += 1
+            self._refresh_timeout = time.time() + backoff
+            if isinstance(exc, HTTPError):
+                logger.error('retrying (%s) authentication failure in %ss: %s', self._auth_retries, backoff, exc.response.text)
+            else:
+                logger.error('retrying (%s) authentication error in %ss: %s', self._auth_retries, backoff, exc)
+            if raise_exception:
+                raise
+
+    def _request(self, method, path, **kwargs):
+        try:
+            if self._session.headers.get('Authorization'):
+                url = self._build_url(path)
+            else:
+                query = 'uuid={0}'.format(self._uuid)
+                url = self._build_url(path, query=self._url.query or query)
+            logger.debug('Request %s %s',  method.__name__.upper(), path)
+            response = method(url, **kwargs)
+            response.raise_for_status()
+            return response.json()
+        except HTTPError as exc:
+            if exc.response.status_code == 403:
+                logger.error('Authentication error: %s', exc.response.text)
+                self._session = requests.Session()
+            elif exc.response.status_code not in (404,):
+                logger.error('API error: %s', exc.response.text)
+            raise
+
+    def _get(self, path):
+        return self._request(self._session.get, path, **self.request_kwargs)
+
+    def _post(self, path, data):
+        return self._request(self._session.post, path, json=data, **self.request_kwargs)
+
+    def confirm_client_certs(self, key_path=None):
+        self.authenticate(key_path=key_path)
+        try:
+            data = self._get('/api/gateway/client-certs')
+            return data['confirmed']
+        except Exception:
+            return False
+
+    def issue_client_certs(self):
+        return self._post('/api/gateway/client-certs', {})
 
     def call_home(self, extra_data):
         """ Call home reporting our state, and optionally get new settings or other stuff """
         if self._url is None:
             logger.debug('Cloud not configured, skipping call home')
         try:
-            request = self._session.post(self._url,
-                                         data={'extra_data': json.dumps(extra_data, sort_keys=True)},
-                                         timeout=10.0,
-                                         verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
-            response = json.loads(request.text)
+            if self._refresh_timeout < time.time():
+                self.authenticate()
+            response = self._post('/api/gateway/heartbeat', extra_data)
             data = {'success': True}
-            for entry in ['sleep_time', 'open_vpn', 'configuration', 'intervals']:
-                if entry in response:
-                    data[entry] = response[entry]
+            data.update({k: v for k, v in response.items() if k in
+                         ('sleep_time', 'open_vpn', 'update_certs', 'configuration', 'intervals')})
             return data
         except Exception:
             logger.exception('Exception occured during call home')
@@ -196,6 +284,104 @@ class Gateway(object):
         return {'master_errors': master_errors,
                 'master_last_success': data['master_last_success'],
                 'power_last_success': data['power_last_success']}
+
+
+class CertificateFiles(object):
+    CURRENT = 'current'
+    PREVIOUS = 'previous'
+    VPN = 'vpn'
+
+    FILES = {'ca': 'ca.crt',
+             'certificate': 'client.crt',
+             'private_key': 'client.key'}
+
+    def __init__(self):
+        self.target = datetime.now().strftime('%Y%m%d%H%M')
+        self.current = self.cert_path(CertificateFiles.CURRENT)
+        self.previous = self.cert_path(CertificateFiles.PREVIOUS)
+        self.vpn = self.cert_path(CertificateFiles.VPN)
+
+    @staticmethod
+    def cert_path(*args, prefix=constants.OPENMOTICS_PREFIX):
+        return os.path.join(prefix, 'versions', 'certificates', *args)
+
+    @property
+    def key_path(self):
+        return self.cert_path(self.target, 'client.key')
+
+    def setup_links(self):
+        if all(os.path.exists(x) for x in (self.current, self.vpn)):
+            return
+
+        certificates = self.cert_path()
+        if not os.path.exists(certificates):
+            os.makedirs(certificates)
+
+        versions = set(x.split(os.path.sep)[-1] for x in glob.glob(self.cert_path('*')))
+        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.VPN])
+        latest = None
+        for version in sorted(versions, reverse=True):
+            if os.path.exists(self.cert_path(version, 'client.key')):
+                latest = version
+                break
+
+        for link in (self.current, self.vpn):
+            if not os.path.exists(link):
+                if latest:
+                    temp_link = tempfile.mktemp(dir=self.cert_path())
+                    os.symlink(latest, temp_link)
+                    os.replace(temp_link, link)
+                else:
+                    logger.warning('No certificates available')
+
+    def cleanup_versions(self):
+        try:
+            versions = set(x.split(os.path.sep)[-1] for x in glob.glob(self.cert_path('*')))
+            versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.VPN])
+            versions -= set(list(sorted(versions, reverse=True))[:3])
+            for link in (self.previous, self.current):
+                try:
+                    link_target = os.readlink(link).split(os.path.sep)[-1]
+                    if link_target in versions:
+                        logger.info('Keeping certificates %s', link_target)
+                        versions -= set([link_target])
+                except Exception:
+                    pass
+            for version in versions:
+                logger.info('Removing certificates %s', version)
+                shutil.rmtree(self.cert_path(version))
+        except Exception as exc:
+            logger.error('Failed to cleanup versions: %s', exc)
+
+    def setup_certs(self, data):
+        logger.info('Saving %s', data['data'].get('serial_number'))
+        version = self.cert_path(self.target)
+        if not os.path.exists(version):
+            os.makedirs(version)
+        for key, file in self.FILES.items():
+            with open(os.path.join(version, file), 'w') as fd:
+                fd.write(data['data'][key])
+
+    def activate(self):
+        logger.info('Activating certificates %s', self.target)
+        temp_link = tempfile.mktemp(dir=self.cert_path())
+        try:
+            previous_target = os.readlink(self.current).split(os.path.sep)[-1]
+        except Exception:
+            previous_target = None
+        os.symlink(self.target, temp_link)
+        os.replace(temp_link, self.current)
+        if previous_target:
+            os.symlink(previous_target, temp_link)
+            os.replace(temp_link, self.previous)
+
+    def rollback(self):
+        previous_target = os.readlink(self.previous).split(os.path.sep)[-1]
+        logger.info('Rolling back certificates %s', previous_target)
+        temp_link = tempfile.mktemp(dir=self.cert_path())
+        os.symlink(previous_target, temp_link)
+        os.replace(temp_link, self.current)
+        os.unlink(self.previous)
 
 
 class DataCollector(object):
@@ -267,16 +453,17 @@ class DebugDumpDataCollector(DataCollector):
 
 class TaskExecutor(object):
     @Inject
-    def __init__(self, message_client=INJECTED):
+    def __init__(self, cloud=None, message_client=INJECTED):
         self._configuration = {}
         self._intervals = {}
         self._vpn_open = False
+        self._cloud = cloud
         self._message_client = message_client
         self._vpn_controller = VpnController()
         self._tasks = deque()
         self._previous_amount_of_tasks = 0
         self._executor = DaemonThread(name='taskexecutor',
-                                      target=self._execute_tasks,
+                                      target=self.execute_tasks,
                                       interval=300)
 
     def start(self):
@@ -291,7 +478,7 @@ class TaskExecutor(object):
     def vpn_open(self):
         return self._vpn_open
 
-    def _execute_tasks(self):
+    def execute_tasks(self):
         while True:
             try:
                 task_data = self._tasks.pop()
@@ -308,6 +495,8 @@ class TaskExecutor(object):
                 self._process_interval_data(task_data['intervals'])
             if 'open_vpn' in task_data:
                 self._open_vpn(task_data['open_vpn'])
+            if 'update_certs' in task_data:
+                self._rotate_client_certificates(task_data['update_certs'])
             if 'events' in task_data and self._message_client is not None:
                 for event in task_data['events']:
                     try:
@@ -354,11 +543,41 @@ class TaskExecutor(object):
                 VpnController.stop_vpn()
                 logger.info('Closing vpn... Done')
             is_running = VpnController.check_vpn()
+
             self._vpn_open = is_running and self._vpn_controller.vpn_connected
             if self._message_client is not None:
                 self._message_client.send_event(OMBusEvents.VPN_OPEN, self._vpn_open)
         except Exception:
             logger.exception('Unexpected exception opening/closing VPN')
+
+    def _rotate_client_certificates(self, should_update):
+        try:
+            if should_update:
+                logger.info('Rotating client certificates...')
+
+                if self._cloud.confirm_client_certs():
+                    logger.info('Confirmed existing client certificates')
+                    return
+
+                files = CertificateFiles()
+                files.setup_links()
+                files.cleanup_versions()
+                data = self._cloud.issue_client_certs()
+                files.setup_certs(data)
+
+                logger.info('Validating client certificates...')
+                confirmed = self._cloud.confirm_client_certs(key_path=files.key_path)
+                try:
+                    if confirmed:
+                        files.activate()
+                        self._cloud.authenticate(raise_exception=True)
+                except Exception:
+                    files.rollback()
+                    self._cloud.authenticate(raise_exception=True)
+
+                logger.info('Rotating client certificates... done')
+        except Exception:
+            logger.exception('Unexpected exception rotating certificates')
 
     def _check_connectivity(self, last_successful_heartbeat):
         # type: (Optional[float]) -> None
@@ -446,8 +665,8 @@ class TaskExecutor(object):
 
 class HeartbeatService(object):
     @Inject
-    def __init__(self, url=None, message_client=INJECTED):
-        # type: (Optional[str], MessageClient) -> None
+    def __init__(self, url=None, uuid=None, message_client=INJECTED):
+        # type: (Optional[str], Optional[str], MessageClient) -> None
         config = ConfigParser()
         config.read(constants.get_config_file())
 
@@ -462,8 +681,8 @@ class HeartbeatService(object):
         self._sleep_time = 0.0
         self._previous_sleep_time = 0.0
         self._gateway = Gateway()
-        self._cloud = Cloud(url=url)
-        self._task_executor = TaskExecutor()
+        self._cloud = Cloud(url=url, uuid=uuid)
+        self._task_executor = TaskExecutor(self._cloud)
 
         # Obsolete keys (do not use them, as they are still processed for legacy gateways):
         # `outputs`, `update`, `energy`, `pulse_totals`, `'thermostats`, `inputs`, `shutters`
@@ -497,7 +716,7 @@ class HeartbeatService(object):
         for collector in self._collectors.values():
             collector.start()
 
-    def run_heartbeat(self):
+    def run(self):
         # type: () -> None
         signal.signal(signal.SIGALRM, HeartbeatService._handle_signal_alarm)
         while True:
@@ -505,7 +724,7 @@ class HeartbeatService(object):
             try:
                 signal.alarm(600)  # 10 minutes
                 start_time = time.time()
-                call_home_duration = self._beat()
+                call_home_duration = self.heartbeat()
                 beat_time = time.time() - start_time
                 if beat_time > 2:
                     logger.warning('Heartbeat took {0:.2f}s to complete, of which the call home took {1:.2f}s'.format(beat_time, call_home_duration))
@@ -518,12 +737,13 @@ class HeartbeatService(object):
                 logger.error("Error during vpn check loop: {0}".format(ex))
                 time.sleep(5)
 
-    def _beat(self):  # type: () -> float
+    def heartbeat(self):  # type: () -> float
         # Check whether connection to the Cloud is enabled/disabled
         self._cloud_enabled = Config.get_entry('cloud_enabled', False)
         if self._cloud_enabled is False:
             self._sleep_time = DEFAULT_SLEEP_TIME
             task_data = {'open_vpn': False,
+                         'update_certs': False,
                          'events': [(OMBusEvents.VPN_OPEN, False),
                                     (OMBusEvents.CLOUD_REACHABLE, False)]}
             self._task_executor.set_new_tasks(task_data=task_data)
@@ -557,6 +777,7 @@ class HeartbeatService(object):
         # Gather tasks to be executed
         task_data = {'events': [(OMBusEvents.CLOUD_REACHABLE, call_home_successful)],
                      'open_vpn': response.get('open_vpn', True),
+                     'update_certs': response.get('update_certs', False),
                      'connectivity': self._last_successful_heartbeat}
         for entry in ['configuration', 'intervals']:
             if entry in response:
@@ -572,7 +793,7 @@ def main():
     logger.info('Starting VPN service')
     heartbeat_service = HeartbeatService()
     heartbeat_service.start()
-    heartbeat_service.run_heartbeat()
+    heartbeat_service.run()
 
 
 if __name__ == '__main__':

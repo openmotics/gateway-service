@@ -153,6 +153,34 @@ def cmd_scan_energy_bus(args):
     f()
 
 
+def cmd_vpn_heartbeat(args):
+    logging.getLogger('openmotics').setLevel(logging.DEBUG)
+    from ioc import Injectable
+    Injectable.value(message_client=None)
+
+    from vpn_service import HeartbeatService
+    service = HeartbeatService()
+
+    for _ in range(60):
+        try:
+            print(service.heartbeat())
+        except Exception:
+            pass
+        finally:
+            time.sleep(10)
+
+
+def cmd_vpn_rotate_client_certs(args):
+    logging.getLogger('openmotics').setLevel(logging.DEBUG)
+    from ioc import Injectable
+    Injectable.value(message_client=None)
+
+    from vpn_service import Cloud, TaskExecutor
+    executor = TaskExecutor(cloud=Cloud())
+    executor.set_new_tasks({'update_certs': True})
+    executor.execute_tasks()
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', action='version', version=gateway.__version__)
 parser.set_defaults(func=lambda args: parser.print_help())
@@ -181,6 +209,14 @@ top_parser.set_defaults(func=cmd_top)
 top_parser.add_argument('-p', '--pid', type=int)
 scan_energy_bus_parser = operator_subparsers.add_parser('scan-energy-bus')
 scan_energy_bus_parser.set_defaults(func=cmd_scan_energy_bus)
+
+vpn_parser = subparsers.add_parser('vpn')
+vpn_parser.set_defaults(func=lambda args: vpn_parser.print_help())
+vpn_subparsers = vpn_parser.add_subparsers()
+heartbeat_parser = vpn_subparsers.add_parser('heartbeat')
+heartbeat_parser.set_defaults(func=cmd_vpn_heartbeat)
+rotate_client_certs_parser = vpn_subparsers.add_parser('rotate-client-certs')
+rotate_client_certs_parser.set_defaults(func=cmd_vpn_rotate_client_certs)
 
 
 def main():
