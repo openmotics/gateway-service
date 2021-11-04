@@ -59,11 +59,15 @@ def update(toolbox_session):
 @fixture
 def toolbox(toolbox_session, update):
     def _log_debug_buffer(buffer_):
-        for key in sorted(buffer_.keys()):
-            logger.debug('   {0} - {1}'.format(
-                time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(float(key))),
-                buffer_[key]
-            ))
+        timestamps = sorted(list(set(buffer_['write'].keys()) & set(buffer_['read'].keys())))
+        for timestamp in timestamps:
+            read = buffer_['read'].get(timestamp)
+            write = buffer_['write'].get(timestamp)
+            formatted_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(float(timestamp)))
+            if write:
+                logger.debug('   {0} -> {1}'.format(formatted_timestamp, write.strip()))
+            if read:
+                logger.debug('   {0} <- {1}'.format(formatted_timestamp, read.strip()))
 
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
@@ -77,8 +81,4 @@ def toolbox(toolbox_session, update):
         # Printing the debug buffer if the test fails to inspect the commands sent to the master
         debug_buffer = toolbox.dut.get('/get_master_debug_buffer', {'amount': 200})
         logger.debug('### Debug Buffer DUT')
-        logger.debug(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
-        logger.debug('### WRITE')
-        logger.debug(_log_debug_buffer(debug_buffer['write']))
-        logger.debug('### READ')
-        logger.debug(_log_debug_buffer(debug_buffer['read']))
+        _log_debug_buffer(debug_buffer)
