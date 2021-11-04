@@ -59,7 +59,7 @@ def update(toolbox_session):
 @fixture
 def toolbox(toolbox_session, update):
     def _log_debug_buffer(buffer_):
-        timestamps = sorted(list(set(buffer_['write'].keys()) & set(buffer_['read'].keys())))
+        timestamps = sorted(list(set(buffer_['write'].keys()) | set(buffer_['read'].keys())))
         for timestamp in timestamps:
             read = buffer_['read'].get(timestamp)
             write = buffer_['write'].get(timestamp)
