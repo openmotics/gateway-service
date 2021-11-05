@@ -69,7 +69,7 @@ class EnergyModuleHelper(ModuleHelper):
             if len(parsed_version) != 4:
                 firmware_version = cleaned_version
             else:
-                firmware_version = '{1}.{2}.{3} ({0})'.format(*parsed_version)
+                firmware_version = '{0}.{1}.{2}'.format(*parsed_version[1:])
             return True, firmware_version
         except CommunicationTimedOutException:
             pass  # No need to log here, there will be tons of other logs anyway

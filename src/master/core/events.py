@@ -44,6 +44,7 @@ class Event(object):
         LED_BLINK = 'LED_BLINK'
         UCAN = 'UCAN'
         EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
+        MODULE_NOT_RESPONDING = 'MODULE_NOT_RESPONDING'
         UNKNOWN = 'UNKNOWN'
 
     class IOEventTypes(object):
@@ -71,6 +72,7 @@ class Event(object):
         EEPROM_ACTIVATE = 'EEPROM_ACTIVATE'
         I2C_RESET = 'I2C_RESET'
         HEALTH = 'HEALTH'
+        STARTUP_COMPLETED = 'STARTUP_COMPLETED'
         UNKNOWN = 'UNKNOWN'
 
     class GenericDataTypes(object):
@@ -167,6 +169,8 @@ class Event(object):
                 20: Types.THERMOSTAT,
                 21: Types.UCAN,
                 22: Types.EXECUTED_BA,
+                23: Types.MODULE_NOT_RESPONDING,
+                24: Types.MODULE_NOT_RESPONDING,
                 245: Types.MODULE_DISCOVERY,
                 246: Types.SLAVE_SEARCH,
                 247: Types.GENERIC_DATA,
@@ -273,6 +277,12 @@ class Event(object):
                                                 action=data[1],
                                                 device_nr=device_nr,
                                                 extra_parameter=word_helper.decode(bytearray(data[2:4])))}
+        if self.type == Event.Types.MODULE_NOT_RESPONDING:
+            if self._type == 23:
+                return {'bus': Event.Bus.CAN,
+                        'address': ucan_address_helper.decode(bytearray([device_nr & 0xFF]) + data[0:2])}
+            return {'bus': Event.Bus.RS485,
+                    'address': address_helper.decode(bytearray([device_nr & 0xFF]) + data[0:3])}
         if self.type == Event.Types.MODULE_DISCOVERY:
             types_map = {5: (Event.DiscoveryTypes.EXISTING, ModuleType.OUTPUT),
                          6: (Event.DiscoveryTypes.EXISTING, ModuleType.INPUT),
@@ -302,7 +312,10 @@ class Event(object):
                     'data': data}
         if self.type == Event.Types.SYSTEM:
             if action == 0:
-                return {'type': Event.SystemEventTypes.EEPROM_ACTIVATE}
+                parsed_data = {'type': Event.SystemEventTypes.EEPROM_ACTIVATE}
+                if data[0] == 0:
+                    parsed_data['type'] = Event.SystemEventTypes.STARTUP_COMPLETED
+                return parsed_data
             if action == 2:
                 return {'type': Event.SystemEventTypes.I2C_RESET,
                         'cause': data[0]}

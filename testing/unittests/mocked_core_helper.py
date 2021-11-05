@@ -25,6 +25,8 @@ from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.core_communicator import CoreCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 from master.core.slave_communicator import SlaveCommunicator
+from master.core.core_updater import CoreUpdater
+from master.core.maintenance import MaintenanceCoreCommunicator
 
 
 class MockedCore(object):
@@ -43,7 +45,10 @@ class MockedCore(object):
         if memory_is_cache:
             self.memory_file._eeprom_cache = self.memory[MemoryTypes.EEPROM]
         SetUpTestInjections(memory_file=self.memory_file,
-                            ucan_communicator=UCANCommunicator(),
+                            cli_serial=mock.Mock())
+        SetUpTestInjections(maintenance_communicator=MaintenanceCoreCommunicator())
+        SetUpTestInjections(ucan_communicator=UCANCommunicator(),
+                            core_updater=CoreUpdater(),
                             slave_communicator=SlaveCommunicator())
         self.controller = MasterCoreController()
         self.write_log = []
@@ -68,7 +73,7 @@ class MockedCore(object):
         elif instruction == 'BA':
             if fields['type'] == 200 and fields['action'] == 1:
                 # Send EEPROM_ACTIVATE event
-                self.memory_file._handle_event({'type': 248, 'action': 0, 'device_nr': 0, 'data': 0})
+                self.memory_file._handle_event({'type': 248, 'action': 0, 'device_nr': 0, 'data': bytearray([1, 0])})
         elif instruction in self.return_data:
             return self.return_data[instruction]
         else:

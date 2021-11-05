@@ -52,6 +52,7 @@ from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
 from master.core.memory_file import MemoryFile
 from gateway.energy.energy_communicator import EnergyCommunicator
+from gateway.energy.energy_module_updater import EnergyModuleUpdater
 from serial_utils import RS485
 
 
@@ -106,6 +107,7 @@ def apply_migrations():
     # Run all unapplied migrations
     db = Database.get_db()
     gateway_src = os.path.abspath(os.path.join(__file__, '..'))
+    from peewee_migrate import Router
     router = Router(db, migrate_dir=os.path.join(gateway_src, 'migrations/orm'))
     router.run()
 
@@ -161,9 +163,8 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Debugging options
     try:
-        for (namespace, log_level) in config.items('logging_overrides'):
-            logger.info('Setting %s log level to %s', namespace, log_level)
-            Logs.set_service_loglevel(log_level.upper(), namespace=namespace)
+        for namespace, log_level in config.items('logging_overrides'):
+            Logs.set_loglevel(log_level.upper(), namespace)
     except NoOptionError:
         pass
     except NoSectionError:
@@ -196,7 +197,7 @@ def setup_target_platform(target_platform, message_client_name):
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
                          ventilation_controller, apartment_controller, delivery_controller,
-                         system_config_controller, rfid_controller, energy_module_controller)
+                         system_config_controller, rfid_controller, energy_module_controller, update_controller)
     from gateway.api.V1.webservice import webservice as webservice_v1
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
@@ -204,7 +205,7 @@ def setup_target_platform(target_platform, message_client_name):
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
          ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
-         rfid_controller, energy_module_controller)
+         rfid_controller, energy_module_controller, update_controller)
 
     # V1 api
     # This will parse all the V1 api files that are included in the __init__.py file in the
@@ -262,9 +263,11 @@ def setup_target_platform(target_platform, message_client_name):
         # TODO: make non blocking?
         Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
         Injectable.value(energy_communicator=EnergyCommunicator())
+        Injectable.value(energy_module_updater=EnergyModuleUpdater())
     else:
         Injectable.value(energy_serial=None)
         Injectable.value(energy_communicator=None)
+        Injectable.value(energy_module_updater=None)
 
     # UART Controller
     try:
@@ -300,8 +303,8 @@ def setup_target_platform(target_platform, message_client_name):
 
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
-        from master.core import ucan_communicator, slave_communicator
-        _ = ucan_communicator, slave_communicator
+        from master.core import ucan_communicator, slave_communicator, core_updater
+        _ = ucan_communicator, slave_communicator, core_updater
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
         Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(passthrough_service=None)  # Mark as "not needed"
@@ -392,8 +395,8 @@ def setup_minimal_master_platform(port):
         Injectable.value(maintenance_communicator=None)
         Injectable.value(master_controller=MasterDummyController())
     elif platform in Platform.CoreTypes:
-        from master.core import ucan_communicator
-        _ = ucan_communicator
+        from master.core import ucan_communicator, slave_communicator, core_updater
+        _ = ucan_communicator, slave_communicator, core_updater
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
         Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(master_communicator=CoreCommunicator())
@@ -419,9 +422,11 @@ def setup_minimal_energy_platform():
     if energy_serial_port:
         Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
         Injectable.value(energy_communicator=EnergyCommunicator())
+        Injectable.value(energy_module_updater=EnergyModuleUpdater())
     else:
         Injectable.value(energy_communicator=None)
         Injectable.value(energy_serial=None)
+        Injectable.value(energy_module_updater=None)
     Injectable.value(master_controller=None)
     Injectable.value(maintenance_communicator=None)
     Injectable.value(maintenance_controller=None)

@@ -411,9 +411,7 @@ class ApiUsersTests(unittest.TestCase):
         user_to_create = {
             'first_name': 'Test',
             'last_name': 'User',
-            'apartment': [
-                2
-            ],
+            'apartment': 2,
             'role': 'USER'
         }
         apartment_dto = ApartmentDTO(id=2, name='TEST_APARTMENT', doorbell_rebus_id=37, mailbox_rebus_id=38)
@@ -453,7 +451,6 @@ class ApiUsersTests(unittest.TestCase):
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='0123'):
             user_to_create_return = user_to_create.copy()
-            del user_to_create_return['pin_code']
             del user_to_create_return['password']
             user_to_create_return['id'] = 5
             user_dto_to_return = UserDTO(**user_to_create_return)
@@ -463,10 +460,7 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_token=auth_token,
                                           request_body=user_to_create.copy())
-            del user_to_create['pin_code']
             del user_to_create['password']
-            resp_json = json.loads(response)
-            self.assertEqual(resp_json['pin_code'], '0123')
             self.verify_user_created(user_to_create, response)
 
     def test_activate_user(self):
@@ -519,9 +513,7 @@ class ApiUsersTests(unittest.TestCase):
         user_to_update = {
             'first_name': 'Test',
             'last_name': 'User',
-            'apartment': [
-                2
-            ],
+            'apartment': 2,
             'role': 'USER'
         }
         apartment_dto = ApartmentDTO(id=2, name='TEST_APARTMENT', doorbell_rebus_id=37, mailbox_rebus_id=38)

@@ -17,22 +17,15 @@ Module BLL
 """
 from __future__ import absolute_import
 import logging
-import os
 import six
 import time
-import hashlib
-import requests
-import shutil
-from constants import OPENMOTICS_PREFIX
 from ioc import Injectable, Inject, INJECTED, Singleton
-from serial_utils import CommunicationTimedOutException
 from gateway.dto import ModuleDTO
 from gateway.enums import HardwareType, ModuleType, IndicateType
+from gateway.exceptions import CommunicationFailure
 from gateway.base_controller import BaseController
 from gateway.models import Module, Sensor
 from gateway.mappers.module import ModuleMapper
-from six.moves.urllib.parse import urlparse, urlunparse
-from platform_utils import Platform, System
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Any
@@ -45,18 +38,6 @@ logger = logging.getLogger(__name__)
 @Injectable.named('module_controller')
 @Singleton
 class ModuleController(BaseController):
-
-    FIRMWARE_ARCHIVE_DIR = os.path.join(OPENMOTICS_PREFIX, 'firmwares')
-    FIRMWARE_BASE_NAME = 'OMF{0}_{{0}}.hex'
-    FIRMWARE_MAP = {'temperature': {2: ('T', 'TE', 'temperature')},
-                    'input': {2: ('I', 'IT', 'input'), 3: ('I', 'IT', 'input_gen3')},
-                    'output': {2: ('O', 'OT', 'output'), 3: ('O', 'RY', 'output_gen3')},
-                    'shutter': {2: ('R', 'OT', 'output')},
-                    'dim_control': {2: ('D', 'DL', 'dimmer'), 3: ('D', 'ZL', 'dimmer_gen3')},
-                    'can_control': {2: ('C', 'CL', 'can'), 3: ('C', 'CL', 'can_gen3')},
-                    'ucan': {3: ('UC', 'MN', 'ucan')},
-                    'master_classic': {2: ('M', 'GY', 'master_classic')},
-                    'master_core': {3: ('M', 'BN', 'master_coreplus')}}
 
     @Inject
     def __init__(self, master_controller=INJECTED, energy_module_controller=INJECTED):
@@ -113,7 +94,7 @@ class ModuleController(BaseController):
             logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
                 amounts[True], amounts[False], amounts[None]
             ))
-        except CommunicationTimedOutException as ex:
+        except CommunicationFailure as ex:
             logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
         except Exception as ex:
             logger.exception('ORM sync (Modules): Failed')
@@ -125,20 +106,18 @@ class ModuleController(BaseController):
     def get_modules(self):
         return self._master_controller.get_modules()
 
-    def load_master_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
-        return [ModuleMapper.orm_to_dto(module)
-                for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)
-                if address is None or module.address == address]
-
-    def load_energy_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
-        return [ModuleMapper.orm_to_dto(module)
-                for module in Module.select().where(Module.source == ModuleDTO.Source.GATEWAY)
-                if address is None or module.address == address]
+    def load_modules(self, source=None, address=None):  # type: (Optional[str], Optional[str]) -> List[ModuleDTO]
+        query = Module.select()
+        if source is not None:
+            query = query.where(Module.source == source)
+        if address is not None:
+            query = query.where(Module.address == address)
+        return [ModuleMapper.orm_to_dto(module) for module in query]
 
     def replace_module(self, old_address, new_address):
         if old_address == new_address:
             raise RuntimeError('Old and new address cannot be identical')
-        all_modules = {module.address: module for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)}  # type: Dict[str, Module]
+        all_modules = {module.address: module for module in Module.select()}  # type: Dict[str, Module]
         old_module = all_modules.get(old_address)
         new_module = all_modules.get(new_address)
         if old_module is None or new_module is None:
@@ -178,49 +157,6 @@ class ModuleController(BaseController):
             self._master_controller.add_virtual_sensor_module()
         else:
             raise RuntimeError('Adding a virtual module of type `{0}` is not supported'.format(module_type))
-
-    def update_firmware(self, module_type, firmware_version):
-        # type: (str, str) -> None
-
-        if module_type not in ModuleController.FIRMWARE_MAP:
-            raise RuntimeError('Dynamic update for {0} not yet supported'.format(module_type))
-
-        platform = Platform.get_platform()
-
-        parsed_version = tuple(int(part) for part in firmware_version.split('.'))
-        if module_type in ['master_classic', 'master_core']:
-            generation = 3 if parsed_version < (2, 0, 0) else 2  # Core = 1.x.x, classic = 3.x.x
-        else:
-            generation = 3 if parsed_version >= (6, 0, 0) else 2  # Gen3 = 6.x.x, gen2 = 3.x.x
-        if generation not in ModuleController.FIRMWARE_MAP[module_type]:
-            raise RuntimeError('Dynamic update for {0} generation {1} not yet supported'.format(module_type, generation))
-        filename_code = ModuleController.FIRMWARE_MAP[module_type][generation][1]
-        firmware_cloud_code = ModuleController.FIRMWARE_MAP[module_type][generation][2]
-
-        if module_type in ['master_classic', 'master_core']:
-            platform_match = (
-                (platform in Platform.CoreTypes and module_type == 'master_core') or
-                (platform in Platform.ClassicTypes and module_type == 'master_classic')
-            )
-            if not platform_match:
-                raise RuntimeError('Cannot update {0} on platform {1}'.format(module_type, platform))
-
-            filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
-            target_filename = os.path.join(ModuleController.FIRMWARE_ARCHIVE_DIR, filename_base.format(firmware_version))
-            self._download_firmware(firmware_cloud_code, firmware_version, target_filename)
-            self._master_controller.update_master(target_filename, firmware_version)
-            ModuleController._archive_firmwares(target_filename, filename_base, firmware_version)
-            return
-
-        if platform in Platform.ClassicTypes and module_type == 'ucan':
-            return  # A uCAN cannot be updated on the Classic platform for now
-
-        filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
-        short_module_type = ModuleController.FIRMWARE_MAP[module_type][generation][0]
-        target_filename = os.path.join(ModuleController.FIRMWARE_ARCHIVE_DIR, filename_base.format(firmware_version))
-        self._download_firmware(firmware_cloud_code, firmware_version, target_filename)
-        self._master_controller.update_slave_modules(short_module_type, target_filename, firmware_version)
-        ModuleController._archive_firmwares(target_filename, filename_base, firmware_version)
 
     def module_discover_start(self, timeout=900):  # type: (int) -> None
         self._master_controller.module_discover_start(timeout)
@@ -301,58 +237,3 @@ class ModuleController(BaseController):
     def get_configuration_dirty_flag(self):
         # type: () -> bool
         return self._master_controller.get_configuration_dirty_flag()
-
-    @Inject
-    def _get_firmware_url(self, module_type, version, firmware_url=INJECTED, gateway_uuid=INJECTED):
-        # type: (str, str, str, str) -> str
-        uri = urlparse(firmware_url)
-        path = '{0}/{1}/{2}/'.format(uri.path, module_type, version)
-        query = 'uuid={0}'.format(gateway_uuid)
-        return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
-
-    def _download_firmware(self, module_type, version, target_filename):
-        # type: (str, str, str) -> None
-        target_dir = os.path.dirname(target_filename)
-        if not os.path.exists(target_dir):
-            os.mkdir(target_dir)
-        url = self._get_firmware_url(module_type, version)
-        response = requests.get(url,
-                                verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
-        if response.status_code != 200:
-            raise ValueError('Failed to retrieve {0} firmware from {1}: {2}'.format(module_type, url, response.status_code))
-        data = response.json()
-        logger.info('Downloading {0} firmware from {1} ...'.format(module_type, data['url']))
-        response = requests.get(data['url'],
-                                stream=True,
-                                verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
-        with open(target_filename, 'wb') as f:
-            shutil.copyfileobj(response.raw, f)
-        logger.info('Downloading {0} firmware from {1} ... Done'.format(module_type, data['url']))
-
-        hasher = hashlib.sha256()
-        with open(target_filename, 'rb') as f:
-            hasher.update(f.read())
-        calculated_hash = hasher.hexdigest()
-        if calculated_hash != data['sha256']:
-            raise ValueError('Firmware {0} checksum sha256:{1} does not match'.format(module_type, calculated_hash))
-
-    @staticmethod
-    def _archive_firmwares(target_filename, filename_base, firmware_version):
-        # type: (str, str, str) -> None
-        archive_dir = ModuleController.FIRMWARE_ARCHIVE_DIR
-        if not os.path.exists(archive_dir):
-            os.mkdir(archive_dir)
-        current_filename = os.path.join(archive_dir, filename_base.format('current'))  # e.g. /foo/OMFXY_current.hex
-        current_target = None
-        if os.path.exists(current_filename):
-            current_target = os.readlink(current_filename)  # e.g. /foo/OMFXY_1.0.1.hex
-        previous_filename = os.path.join(archive_dir, filename_base.format('previous'))  # e.g. /foo/OMFXY_previous.hex
-        if target_filename == current_target:
-            return  # No real update, no need to remove the previous
-        if os.path.exists(previous_filename):
-            os.unlink(previous_filename)
-        if os.path.exists(current_filename):
-            os.unlink(current_filename)
-        if current_target is not None:
-            os.symlink(current_target, previous_filename)  # /foo/OMFXY_previous.hex -> /foo/OMFXY_1.0.1.hex
-        os.symlink(target_filename, current_filename)  # /foo/OMFXY_current.hex -> /foo/OMFXY_1.0.2.hex

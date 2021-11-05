@@ -22,16 +22,15 @@ import time
 
 from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
+from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.models import BaseModel
-from gateway.dto.base import BaseDTO
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
-from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Callable, List, Optional, Type, TypeVar
+    from typing import Any, Callable, List, Optional, Type
     from gateway.maintenance_controller import MaintenanceController
 
 logger = logging.getLogger(__name__)
@@ -110,7 +109,7 @@ class BaseController(object):
                     self._sync_orm_structure(structure)
                     duration = time.time() - start
                     logger.info('ORM sync ({0}): completed after {1:.1f}s'.format(orm_model.__name__, duration))
-                except CommunicationTimedOutException as ex:
+                except CommunicationFailure as ex:
                     logger.error('ORM sync ({0}): Failed: {1}'.format(orm_model.__name__, ex))
                 except Exception:
                     logger.exception('ORM sync ({0}): Failed'.format(orm_model.__name__))

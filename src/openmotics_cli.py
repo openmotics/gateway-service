@@ -138,6 +138,20 @@ def cmd_top(args):
         time.sleep(10)
 
 
+def cmd_scan_energy_bus(args):
+    _ = args
+    from gateway.initialize import setup_minimal_energy_platform
+    from gateway.energy_module_controller import EnergyModuleController
+    setup_minimal_energy_platform()
+
+    @Inject
+    def f(energy_module_controller=INJECTED):  # type: (EnergyModuleController) -> None
+        logger.info('Scanning energy bus...')
+        for module_type, address, firmware_version, hardware_version in energy_module_controller.scan_bus():
+            logger.info('* {0} {1}: {2}{3}'.format(module_type, address, firmware_version, '' if hardware_version is None else ' {0}'.format(hardware_version)))
+        logger.info('Scan complete')
+    f()
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', action='version', version=gateway.__version__)
@@ -165,6 +179,8 @@ shell_parser.set_defaults(func=cmd_shell)
 top_parser = operator_subparsers.add_parser('top')
 top_parser.set_defaults(func=cmd_top)
 top_parser.add_argument('-p', '--pid', type=int)
+scan_energy_bus_parser = operator_subparsers.add_parser('scan-energy-bus')
+scan_energy_bus_parser.set_defaults(func=cmd_scan_energy_bus)
 
 
 def main():

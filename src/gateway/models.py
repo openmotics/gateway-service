@@ -151,6 +151,7 @@ class Module(BaseModel):
     hardware_version = CharField(null=True)
     order = IntegerField(null=True)
     last_online_update = IntegerField(null=True)
+    update_success = BooleanField(null=True)
 
 
 class EnergyModule(BaseModel):
@@ -627,6 +628,6 @@ class Delivery(BaseModel):
     signature_delivery = CharField(null=True)
     signature_pickup = CharField(null=True)
     parcelbox_rebus_id = IntegerField(null=False)
-    user_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=True)
-    user_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION', null=False)
+    user_delivery = ForeignKeyField(User, backref='deliveries', on_delete='SET NULL', null=True)
+    user_pickup = ForeignKeyField(User, backref='pickups', on_delete='SET NULL', null=True)
 

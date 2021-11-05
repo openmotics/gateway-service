@@ -14,15 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """"
 The constants modules contains static definitions for filenames.
-
-@author: fryckbos
 """
 import os
 import platform_utils
 import sys
 
 PYINSTALLER_PREFIX = os.environ.get('PYINSTALLER_PREFIX', None)
-OPENMOTICS_PREFIX = os.environ.get('OPENMOTICS_PREFIX', os.path.abspath(os.path.join(__file__, '../..')))
+OPENMOTICS_PREFIX = os.environ.get('OPENMOTICS_PREFIX', '/opt/openmotics')
 
 
 def get_openmotics_prefix():
@@ -202,6 +200,7 @@ def get_update_lockfile():
     """ Returns the lock file used by openmotics_update.py """
     return '/tmp/openmotics_update.lock'
 
+
 def get_runit_service_folder():
     # type: () -> str
     """ Returns the location of the runit services definitions """
@@ -210,13 +209,16 @@ def get_runit_service_folder():
     else:
         raise ValueError('"PYINSTALLER_PREFIX" environment variable is not set, cannot retrieve the runit service folder')
 
+
 def get_renson_main_config_file():
     # type: () -> str
     return '/data/app_data/main.config'
 
+
 def get_esafe_touchscreen_calibration_file():
     # type: () -> str
     return '/etc/pointercal'
+
 
 def get_email_verification_regex():
     # type: () -> str
