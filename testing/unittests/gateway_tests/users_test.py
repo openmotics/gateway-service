@@ -29,18 +29,19 @@ from peewee import SqliteDatabase
 
 import platform_utils
 from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod, AuthenticationToken
+from gateway.delivery_controller import DeliveryController
 from gateway.dto import UserDTO, RfidDTO
 from gateway.enums import UserEnums
-from gateway.exceptions import GatewayException
+from gateway.exceptions import GatewayException, StateException
 from gateway.mappers.user import UserMapper
-from gateway.models import User, RFID
+from gateway.models import User, RFID, Delivery
 from gateway.rfid_controller import RfidController
 from gateway.system_config_controller import SystemConfigController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 from platform_utils import Platform
 
-MODELS = [User, RFID]
+MODELS = [User, RFID, Delivery]
 
 
 class UserControllerTest(unittest.TestCase):
@@ -79,6 +80,9 @@ class UserControllerTest(unittest.TestCase):
         self.pubsub = mock.Mock()
         SetUpTestInjections(authentication_controller=self.auth_controller, pubsub=self.pubsub)
         self.controller = UserController()
+        SetUpTestInjections(user_controller=self.controller)
+        self.delivery_controller = DeliveryController()
+        SetUpTestInjections(delivery_controller=self.delivery_controller)
         self.auth_controller.set_user_controller(self.controller)
         self.controller.start()
 
@@ -523,6 +527,39 @@ class UserControllerTest(unittest.TestCase):
             self.fail('Should have raised exception !')
         except GatewayException as ex:
             self.assertIn(UserEnums.DeleteErrors.LAST_ACCOUNT, ex.message)
+
+        # verify that a user with a delivery cannot be deleted
+        user_to_add = User(
+            username='test',
+            password=UserDTO._hash_password('test'),
+            pin_code='1234',
+            role=User.UserRoles.USER,
+            accepted_terms=True,
+            language='en'
+        )
+        user_to_add.save()
+        loaded_user = self.controller.load_user(user_id=user_to_add.id)
+        delivery_to_add = Delivery(
+            type='DELIVERY',
+            timestamp_delivery='now',
+            timestamp_pickup=None,
+            courier_firm='OTHER',
+            signature_delivery='',
+            signature_pickup='',
+            parcelbox_rebus_id=32,
+            user_delivery=None,
+            user_pickup_id=user_to_add.id
+        )
+        delivery_to_add.save()
+
+        with self.assertRaises(StateException):
+            self.controller.remove_user(loaded_user)
+
+        # assert that a picked up delivery is not binding to removal
+        delivery_to_add.timestamp_pickup = 'now'
+        delivery_to_add.save()
+        self.controller.remove_user(loaded_user)
+        self.assertEqual(1, self.controller.get_number_of_users())
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
