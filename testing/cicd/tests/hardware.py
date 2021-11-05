@@ -65,7 +65,8 @@ def multiple_shutters(size, types=None):
 
 def input_types():
     module_types = [module.module_type for module in INPUT_MODULE_LAYOUT
-                    if module.hardware_type != 'emulated']
+                    if module.hardware_type != 'emulated'
+                    and module.module_type == 'input']
     return one_of([just(x) for x in module_types])
 
 
