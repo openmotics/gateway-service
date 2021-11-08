@@ -642,7 +642,7 @@ class Toolbox(object):
             assert pending == []
         return pending
 
-    def wait_for_completed_update(self, timeout=300):
+    def wait_for_completed_update(self, timeout=600):
         # type: (float) -> None
         def _log_status_detail(logger_, status_detail):
             logger_('Update status overview:')
