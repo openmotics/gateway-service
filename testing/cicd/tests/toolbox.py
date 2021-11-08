@@ -443,6 +443,11 @@ class Toolbox(object):
                 time.sleep(0.5)
             time.sleep(5)  # Give a brief moment for the CC to settle
 
+        def _press_discover_button(button):
+            self.tester.toggle_output(button, delay=0.5)
+            time.sleep(1)
+            self.tester.toggle_output(button, delay=0.5)
+
         new_modules = []
         self.clear_module_discovery_log()
         self.module_discover_start()
@@ -450,27 +455,27 @@ class Toolbox(object):
             addresses = []
             if output_modules:
                 logger.info('* Discover output module')
-                self.tester.toggle_output(TESTER.Button.output, delay=0.5)
+                _press_discover_button(TESTER.Button.output)
                 new_modules += self.watch_module_discovery_log(module_amounts={'O': 1}, addresses=addresses)
             if shutter_modules:
                 logger.info('* Discover shutter module')
-                self.tester.toggle_output(TESTER.Button.shutter, delay=0.5)
+                _press_discover_button(TESTER.Button.shutter)
                 new_modules += self.watch_module_discovery_log(module_amounts={'R': 1}, addresses=addresses)
             if input_modules:
                 logger.info('* Discover input module')
-                self.tester.toggle_output(TESTER.Button.input, delay=0.5)
+                _press_discover_button(TESTER.Button.input)
                 new_modules += self.watch_module_discovery_log(module_amounts={'I': 1}, addresses=addresses)
             if dimmer_modules:
                 logger.info('* Discover dim control module')
-                self.tester.toggle_output(TESTER.Button.dimmer, delay=0.5)
+                _press_discover_button(TESTER.Button.dimmer)
                 new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
             if sensor_modules:
                 logger.info('* Discover sensor module')
-                self.tester.toggle_output(TESTER.Button.temp, delay=0.5)
+                _press_discover_button(TESTER.Button.temp)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
             if can_controls or ucan_inputs:
                 logger.info('* Discover can control')
-                self.tester.toggle_output(TESTER.Button.can, delay=0.5)
+                _press_discover_button(TESTER.Button.can)
                 module_amounts = {'C': 1,  # TODO: Fix these hardcoded values
                                   'T': expected_ucan_emulated_modules.get('sensor', 0),
                                   'I': expected_ucan_emulated_modules.get('input', 0)}
