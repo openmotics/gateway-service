@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+import peewee
 from peewee import (
     Model, Database, SqliteDatabase,
     AutoField, CharField, BooleanField, IntegerField, ForeignKeyField,
@@ -78,11 +78,28 @@ def migrate(migrator, database, fake=False, **kwargs):
         user_delivery_tmp = ForeignKeyField(User, backref='deliveries', on_delete='SET NULL', null=True)
         user_pickup_tmp = ForeignKeyField(User, backref='pickups', on_delete='SET NULL', null=True)
 
-    for d in Delivery.select():
-        d.user_delivery_tmp = d.user_delivery
-        d.user_pickup_tmp = d.user_pickup
-        d.save()
+    # Get the admin user to temporarily link an unlinked delivery to
+    admin_user = User.select().where(User.role == User.UserRoles.ADMIN).first()
 
+    # Go over all the deliveries and unlink them if necessary
+    for d in Delivery.select():
+        if User.select().where(User.id == d.user_delivery_id).exists():
+            d.user_delivery_tmp = d.user_delivery
+        else:
+            # set them to None to unlink them if they do not exists
+            d.user_delivery = None
+
+        if User.select().where(User.id == d.user_pickup_id).exists():
+            d.user_pickup_tmp = d.user_pickup
+        else:
+            # Temporary link them to the admin user to have some user to save the delivery to. (user_pickup is not nullable)
+            # the Admin user will be unlinked in the next step when the user_pickup_tmp will be renamed to user_pickup.
+            d.user_pickup = admin_user
+
+        try:
+            d.save()
+        except peewee.IntegrityError:
+            pass
 
     migrator.drop_columns(Delivery, 'user_delivery')
     migrator.drop_columns(Delivery, 'user_pickup')
