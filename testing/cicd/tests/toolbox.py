@@ -283,8 +283,7 @@ class Toolbox(object):
                                   shutter_modules='shutter' in missing_modules,
                                   dimmer_modules='dim_control' in missing_modules,
                                   sensor_modules='sensor' in missing_modules,
-                                  can_controls='can_control' in missing_modules,
-                                  ucans='ucan' in missing_modules)
+                                  can_controls='can_control' in missing_modules)
 
         modules = self.count_modules('master')
         logger.info('Post-discovery modules: {0}'.format(modules))
@@ -425,19 +424,19 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, ucans=False, timeout=120):
+    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, timeout=120):
         logger.info('Discovering modules')
         since = time.time()
         expected_ucan_emulated_modules = {'I': 0, 'T': 0}
-        if ucans:
-            ucan_inputs = []
-            for module in INPUT_MODULE_LAYOUT:
-                if module.is_can:
-                    ucan_inputs += module.inputs
-                    expected_ucan_emulated_modules[module.module_type] += 1
-            for module in TEMPERATURE_MODULE_LAYOUT:
-                if module.is_can:
-                    expected_ucan_emulated_modules[module.module_type] += 1
+        ucan_inputs = []
+        for module in INPUT_MODULE_LAYOUT:
+            if module.is_can:
+                ucan_inputs += module.inputs
+                expected_ucan_emulated_modules[module.module_type] += 1
+        for module in TEMPERATURE_MODULE_LAYOUT:
+            if module.is_can:
+                expected_ucan_emulated_modules[module.module_type] += 1
+        if ucan_inputs:
             logger.info('* Toggle uCAN inputs for discovery: %s', ucan_inputs)
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
@@ -469,7 +468,7 @@ class Toolbox(object):
                 logger.info('* Discover sensor module')
                 self.tester.toggle_output(TESTER.Button.temp, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
-            if can_controls or ucans:
+            if can_controls or ucan_inputs:
                 logger.info('* Discover can control')
                 self.tester.toggle_output(TESTER.Button.can, delay=0.5)
                 # TODO: Fix these hardcoded values.
