@@ -427,7 +427,7 @@ class Toolbox(object):
     def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, timeout=120):
         logger.info('Discovering modules')
         since = time.time()
-        expected_ucan_emulated_modules = {'I': 0, 'T': 0}
+        expected_ucan_emulated_modules = {'input': 0, 'sensor': 0}
         ucan_inputs = []
         for module in INPUT_MODULE_LAYOUT:
             if module.is_can:
@@ -471,9 +471,9 @@ class Toolbox(object):
             if can_controls or ucan_inputs:
                 logger.info('* Discover can control')
                 self.tester.toggle_output(TESTER.Button.can, delay=0.5)
-                # TODO: Fix these hardcoded values.
-                module_amounts = {'C': 1}
-                module_amounts.update(expected_ucan_emulated_modules)
+                module_amounts = {'C': 1,  # TODO: Fix these hardcoded values
+                                  'T': expected_ucan_emulated_modules.get('sensor', 0),
+                                  'I': expected_ucan_emulated_modules.get('input', 0)}
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses, timeout=30)
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
