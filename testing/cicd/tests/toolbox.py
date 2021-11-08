@@ -273,7 +273,7 @@ class Toolbox(object):
         modules = self.count_modules(source='master')
         logger.info('Initial modules: {0}'.format(modules))
         for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED]:
-            for module_type, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
+            for module_type, expected_amount in expected_modules[hardware_type].items():
                 if modules[hardware_type].get(module_type, 0) == 0:
                     missing_modules.add(module_type)
         if missing_modules:
