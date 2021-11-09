@@ -82,7 +82,7 @@ class VpnController(object):
         check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
 
     def __init__(self):
-        self.vpn_connected = False
+        self.connected = False
         self._vpn_tester = DaemonThread(name='vpnctl',
                                         target=self._vpn_connected,
                                         interval=5)
@@ -124,10 +124,10 @@ class VpnController(object):
                     if TaskExecutor._ping(vpn_server, verbose=False):
                         result = True
                         break
-            self.vpn_connected = result
+            self.connected = result
         except Exception as ex:
             logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
-            self.vpn_connected = False
+            self.connected = False
 
 
 class Cloud(object):
@@ -296,7 +296,6 @@ class CertificateFiles(object):
              'private_key': 'client.key'}
 
     def __init__(self):
-        self.target = datetime.now().strftime('%Y%m%d%H%M')
         self.current = self.cert_path(CertificateFiles.CURRENT)
         self.previous = self.cert_path(CertificateFiles.PREVIOUS)
         self.vpn = self.cert_path(CertificateFiles.VPN)
@@ -305,9 +304,63 @@ class CertificateFiles(object):
     def cert_path(*args, prefix=constants.OPENMOTICS_PREFIX):
         return os.path.join(prefix, 'versions', 'certificates', *args)
 
-    @property
-    def key_path(self):
-        return self.cert_path(self.target, 'client.key')
+    @staticmethod
+    def get_versions():
+        versions = set(x.split(os.path.sep)[-1] for x in glob.glob(CertificateFiles.cert_path('*')))
+        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.VPN])
+        return versions
+
+    def activate_vpn(self, rollback=False):
+        if rollback:
+            try:
+                vpn_target = os.readlink(self.vpn).split(os.path.sep)[-1]
+                logger.info('Marking certificates %s as failed', vpn_target)
+                marker = self.cert_path(vpn_target, '.failure')
+                if not os.path.exists(marker):
+                    with open(marker, 'w') as fd:
+                        pass
+            except Exception:
+                vpn_target = None
+
+            versions = self.get_versions()
+            try:
+                current_target = os.readlink(self.current).split(os.path.sep)[-1]
+            except Exception:
+                current_target = None
+            target = None
+            if os.path.exists(self.cert_path(current_target, '.failure')):
+                for version in sorted(versions, reverse=True):
+                    if not os.path.exists(self.cert_path(version, '.failure')):
+                        target = version
+                        break
+            else:
+                target = current_target
+            if target is None:
+                target = current_target
+            if target != vpn_target:
+                logger.info('Rolling back vpn certificates %s -> %s', vpn_target, target)
+                temp_link = tempfile.mktemp(dir=self.cert_path())
+                os.symlink(target, temp_link)
+                os.replace(temp_link, self.vpn)
+                return True
+        else:
+            try:
+                target = os.readlink(self.current).split(os.path.sep)[-1]
+            except Exception:
+                target = None
+            try:
+                vpn_target = os.readlink(self.current).split(os.path.sep)[-1]
+            except Exception:
+                vpn_target = None
+
+            if target and target != vpn_target:
+                logger.info('Activating vpn certificates %s', target)
+                temp_link = tempfile.mktemp(dir=self.cert_path())
+                os.symlink(target, temp_link)
+                os.replace(temp_link, self.vpn)
+                return True
+        return False
+
 
     def setup_links(self):
         if all(os.path.exists(x) for x in (self.current, self.vpn)):
@@ -317,8 +370,7 @@ class CertificateFiles(object):
         if not os.path.exists(certificates):
             os.makedirs(certificates)
 
-        versions = set(x.split(os.path.sep)[-1] for x in glob.glob(self.cert_path('*')))
-        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.VPN])
+        versions = self.get_versions()
         latest = None
         for version in sorted(versions, reverse=True):
             if os.path.exists(self.cert_path(version, 'client.key')):
@@ -336,8 +388,7 @@ class CertificateFiles(object):
 
     def cleanup_versions(self):
         try:
-            versions = set(x.split(os.path.sep)[-1] for x in glob.glob(self.cert_path('*')))
-            versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.VPN])
+            versions = self.get_versions()
             versions -= set(list(sorted(versions, reverse=True))[:3])
             for link in (self.previous, self.current):
                 try:
@@ -353,23 +404,23 @@ class CertificateFiles(object):
         except Exception as exc:
             logger.error('Failed to cleanup versions: %s', exc)
 
-    def setup_certs(self, data):
+    def setup_certs(self, target, data):
         logger.info('Saving %s', data['data'].get('serial_number'))
-        version = self.cert_path(self.target)
+        version = self.cert_path(target)
         if not os.path.exists(version):
             os.makedirs(version)
         for key, file in self.FILES.items():
             with open(os.path.join(version, file), 'w') as fd:
                 fd.write(data['data'][key])
 
-    def activate(self):
-        logger.info('Activating certificates %s', self.target)
+    def activate(self, target):
+        logger.info('Activating certificates %s', target)
         temp_link = tempfile.mktemp(dir=self.cert_path())
         try:
             previous_target = os.readlink(self.current).split(os.path.sep)[-1]
         except Exception:
             previous_target = None
-        os.symlink(self.target, temp_link)
+        os.symlink(target, temp_link)
         os.replace(temp_link, self.current)
         if previous_target:
             os.symlink(previous_target, temp_link)
@@ -456,7 +507,9 @@ class TaskExecutor(object):
     def __init__(self, cloud=None, message_client=INJECTED):
         self._configuration = {}
         self._intervals = {}
+        self._online = False
         self._vpn_open = False
+        self._vpn_retries = 0
         self._cloud = cloud
         self._message_client = message_client
         self._vpn_controller = VpnController()
@@ -493,18 +546,19 @@ class TaskExecutor(object):
                 self._process_configuration_data(task_data['configuration'])
             if 'intervals' in task_data:
                 self._process_interval_data(task_data['intervals'])
-            if 'open_vpn' in task_data:
-                self._open_vpn(task_data['open_vpn'])
-            if 'update_certs' in task_data:
-                self._rotate_client_certificates(task_data['update_certs'])
+            if 'connectivity' in task_data:
+                self._check_connectivity(task_data['connectivity'])
+            if self._online:
+                if 'open_vpn' in task_data:
+                    self._open_vpn(task_data['open_vpn'])
+                if 'update_certs' in task_data:
+                    self._rotate_client_certificates(task_data['update_certs'])
             if 'events' in task_data and self._message_client is not None:
                 for event in task_data['events']:
                     try:
                         self._message_client.send_event(event[0], event[1])
                     except Exception as ex:
                         logger.error('Could not send event {0}({1}): {2}'.format(event[0], event[1], ex))
-            if 'connectivity' in task_data:
-                self._check_connectivity(task_data['connectivity'])
 
             if self._previous_amount_of_tasks != amount_of_tasks:
                 logger.info('Processing {0} tasks... Done'.format(amount_of_tasks))
@@ -534,6 +588,24 @@ class TaskExecutor(object):
     def _open_vpn(self, should_open):
         try:
             is_running = VpnController.check_vpn()
+            if should_open:
+                rollback = False
+                if self._vpn_controller.connected:
+                    self._vpn_retries = 0
+                elif self._vpn_retries < 5:
+                    logger.info('Waiting for VPN connection...')
+                    self._vpn_retries += 1
+                else:
+                    rollback = True
+                    self._vpn_retries += 1
+
+                files = CertificateFiles()
+                changed = files.activate_vpn(rollback=rollback)
+                if changed:
+                    self._vpn_retries = 0
+                    VpnController.stop_vpn()
+                    VpnController.start_vpn()
+
             if should_open and not is_running:
                 logger.info('Opening vpn...')
                 VpnController.start_vpn()
@@ -544,7 +616,7 @@ class TaskExecutor(object):
                 logger.info('Closing vpn... Done')
             is_running = VpnController.check_vpn()
 
-            self._vpn_open = is_running and self._vpn_controller.vpn_connected
+            self._vpn_open = is_running and self._vpn_controller.connected
             if self._message_client is not None:
                 self._message_client.send_event(OMBusEvents.VPN_OPEN, self._vpn_open)
         except Exception:
@@ -563,13 +635,14 @@ class TaskExecutor(object):
                 files.setup_links()
                 files.cleanup_versions()
                 data = self._cloud.issue_client_certs()
-                files.setup_certs(data)
+                target = datetime.now().strftime('%Y%m%d%H%M')
+                files.setup_certs(target, data)
 
                 logger.info('Validating client certificates...')
-                confirmed = self._cloud.confirm_client_certs(key_path=files.key_path)
+                confirmed = self._cloud.confirm_client_certs(key_path=files.cert_path(target, 'client.key'))
                 try:
                     if confirmed:
-                        files.activate()
+                        files.activate(target)
                         self._cloud.authenticate(raise_exception=True)
                 except Exception:
                     files.rollback()
@@ -583,10 +656,16 @@ class TaskExecutor(object):
         # type: (Optional[float]) -> None
         try:
             if last_successful_heartbeat is not None and last_successful_heartbeat > time.time() - CHECK_CONNECTIVITY_TIMEOUT:
+                if not self._online:
+                    logger.info('Connectivity changed: heartbeat=ok')
+                    self._online = True
                 if self._message_client is not None:
                     self._message_client.send_event(OMBusEvents.CONNECTIVITY, True)
             else:
                 connectivity = TaskExecutor._has_connectivity()
+                if connectivity != self._online:
+                    logger.info('Connectivity changed: connectivity=%s', connectivity)
+                    self._online = False
                 if self._message_client is not None:
                     self._message_client.send_event(OMBusEvents.CONNECTIVITY, connectivity)
                 if not connectivity and last_successful_heartbeat is not None and last_successful_heartbeat < time.time() - REBOOT_TIMEOUT:
