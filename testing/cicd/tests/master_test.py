@@ -52,10 +52,14 @@ def test_offline_recovery(toolbox, master_communication):
     assert data['success'], data
 
     toolbox.dut.get('/reset_master', {'power_on': False})
-
-    time.sleep(40)
-    data = toolbox.dut.get('/health_check')['health']
-    assert not data['master']['state'], data
+    start = time.time()
+    offline = False
+    while time.time() < start + 60:
+        data = toolbox.dut.get('/health_check')['health']
+        if not data['master']['state']:
+            offline = True
+            break
+    assert offline, 'Master is not offline after being turned off'
 
     toolbox.health_check(timeout=360)
     toolbox.dut.get('/get_status')
