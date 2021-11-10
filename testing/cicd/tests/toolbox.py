@@ -283,7 +283,8 @@ class Toolbox(object):
                                   shutter_modules='shutter' in missing_modules,
                                   dimmer_modules='dim_control' in missing_modules,
                                   sensor_modules='sensor' in missing_modules,
-                                  can_controls='can_control' in missing_modules)
+                                  can_controls='can_control' in missing_modules,
+                                  energy_modules='energy' in missing_modules)
 
         modules = self.count_modules('master')
         logger.info('Post-discovery modules: {0}'.format(modules))
@@ -424,7 +425,7 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, timeout=120):
+    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, energy_modules=False, timeout=120):
         logger.info('Discovering modules')
         since = time.time()
         expected_ucan_emulated_modules = {'input': 0, 'sensor': 0}
@@ -448,6 +449,7 @@ class Toolbox(object):
             time.sleep(1)
             self.tester.toggle_output(button, delay=0.5)
 
+        need_energy_module = False
         new_modules = []
         self.clear_module_discovery_log()
         self.module_discover_start()
@@ -481,16 +483,27 @@ class Toolbox(object):
                                   'I': expected_ucan_emulated_modules.get('input', 0)}
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses, timeout=30)
             new_module_addresses = set(module['address'] for module in new_modules)
+            if energy_modules:
+                need_energy_module = True
+                logger.info('* Discover energy module')
+                _press_discover_button(TESTER.Button.energy)
+                time.sleep(3)
         finally:
             self.module_discover_stop()
             time.sleep(30)  # Give time for the master to clear the eeprom cache
 
-        while since > time.time() - timeout:
+        master_modules_found = False
+        energy_module_found = not need_energy_module
+        while (master_modules_found is False or energy_module_found is False) and since > time.time() - timeout:
             data = self.dut.get('/get_modules_information')
+            if need_energy_module:
+                energy_module_found = len(data['modules'].get('gateway', {})) > 0
             synced_addresses = set(data['modules'].get('master', {}).keys())
             if new_module_addresses.issubset(synced_addresses):
-                return True
-        raise AssertionError('Discovered modules did not correctly sync')
+                master_modules_found = True
+        if master_modules_found is False or energy_module_found is False:
+            raise AssertionError('Discovered modules did not correctly sync')
+        return True
 
     def add_virtual_modules(self, module_amounts, timeout=120):
         since = time.time()
