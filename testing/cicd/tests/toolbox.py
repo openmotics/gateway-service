@@ -487,15 +487,15 @@ class Toolbox(object):
                 logger.info('* Discover sensor module')
                 _press_discover_button(TESTER.Button.temp)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
-            if can_controls[Module.HardwareType.PHYSICAL] or expected_emulated_modules['input'] or expected_emulated_modules['sensor']:
+            if can_controls[Module.HardwareType.PHYSICAL] or expected_emulated_modules.get('input', 0) or expected_emulated_modules.get('sensor', 0):
                 logger.info('* Discover can control')
                 _press_discover_button(TESTER.Button.can)
                 module_amounts = {'C': 1,  # TODO: Fix these hardcoded values
-                                  'T': expected_emulated_modules['sensor'],
-                                  'I': expected_emulated_modules['input']}
+                                  'T': expected_emulated_modules.get('sensor', 0),
+                                  'I': expected_emulated_modules.get('input', 0)}
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses, timeout=30)
             new_module_addresses = set(module['address'] for module in new_modules)
-            if energy_modules:
+            if energy_modules[Module.HardwareType.PHYSICAL]:
                 need_energy_module = True
                 logger.info('* Discover energy module')
                 _press_discover_button(TESTER.Button.energy)
