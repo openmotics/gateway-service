@@ -271,21 +271,27 @@ class Toolbox(object):
         logger.info('Expected modules: {0}'.format(expected_modules))
 
         missing_modules = set()
+        missing_emulated_modules = set()
         modules = self.count_modules(source='master')
         logger.info('Initial modules: {0}'.format(modules))
         for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED]:
             for module_type, expected_amount in expected_modules[hardware_type].items():
                 if modules[hardware_type].get(module_type, 0) == 0:
-                    missing_modules.add(module_type)
-        if missing_modules:
+                    if hardware_type == Module.HardwareType.PHYSICAL:
+                        missing_modules.add(module_type)
+                    else:
+                        missing_emulated_modules.add(module_type)
+        if missing_modules or missing_emulated_modules:
             logger.info('Discovering modules...')
-            self.discover_modules(output_modules='output' in missing_modules,
-                                  input_modules='input' in missing_modules,
-                                  shutter_modules='shutter' in missing_modules,
-                                  dimmer_modules='dim_control' in missing_modules,
-                                  sensor_modules='sensor' in missing_modules,
-                                  can_controls='can_control' in missing_modules,
-                                  energy_modules='energy' in missing_modules)
+            self.discover_modules(output_modules={Module.HardwareType.PHYSICAL: 'output' in missing_modules},
+                                  input_modules={Module.HardwareType.PHYSICAL: 'input' in missing_modules,
+                                                 Module.HardwareType.EMULATED: 'input' in missing_emulated_modules},
+                                  shutter_modules={Module.HardwareType.PHYSICAL: 'shutter' in missing_modules},
+                                  dimmer_modules={Module.HardwareType.PHYSICAL: 'dim_control' in missing_modules},
+                                  sensor_modules={Module.HardwareType.PHYSICAL: 'sensor' in missing_modules,
+                                                  Module.HardwareType.EMULATED: 'sensor' in missing_emulated_modules},
+                                  can_controls={Module.HardwareType.PHYSICAL: 'can_control' in missing_modules},
+                                  energy_modules={Module.HardwareType.PHYSICAL: 'energy' in missing_modules})
 
         modules = self.count_modules('master')
         logger.info('Post-discovery modules: {0}'.format(modules))
@@ -426,24 +432,29 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, energy_modules=False, timeout=120):
+    def discover_modules(self, output_modules, input_modules, shutter_modules, dimmer_modules, sensor_modules, can_controls, energy_modules, timeout=120):
         logger.info('Discovering modules')
         since = time.time()
-        expected_ucan_emulated_modules = {'input': 0, 'sensor': 0}
-        ucan_inputs = []
-        for module in INPUT_MODULE_LAYOUT:
-            if module.is_can:
-                ucan_inputs += module.inputs
-                expected_ucan_emulated_modules[module.module_type] += 1
-        for module in TEMPERATURE_MODULE_LAYOUT:
-            if module.is_can:
-                expected_ucan_emulated_modules[module.module_type] += 1
-        if ucan_inputs:
-            logger.info('* Toggle uCAN inputs for discovery: %s', ucan_inputs)
-            for ucan_input in ucan_inputs:
-                self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
-                time.sleep(0.5)
-            time.sleep(5)  # Give a brief moment for the CC to settle
+        expected_emulated_modules = {}
+        if input_modules[Module.HardwareType.EMULATED] or sensor_modules[Module.HardwareType.EMULATED]:
+            ucan_inputs = []
+            for module in INPUT_MODULE_LAYOUT:
+                if module.is_can:
+                    ucan_inputs += module.inputs
+                    if module.module_type not in expected_emulated_modules:
+                        expected_emulated_modules[module.module_type] = 0
+                    expected_emulated_modules[module.module_type] += 1
+            for module in TEMPERATURE_MODULE_LAYOUT:
+                if module.is_can:
+                    if module.module_type not in expected_emulated_modules:
+                        expected_emulated_modules[module.module_type] = 0
+                    expected_emulated_modules[module.module_type] += 1
+            if ucan_inputs:
+                logger.info('* Toggle uCAN inputs for discovery: %s', ucan_inputs)
+                for ucan_input in ucan_inputs:
+                    self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
+                    time.sleep(0.5)
+                time.sleep(5)  # Give a brief moment for the CC to settle
 
         def _press_discover_button(button):
             self.tester.toggle_output(button, delay=0.5)
@@ -456,32 +467,32 @@ class Toolbox(object):
         self.module_discover_start()
         try:
             addresses = []
-            if output_modules:
+            if output_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover output module')
                 _press_discover_button(TESTER.Button.output)
                 new_modules += self.watch_module_discovery_log(module_amounts={'O': 1}, addresses=addresses)
-            if shutter_modules:
+            if shutter_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover shutter module')
                 _press_discover_button(TESTER.Button.shutter)
                 new_modules += self.watch_module_discovery_log(module_amounts={'R': 1}, addresses=addresses)
-            if input_modules:
+            if input_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover input module')
                 _press_discover_button(TESTER.Button.input)
                 new_modules += self.watch_module_discovery_log(module_amounts={'I': 1}, addresses=addresses)
-            if dimmer_modules:
+            if dimmer_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover dim control module')
                 _press_discover_button(TESTER.Button.dimmer)
                 new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
-            if sensor_modules:
+            if sensor_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover sensor module')
                 _press_discover_button(TESTER.Button.temp)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
-            if can_controls or ucan_inputs:
+            if can_controls[Module.HardwareType.PHYSICAL] or expected_emulated_modules['input'] or expected_emulated_modules['sensor']:
                 logger.info('* Discover can control')
                 _press_discover_button(TESTER.Button.can)
                 module_amounts = {'C': 1,  # TODO: Fix these hardcoded values
-                                  'T': expected_ucan_emulated_modules.get('sensor', 0),
-                                  'I': expected_ucan_emulated_modules.get('input', 0)}
+                                  'T': expected_emulated_modules['sensor'],
+                                  'I': expected_emulated_modules['input']}
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses, timeout=30)
             new_module_addresses = set(module['address'] for module in new_modules)
             if energy_modules:
