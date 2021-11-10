@@ -61,9 +61,11 @@ class ThermostatStatusMaster(object):
         with self._merge_lock:
             new_status = {}
             state = ThermostatState.ON if thermostats['thermostats_on'] else ThermostatState.OFF
-            thermostats['mode'] = ThermostatMode.COOLING if thermostats['cooling'] else ThermostatMode.HEATING
+            mode = ThermostatMode.COOLING if thermostats['cooling'] else ThermostatMode.HEATING
+            thermostats['mode'] = mode
             for status in thermostats['status']:
-                status.update({'state': state,
+                status.update({'mode': mode,
+                               'state': state,
                                'steering_power': (status['output0'] + status['output1']) // 2})
                 new_status[status['id']] = status
             if not self._thermostats:
@@ -71,8 +73,8 @@ class ThermostatStatusMaster(object):
                 for i in range(0, 32):
                     self._report_change(i, new_status.get(i))
             else:
-                if thermostats['mode'] != self._thermostats['mode']:
-                    self._report_group_change(mode=thermostats['mode'])
+                if mode != self._thermostats['mode']:
+                    self._report_group_change(mode=mode)
                 old_status = {t['id']: t for t in self._thermostats['status']}
                 for thermostat_id in range(0, 32):
                     change = False
@@ -95,6 +97,7 @@ class ThermostatStatusMaster(object):
         if self._on_thermostat_change is not None and status is not None:
             self._on_thermostat_change(thermostat_id, {'preset': status['preset'],
                                                        'state': status['state'],
+                                                       'mode': status['mode'],
                                                        'current_setpoint': status['csetp'],
                                                        'actual_temperature': status['act'],
                                                        'output_0': status['output0'],

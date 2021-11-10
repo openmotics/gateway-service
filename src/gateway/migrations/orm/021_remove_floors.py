@@ -30,7 +30,7 @@ def migrate(migrator, database, fake=False, **kwargs):
     class BaseModel(Model):
         class Meta:
             database = SqliteDatabase(constants.get_gateway_database_file(),
-                                      pragmas={'foreign_keys': 1})
+                                      pragmas={'foreign_keys': 0})
 
     class Floor(BaseModel):
         id = AutoField()
