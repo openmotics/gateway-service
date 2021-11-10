@@ -28,7 +28,7 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, \
     TEMPERATURE_MODULE_LAYOUT, TEST_PLATFORM, TESTER, Input, Module, Output, \
-    TestPlatform, Shutter, SHUTTER_MODULE_LAYOUT
+    TestPlatform, Shutter, SHUTTER_MODULE_LAYOUT, ENERGY_MODULE_LAYOUT
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +262,8 @@ class Toolbox(object):
                             Module.HardwareType.PHYSICAL: {},
                             Module.HardwareType.EMULATED: {},
                             Module.HardwareType.INTERNAL: {}}
-        for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
+        for module in (OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT +
+                       SHUTTER_MODULE_LAYOUT + ENERGY_MODULE_LAYOUT):
             hardware_type = module.hardware_type
             if module.module_type not in expected_modules[hardware_type]:
                 expected_modules[hardware_type][module.module_type] = 0
