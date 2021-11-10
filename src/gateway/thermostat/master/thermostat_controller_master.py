@@ -97,6 +97,7 @@ class ThermostatControllerMaster(ThermostatController):
                                      {'id': thermostat_id,
                                       'status': {'preset': status['preset'],
                                                  'state': status['state'].upper(),
+                                                 'mode': status['mode'].upper(),
                                                  'current_setpoint': status['current_setpoint'],
                                                  'actual_temperature': status['actual_temperature'],
                                                  'output_0': status['output_0'],
