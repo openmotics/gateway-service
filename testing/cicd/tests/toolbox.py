@@ -215,7 +215,6 @@ class Toolbox(object):
         # type: () -> None
         self._tester = None  # type: Optional[TesterGateway]
         self._dut = None  # type: Optional[Client]
-        self._dut_energy_cts = None  # type: Optional[List[Tuple[int, int]]]
         self.dirty_shutters = []  # type: List[Shutter]
 
     @property
@@ -235,16 +234,6 @@ class Toolbox(object):
             dut_host = os.environ['OPENMOTICS_DUT_HOST']
             self._dut = Client('dut', dut_host, auth=dut_auth)
         return self._dut
-
-    @property
-    def dut_energy_cts(self):
-        if self._dut_energy_cts is None:
-            cts = []
-            energy_modules = self.list_energy_modules(module_type='energy')
-            for module in energy_modules:
-                cts += [(module['address'], input_id) for input_id in range(12)]
-            self._dut_energy_cts = cts
-        return self._dut_energy_cts
 
     def initialize(self):
         # type: () -> None
@@ -272,7 +261,7 @@ class Toolbox(object):
 
         missing_modules = set()
         missing_emulated_modules = set()
-        modules = self.count_modules(source='master')
+        modules = self.count_modules()
         logger.info('Initial modules: {0}'.format(modules))
         for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED]:
             for module_type, expected_amount in expected_modules[hardware_type].items():
@@ -293,7 +282,7 @@ class Toolbox(object):
                                   can_controls={Module.HardwareType.PHYSICAL: 'can_control' in missing_modules},
                                   energy_modules={Module.HardwareType.PHYSICAL: 'energy' in missing_modules})
 
-        modules = self.count_modules('master')
+        modules = self.count_modules()
         logger.info('Post-discovery modules: {0}'.format(modules))
         for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.INTERNAL, Module.HardwareType.EMULATED]:
             for module_type in set(list(expected_modules[hardware_type].keys())):
@@ -311,7 +300,7 @@ class Toolbox(object):
                 assert extra_needed_amount > 0
                 self.add_virtual_modules(module_amounts={module_type: extra_needed_amount})
 
-        modules = self.count_modules('master')
+        modules = self.count_modules()
         logger.info('Post add virtual modules: {0}'.format(modules))
         for module_type, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
             assert modules[Module.HardwareType.VIRTUAL].get(module_type, 0) >= expected_amount
@@ -356,34 +345,20 @@ class Toolbox(object):
         params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm, 'can': False}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
-    def list_modules(self, source):
-        # type: () -> Dict[str, Any]
-        return self.dut.get('/get_modules_information')['modules'].get(source, {})
-
-    def count_modules(self, source):
-        modules = self.list_modules(source=source)
+    def count_modules(self):
+        modules = self.dut.get('/get_modules_information')['modules']
         counts = {Module.HardwareType.VIRTUAL: {},
                   Module.HardwareType.PHYSICAL: {},
                   Module.HardwareType.INTERNAL: {},
                   Module.HardwareType.EMULATED: {}}
-        for module in modules.values():
-            hardware_type = module['hardware_type']
-            module_type = module['module_type']
-            if module_type not in counts[hardware_type]:
-                counts[hardware_type][module_type] = 0
-            counts[hardware_type][module_type] += 1
+        for source in ['master', 'gateway']:
+            for module in modules[source].values():
+                hardware_type = module['hardware_type']
+                module_type = module['module_type']
+                if module_type not in counts[hardware_type]:
+                    counts[hardware_type][module_type] = 0
+                counts[hardware_type][module_type] += 1
         return counts
-
-    def list_energy_modules(self, module_type, min_modules=1):
-        # type: (str, int) -> List[Dict[str, Any]]
-        data = self.list_modules(source='gateway')
-        modules = []
-        for address, info in data.items():
-            if info['module_type'] != module_type or not info['firmware_version']:
-                continue
-            modules.append(info)
-        assert len(modules) >= min_modules, 'Not enough energy modules of type \'{}\' available in {}'.format(module_type, data)
-        return modules
 
     def authorized_mode_start(self):
         # type: () -> None
