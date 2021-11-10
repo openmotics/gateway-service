@@ -352,6 +352,8 @@ class Toolbox(object):
                   Module.HardwareType.INTERNAL: {},
                   Module.HardwareType.EMULATED: {}}
         for source in ['master', 'gateway']:
+            if source not in modules:
+                continue
             for module in modules[source].values():
                 hardware_type = module['hardware_type']
                 module_type = module['module_type']
