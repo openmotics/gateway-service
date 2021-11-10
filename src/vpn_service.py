@@ -361,15 +361,16 @@ class TaskExecutor(object):
             logger.exception('Unexpected exception opening/closing VPN')
 
     def _check_connectivity(self, last_successful_heartbeat):
+        # type: (Optional[float]) -> None
         try:
-            if last_successful_heartbeat > time.time() - CHECK_CONNECTIVITY_TIMEOUT:
+            if last_successful_heartbeat is not None and last_successful_heartbeat > time.time() - CHECK_CONNECTIVITY_TIMEOUT:
                 if self._message_client is not None:
                     self._message_client.send_event(OMBusEvents.CONNECTIVITY, True)
             else:
                 connectivity = TaskExecutor._has_connectivity()
                 if self._message_client is not None:
                     self._message_client.send_event(OMBusEvents.CONNECTIVITY, connectivity)
-                if not connectivity and last_successful_heartbeat < time.time() - REBOOT_TIMEOUT:
+                if not connectivity and last_successful_heartbeat is not None and last_successful_heartbeat < time.time() - REBOOT_TIMEOUT:
                     subprocess.call('sync && reboot', shell=True)
         except Exception:
             logger.exception('Unexpected exception checking connectivity')
