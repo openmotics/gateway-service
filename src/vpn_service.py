@@ -64,72 +64,6 @@ DEFAULT_SLEEP_TIME = 30.0
 logger = logging.getLogger('openmotics')
 
 
-class VpnController(object):
-    """ Contains methods to check the vpn status, start and stop the vpn. """
-    config = ConfigParser()
-    config.read(constants.get_config_file())
-    vpn_supervisor = config.get('OpenMotics', 'vpn_supervisor') == 'True' if config.has_option('OpenMotics', 'vpn_supervisor') else True
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT or not vpn_supervisor:
-        vpn_binary = 'openvpn'
-        config_location = '/etc/openvpn/client/'
-        start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
-        stop_cmd = 'killall {} > /dev/null'.format(vpn_binary)
-        check_cmd = 'ps -a | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
-    else:
-        vpn_service = System.get_vpn_service()
-        start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
-        stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
-        check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
-
-    def __init__(self):
-        self.connected = False
-        self._vpn_tester = DaemonThread(name='vpnctl',
-                                        target=self._vpn_connected,
-                                        interval=5)
-
-    def start(self):
-        self._vpn_tester.start()
-
-    @staticmethod
-    def start_vpn():
-        """ Start openvpn """
-        logger.info('Starting VPN')
-        return subprocess.call(VpnController.start_cmd, shell=True) == 0
-
-    @staticmethod
-    def stop_vpn():
-        """ Stop openvpn """
-        logger.info('Stopping VPN')
-        return subprocess.call(VpnController.stop_cmd, shell=True) == 0
-
-    @staticmethod
-    def check_vpn():
-        """ Check if openvpn is running """
-        return subprocess.call(VpnController.check_cmd, shell=True) == 0
-
-    def _vpn_connected(self):
-        """ Checks if the VPN tunnel is connected """
-        try:
-            routes = subprocess.check_output('ip r | grep tun | grep via || true', shell=True).strip()
-            # example output:
-            # 10.0.0.0/24 via 10.37.0.5 dev tun0\n
-            # 10.37.0.1 via 10.37.0.5 dev tun0
-            result = False
-            if routes:
-                if not isinstance(routes, str):  # to ensure python 2 and 3 compatibility
-                    routes = routes.decode()
-
-                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
-                for vpn_server in vpn_servers:
-                    if TaskExecutor._ping(vpn_server, verbose=False):
-                        result = True
-                        break
-            self.connected = result
-        except Exception as ex:
-            logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
-            self.connected = False
-
-
 class Cloud(object):
     """ Connects to the cloud """
     request_kwargs = {
@@ -201,7 +135,7 @@ class Cloud(object):
             else:
                 query = 'uuid={0}'.format(self._uuid)
                 url = self._build_url(path, query=self._url.query or query)
-            logger.debug('Request %s %s',  method.__name__.upper(), path)
+            logger.debug('Request %s %s',  getattr(method, '__name__', '').upper(), path)
             response = method(url, **kwargs)
             response.raise_for_status()
             return response.json()
@@ -301,8 +235,8 @@ class CertificateFiles(object):
         self.vpn = self.cert_path(CertificateFiles.VPN)
 
     @staticmethod
-    def cert_path(*args, prefix=constants.OPENMOTICS_PREFIX):
-        return os.path.join(prefix, 'versions', 'certificates', *args)
+    def cert_path(*args):
+        return os.path.join(constants.OPENMOTICS_PREFIX, 'versions', 'certificates', *args)
 
     @staticmethod
     def get_versions():
@@ -349,7 +283,7 @@ class CertificateFiles(object):
             except Exception:
                 target = None
             try:
-                vpn_target = os.readlink(self.current).split(os.path.sep)[-1]
+                vpn_target = os.readlink(self.vpn).split(os.path.sep)[-1]
             except Exception:
                 vpn_target = None
 
@@ -509,147 +443,381 @@ class TaskExecutor(object):
         self._intervals = {}
         self._online = False
         self._vpn_open = False
-        self._vpn_retries = 0
+        self.connect_retries = 0
         self._cloud = cloud
         self._message_client = message_client
-        self._vpn_controller = VpnController()
-        self._tasks = deque()
-        self._previous_amount_of_tasks = 0
-        self._executor = DaemonThread(name='taskexecutor',
-                                      target=self.execute_tasks,
-                                      interval=300)
+        self._queue = deque()
+        self._tasks = []
+        self._thread = DaemonThread(name='taskexecutor',
+                                    target=self.execute_tasks,
+                                    interval=300)
 
     def start(self):
-        self._vpn_controller.start()
-        self._executor.start()
+        self._tasks = [
+            EventsTask(),
+            ConfigurationTask(),
+            ConnectivityTask(),
+            RebootTask(),
+            OpenVPNTask(),
+            UpdateCertsTask(self._cloud),
+        ]
+        self._thread.start()
 
-    def set_new_tasks(self, task_data):
-        self._tasks.appendleft(task_data)
-        self._executor.request_single_run()
+    def enqueue(self, data):
+        self._queue.appendleft(data)
+        self._thread.request_single_run()
 
     @property
     def vpn_open(self):
         return self._vpn_open
 
+    def execute(self, tasks, context):
+        events = []
+        for task in tasks:
+            try:
+                result = task.run(context)
+                if result:
+                    events.extend(result)
+            except Exception:
+                logger.exception('Failed to execute %s', task)
+        return context, events
+
     def execute_tasks(self):
         while True:
             try:
-                task_data = self._tasks.pop()
+                data = self._queue.pop()
             except IndexError:
                 return
+            _, events = self.execute(self._tasks, data)
+            for event in events:
+                if self._message_client:
+                    self._message_client.send_event(event)
 
-            amount_of_tasks = len(task_data)
-            if self._previous_amount_of_tasks != amount_of_tasks:
-                logger.info('Processing {0} tasks...'.format(amount_of_tasks))
 
-            if 'configuration' in task_data:
-                self._process_configuration_data(task_data['configuration'])
-            if 'intervals' in task_data:
-                self._process_interval_data(task_data['intervals'])
-            if 'connectivity' in task_data:
-                self._check_connectivity(task_data['connectivity'])
-            if self._online:
-                if 'open_vpn' in task_data:
-                    self._open_vpn(task_data['open_vpn'])
-                if 'update_certs' in task_data:
-                    self._rotate_client_certificates(task_data['update_certs'])
-            if 'events' in task_data and self._message_client is not None:
-                for event in task_data['events']:
-                    try:
-                        self._message_client.send_event(event[0], event[1])
-                    except Exception as ex:
-                        logger.error('Could not send event {0}({1}): {2}'.format(event[0], event[1], ex))
+class HeartbeatService(object):
+    @Inject
+    def __init__(self, url=None, uuid=None, message_client=INJECTED):
+        # type: (Optional[str], Optional[str], MessageClient) -> None
+        config = ConfigParser()
+        config.read(constants.get_config_file())
 
-            if self._previous_amount_of_tasks != amount_of_tasks:
-                logger.info('Processing {0} tasks... Done'.format(amount_of_tasks))
-                self._previous_amount_of_tasks = amount_of_tasks
+        self._message_client = message_client
+        if self._message_client is not None:
+            self._message_client.set_state_handler(self._check_state)
+            self._message_client.add_event_handler(self._handle_event)
 
-    def _process_configuration_data(self, configuration):
-        try:
-            configuration_changed = self._configuration != configuration
-            if configuration_changed:
-                for setting, value in configuration.items():
-                    Config.set_entry(setting, value)
-                logger.info('Configuration changed: {0}'.format(configuration))
-            self._configuration = configuration
-        except Exception:
-            logger.exception('Unexpected exception processing configuration data')
+        self._last_successful_heartbeat = None  # type: Optional[float]
+        self._last_cycle = 0.0
+        self._cloud_enabled = True
+        self._sleep_time = 0.0
+        self._previous_sleep_time = 0.0
+        self._gateway = Gateway()
+        self._cloud = Cloud(url=url, uuid=uuid)
+        self._executor = TaskExecutor(self._cloud)
 
-    def _process_interval_data(self, intervals):
-        try:
-            intervals_changed = self._intervals != intervals
-            if intervals_changed and self._message_client is not None:
-                self._message_client.send_event(OMBusEvents.METRICS_INTERVAL_CHANGE, intervals)
-                logger.info('Intervals changed: {0}'.format(intervals))
-            self._intervals = intervals
-        except Exception:
-            logger.exception('Unexpected exception processing interval data')
+        # Obsolete keys (do not use them, as they are still processed for legacy gateways):
+        # `outputs`, `update`, `energy`, `pulse_totals`, `'thermostats`, `inputs`, `shutters`
+        self._collectors = {'errors': DataCollector('errors', self._gateway.get_errors, 600),
+                            'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}
+        self._debug_collector = DebugDumpDataCollector()
 
-    def _open_vpn(self, should_open):
-        try:
-            is_running = VpnController.check_vpn()
-            if should_open:
-                rollback = False
-                if self._vpn_controller.connected:
-                    self._vpn_retries = 0
-                elif self._vpn_retries < 5:
+    @staticmethod
+    def _handle_signal_alarm(signum, frame):
+        logger.error('Signal alarm ({0}) triggered:\n{1}'.format(signum, (''.join(traceback.format_stack(frame))).strip()))
+        logger.error('Exit(1)')
+        os._exit(1)
+
+    def _check_state(self):
+        return {'cloud_disabled': not self._cloud_enabled,
+                'cloud_last_connect': None if not self._cloud_enabled else self._last_successful_heartbeat,
+                'sleep_time': self._sleep_time,
+                'vpn_open': self._executor.vpn_open,
+                'last_cycle': self._last_cycle}
+
+    def _handle_event(self, event, payload):
+        _ = self, payload
+        if event == OMBusEvents.TIME_CHANGED:
+            time.tzset()  # Refresh timezone
+            logger.info('Timezone changed to {0}'.format(time.tzname[0]))
+
+    def start(self):
+        # type: () -> None
+        self._executor.start()
+        self._debug_collector.start()
+        for collector in self._collectors.values():
+            collector.start()
+
+    def run(self):
+        # type: () -> None
+        signal.signal(signal.SIGALRM, HeartbeatService._handle_signal_alarm)
+        while True:
+            self._last_cycle = time.time()
+            try:
+                signal.alarm(600)  # 10 minutes
+                start_time = time.time()
+                call_home_duration = self.heartbeat()
+                beat_time = time.time() - start_time
+                if beat_time > 2:
+                    logger.warning('Heartbeat took {0:.2f}s to complete, of which the call home took {1:.2f}s'.format(beat_time, call_home_duration))
+                if self._previous_sleep_time != self._sleep_time:
+                    logger.info('Set sleep interval to {0}s'.format(self._sleep_time))
+                    self._previous_sleep_time = self._sleep_time
+                signal.alarm(0)
+                time.sleep(self._sleep_time)
+            except Exception as ex:
+                logger.error("Error during vpn check loop: {0}".format(ex))
+                time.sleep(5)
+
+    def heartbeat(self):  # type: () -> float
+        # Check whether connection to the Cloud is enabled/disabled
+        self._cloud_enabled = Config.get_entry('cloud_enabled', False)
+        if self._cloud_enabled is False:
+            self._sleep_time = DEFAULT_SLEEP_TIME
+            task_data = {'cloud_enabled': False,
+                         'open_vpn': False,
+                         'update_certs': False,
+                         'events': [(OMBusEvents.VPN_OPEN, False),
+                                    (OMBusEvents.CLOUD_REACHABLE, False)]}
+            self._executor.enqueue(task_data)
+            return 0.0
+
+        # Load collected data from async collectors
+        call_data = {}  # type: Dict[str, Dict[str, Any]]
+        for collector_key in self._collectors:
+            collector = self._collectors[collector_key]
+            data = collector.data
+            if data is not None:
+                call_data[collector_key] = data
+
+        # Load debug data
+        debug_data = self._debug_collector.data
+        debug_references = None  # type: Optional[List[float]]
+        if debug_data is not None:
+            call_data['debug'], debug_references = debug_data
+
+        # Send data to the cloud and load response
+        start_time = time.time()
+        response = self._cloud.call_home(call_data)
+        duration = time.time() - start_time
+        success = response.get('success', False)
+        self._sleep_time = response.get('sleep_time', DEFAULT_SLEEP_TIME)
+
+        if success:
+            self._last_successful_heartbeat = time.time()
+            self._debug_collector.clear(debug_references)
+
+        # Gather tasks to be executed
+        task_data = {'events': [(OMBusEvents.CLOUD_REACHABLE, success)],
+                     'cloud_enabled': True,
+                     'open_vpn': response.get('open_vpn', True),
+                     'update_certs': response.get('update_certs', False),
+                     'heartbeat_success': success}
+        for entry in ['configuration', 'intervals']:
+            if entry in response:
+                task_data[entry] = response[entry]
+        self._executor.enqueue(task_data)
+        return duration
+
+
+class ConfigurationTask(object):
+    def __init__(self):
+        self._configuration = {}
+
+    def run(self, context):
+        data = context['configuration']
+        if self._configuration != data:
+            for setting, value in data.items():
+                Config.set_entry(setting, value)
+            logger.info('Configuration changed: %s', data)
+        self._configuration = data
+
+
+class EventsTask(object):
+    def __init__(self):
+        self._intervals = {}
+
+    def run(self, context):
+        for event in context['events']:
+            yield event
+        data = context['intervals']
+        if self._intervals != data:
+            yield (OMBusEvents.METRICS_INTERVAL_CHANGE, data)
+            logger.info('Intervals changed: %s', data)
+        self._intervals = data
+
+
+class ConnectivityTask(object):
+    def __init__(self):
+        self.connected = False
+        self.last_heartbeat = time.time()  # unknown
+
+    def run(self, context):
+
+        timeout = time.time() - CHECK_CONNECTIVITY_TIMEOUT
+        if context['heartbeat_success']:
+            if self.last_heartbeat is None or self.last_heartbeat < timeout:
+                logger.info('Heartbeat recovered')
+            self.last_heartbeat = time.time()
+
+        if self.last_heartbeat < timeout:
+            status = self._check_status()
+            if self.connected != status:
+                logger.info('Connectivity changed: %s', status)
+                self.connected = status
+        else:
+            self.connected = True
+        context['connectivity_success'] = self.connected
+        yield (OMBusEvents.CONNECTIVITY, self.connected)
+        if context['cloud_enabled'] and not self.connected and \
+                self.last_heartbeat < time.time() - REBOOT_TIMEOUT:
+            context['perform_reboot'] = True
+
+    @classmethod
+    def _check_status(cls):
+        """
+        Check connectivity by using ping to recover from a messed up network stack on the BeagleBone
+        Prefer using OpenMotics infrastructure first
+        """
+        if Util.ping('cloud.openmotics.com'):
+            # OpenMotics infrastructure can be pinged
+            # > Connectivity
+            return True
+        can_ping_internet_by_fqdn = Util.ping('example.org') or Util.ping('google.com')
+        if can_ping_internet_by_fqdn:
+            # Public internet servers can be pinged by FQDN
+            # > Assume maintenance on OpenMotics infrastructure. Sufficient connectivity
+            return True
+        can_ping_internet_by_ip = Util.ping('8.8.8.8') or Util.ping('1.1.1.1')
+        if can_ping_internet_by_ip:
+            # Public internet servers can be pinged by IP, but not by FQDN
+            # > Assume DNS resolving issues. Insufficient connectivity
+            return False
+        # Public internet servers cannot be pinged by IP, nor by FQDN
+        can_ping_default_gateway = Util.ping(Util.default_gateway())
+        if can_ping_default_gateway:
+            # > Assume ISP outage. Sufficient connectivity
+            return True
+        # > Assume broken TCP stack. No connectivity
+        return False
+
+
+class RebootTask(object):
+    def run(self, context):
+        if context.get('perform_reboot', False):
+            subprocess.call('sync && reboot', shell=True)
+
+
+class OpenVPNTask(object):
+    def __init__(self):
+        self.open = False
+        self.connect_retries = 0
+
+    def run(self, context):
+        # Requires connectivity
+        if not context['connectivity_success']:
+            return
+
+        is_running = Util.check_vpn()
+        should_open = context['open_vpn']
+        if should_open:
+            rollback = False
+            if context['heartbeat_success']:
+                # Only attempt rollbacks when cloud is accessible
+                if self.open:
+                    self.connect_retries = 0
+                elif self.connect_retries < 5:
                     logger.info('Waiting for VPN connection...')
-                    self._vpn_retries += 1
+                    self.connect_retries += 1
                 else:
                     rollback = True
-                    self._vpn_retries += 1
+                    self.connect_retries += 1
 
-                files = CertificateFiles()
-                changed = files.activate_vpn(rollback=rollback)
-                if changed:
-                    self._vpn_retries = 0
-                    VpnController.stop_vpn()
-                    VpnController.start_vpn()
+            files = CertificateFiles()
+            changed = files.activate_vpn(rollback=rollback)
+            if changed:
+                self.open = False
+                self.connect_retries = 0
+                logger.info('Restarting vpn...')
+                Util.stop_vpn()
+                Util.start_vpn()
 
-            if should_open and not is_running:
-                logger.info('Opening vpn...')
-                VpnController.start_vpn()
-                logger.info('Opening vpn... Done')
-            elif not should_open and is_running:
-                logger.info('Closing vpn...')
-                VpnController.stop_vpn()
-                logger.info('Closing vpn... Done')
-            is_running = VpnController.check_vpn()
+        if should_open and not is_running:
+            logger.info('Opening vpn...')
+            Util.start_vpn()
+            logger.info('Opening vpn... Done')
+        elif not should_open and is_running:
+            logger.info('Closing vpn...')
+            Util.stop_vpn()
+            logger.info('Closing vpn... Done')
+        status = Util.check_vpn() and self._check_status()
+        if self.open != status:
+            logger.info('OpenVPN changed: open=%s', status)
+            self.open = status
 
-            self._vpn_open = is_running and self._vpn_controller.connected
-            if self._message_client is not None:
-                self._message_client.send_event(OMBusEvents.VPN_OPEN, self._vpn_open)
-        except Exception:
-            logger.exception('Unexpected exception opening/closing VPN')
+        yield (OMBusEvents.VPN_OPEN, status)
 
-    def _rotate_client_certificates(self, should_update):
+    def _check_status(self):
+        """ Checks if the VPN tunnel is connected """
+        return True
+        try:
+            routes = subprocess.check_output('ip r | grep tun | grep via || true', shell=True).strip()
+            # example output:
+            # 10.0.0.0/24 via 10.37.0.5 dev tun0\n
+            # 10.37.0.1 via 10.37.0.5 dev tun0
+            result = False
+            if routes:
+                if not isinstance(routes, str):  # to ensure python 2 and 3 compatibility
+                    routes = routes.decode()
+
+                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
+                for vpn_server in vpn_servers:
+                    if Util.ping(vpn_server, verbose=False):
+                        result = True
+                        break
+            return result
+        except Exception as ex:
+            logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
+            return False
+
+
+class UpdateCertsTask(object):
+    def __init__(self, cloud):
+        self._cloud = cloud
+
+    def run(self, context):
+        changed = False
+        # Requires cloud to be accessible
+        if not context['heartbeat_success']:
+            return
+
+        should_update = context['update_certs']
         try:
             if should_update:
                 logger.info('Rotating client certificates...')
-
-                files = CertificateFiles()
-                files.setup_links()
+                files = self.get_cert_files()
 
                 if self._cloud.confirm_client_certs():
                     try:
-                        self._verify_client_certificates(files.current)
+                        self.verify_client_certificates(files.current)
                         logger.info('Confirmed existing client certificates')
+                        yield (OMBusEvents.CLIENT_CERTS_CHANGED, changed)
                         return
                     except Exception:
                         pass
 
                 files.cleanup_versions()
                 data = self._cloud.issue_client_certs()
-                target = datetime.now().strftime('%Y%m%d%H%M')
+                target = self.new_version()
                 files.setup_certs(target, data)
 
                 logger.info('Validating client certificates...')
-                self._verify_client_certificates(files.cert_path(target))
+                self.verify_client_certificates(files.cert_path(target))
                 confirmed = self._cloud.confirm_client_certs(key_path=files.cert_path(target, 'client.key'))
                 try:
                     if confirmed:
                         files.activate(target)
                         self._cloud.authenticate(raise_exception=True)
+                        changed = True
                 except Exception:
                     files.rollback()
                     self._cloud.authenticate(raise_exception=True)
@@ -657,35 +825,62 @@ class TaskExecutor(object):
                 logger.info('Rotating client certificates... done')
         except Exception:
             logger.exception('Unexpected exception rotating certificates')
+        finally:
+            yield (OMBusEvents.CLIENT_CERTS_CHANGED, changed)
 
-    def _check_connectivity(self, last_successful_heartbeat):
-        # type: (Optional[float]) -> None
-        try:
-            if last_successful_heartbeat is not None and last_successful_heartbeat > time.time() - CHECK_CONNECTIVITY_TIMEOUT:
-                if not self._online:
-                    logger.info('Connectivity changed: heartbeat=ok')
-                    self._online = True
-                if self._message_client is not None:
-                    self._message_client.send_event(OMBusEvents.CONNECTIVITY, True)
-            else:
-                connectivity = TaskExecutor._has_connectivity()
-                if connectivity != self._online:
-                    logger.info('Connectivity changed: connectivity=%s', connectivity)
-                    self._online = False
-                if self._message_client is not None:
-                    self._message_client.send_event(OMBusEvents.CONNECTIVITY, connectivity)
-                if not connectivity and last_successful_heartbeat is not None and last_successful_heartbeat < time.time() - REBOOT_TIMEOUT:
-                    subprocess.call('sync && reboot', shell=True)
-        except Exception:
-            logger.exception('Unexpected exception checking connectivity')
+    def new_version(self):
+        return datetime.now().strftime('%Y%m%d%H%M')
+
+    def get_cert_files(self):
+        files = CertificateFiles()
+        files.setup_links()
+        return files
 
     @staticmethod
-    def _verify_client_certificates(path):
+    def verify_client_certificates(path):
         subprocess.check_output(['openssl', 'rsa', '-check', '-noout', '-in', os.path.join(path, 'client.key')])
         subprocess.check_output(['openssl', 'verify', '-CAfile', os.path.join(path, 'ca.crt'), os.path.join(path, 'client.crt')])
 
+
+class Util(object):
+    """ Contains methods to check the vpn status, start and stop the vpn. """
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+    vpn_supervisor = config.get('OpenMotics', 'vpn_supervisor') == 'True' if config.has_option('OpenMotics', 'vpn_supervisor') else True
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT or not vpn_supervisor:
+        vpn_binary = 'openvpn'
+        config_location = '/etc/openvpn/client/'
+        start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
+        stop_cmd = 'killall {} > /dev/null'.format(vpn_binary)
+        check_cmd = 'ps -a | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
+    else:
+        vpn_service = System.get_vpn_service()
+        start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
+        stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
+        check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
+
     @staticmethod
-    def _ping(target, verbose=True):
+    def start_vpn():
+        """ Start openvpn """
+        logger.info('Starting VPN')
+        return True
+        # return subprocess.call(Util.start_cmd, shell=True) == 0
+
+    @staticmethod
+    def stop_vpn():
+        """ Stop openvpn """
+        logger.info('Stopping VPN')
+        return True
+        # return subprocess.call(Util.stop_cmd, shell=True) == 0
+
+    @staticmethod
+    def check_vpn():
+        """ Check if openvpn is running """
+        return True
+        # return subprocess.call(Util.check_cmd, shell=True) == 0
+
+    @staticmethod
+    def ping(target, verbose=True):
         """ Check if the target can be pinged. Returns True if at least 1/4 pings was successful. """
         if target is None:
             return False
@@ -717,34 +912,7 @@ class TaskExecutor(object):
             return False
 
     @staticmethod
-    def _has_connectivity():
-        # Check connectivity by using ping to recover from a messed up network stack on the BeagleBone
-        # Prefer using OpenMotics infrastructure first
-
-        if TaskExecutor._ping('cloud.openmotics.com'):
-            # OpenMotics infrastructure can be pinged
-            # > Connectivity
-            return True
-        can_ping_internet_by_fqdn = TaskExecutor._ping('example.com') or TaskExecutor._ping('google.com')
-        if can_ping_internet_by_fqdn:
-            # Public internet servers can be pinged by FQDN
-            # > Assume maintenance on OpenMotics infrastructure. Sufficient connectivity
-            return True
-        can_ping_internet_by_ip = TaskExecutor._ping('8.8.8.8') or TaskExecutor._ping('1.1.1.1')
-        if can_ping_internet_by_ip:
-            # Public internet servers can be pinged by IP, but not by FQDN
-            # > Assume DNS resolving issues. Insufficient connectivity
-            return False
-        # Public internet servers cannot be pinged by IP, nor by FQDN
-        can_ping_default_gateway = TaskExecutor._ping(TaskExecutor._get_default_gateway())
-        if can_ping_default_gateway:
-            # > Assume ISP outage. Sufficient connectivity
-            return True
-        # > Assume broken TCP stack. No connectivity
-        return False
-
-    @staticmethod
-    def _get_default_gateway():
+    def default_gateway():
         """ Get the default gateway. """
         try:
             return subprocess.check_output("ip r | grep '^default via' | awk '{ print $3; }'", shell=True)
@@ -753,132 +921,11 @@ class TaskExecutor(object):
             return
 
 
-class HeartbeatService(object):
-    @Inject
-    def __init__(self, url=None, uuid=None, message_client=INJECTED):
-        # type: (Optional[str], Optional[str], MessageClient) -> None
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-
-        self._message_client = message_client
-        if self._message_client is not None:
-            self._message_client.set_state_handler(self._check_state)
-            self._message_client.add_event_handler(self._handle_event)
-
-        self._last_successful_heartbeat = None  # type: Optional[float]
-        self._last_cycle = 0.0
-        self._cloud_enabled = True
-        self._sleep_time = 0.0
-        self._previous_sleep_time = 0.0
-        self._gateway = Gateway()
-        self._cloud = Cloud(url=url, uuid=uuid)
-        self._task_executor = TaskExecutor(self._cloud)
-
-        # Obsolete keys (do not use them, as they are still processed for legacy gateways):
-        # `outputs`, `update`, `energy`, `pulse_totals`, `'thermostats`, `inputs`, `shutters`
-        self._collectors = {'errors': DataCollector('errors', self._gateway.get_errors, 600),
-                            'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}
-        self._debug_collector = DebugDumpDataCollector()
-
-    @staticmethod
-    def _handle_signal_alarm(signum, frame):
-        logger.error('Signal alarm ({0}) triggered:\n{1}'.format(signum, (''.join(traceback.format_stack(frame))).strip()))
-        logger.error('Exit(1)')
-        os._exit(1)
-
-    def _check_state(self):
-        return {'cloud_disabled': not self._cloud_enabled,
-                'cloud_last_connect': None if not self._cloud_enabled else self._last_successful_heartbeat,
-                'sleep_time': self._sleep_time,
-                'vpn_open': self._task_executor.vpn_open,
-                'last_cycle': self._last_cycle}
-
-    def _handle_event(self, event, payload):
-        _ = self, payload
-        if event == OMBusEvents.TIME_CHANGED:
-            time.tzset()  # Refresh timezone
-            logger.info('Timezone changed to {0}'.format(time.tzname[0]))
-
-    def start(self):
-        # type: () -> None
-        self._task_executor.start()
-        self._debug_collector.start()
-        for collector in self._collectors.values():
-            collector.start()
-
-    def run(self):
-        # type: () -> None
-        signal.signal(signal.SIGALRM, HeartbeatService._handle_signal_alarm)
-        while True:
-            self._last_cycle = time.time()
-            try:
-                signal.alarm(600)  # 10 minutes
-                start_time = time.time()
-                call_home_duration = self.heartbeat()
-                beat_time = time.time() - start_time
-                if beat_time > 2:
-                    logger.warning('Heartbeat took {0:.2f}s to complete, of which the call home took {1:.2f}s'.format(beat_time, call_home_duration))
-                if self._previous_sleep_time != self._sleep_time:
-                    logger.info('Set sleep interval to {0}s'.format(self._sleep_time))
-                    self._previous_sleep_time = self._sleep_time
-                signal.alarm(0)
-                time.sleep(self._sleep_time)
-            except Exception as ex:
-                logger.error("Error during vpn check loop: {0}".format(ex))
-                time.sleep(5)
-
-    def heartbeat(self):  # type: () -> float
-        # Check whether connection to the Cloud is enabled/disabled
-        self._cloud_enabled = Config.get_entry('cloud_enabled', False)
-        if self._cloud_enabled is False:
-            self._sleep_time = DEFAULT_SLEEP_TIME
-            task_data = {'open_vpn': False,
-                         'update_certs': False,
-                         'events': [(OMBusEvents.VPN_OPEN, False),
-                                    (OMBusEvents.CLOUD_REACHABLE, False)]}
-            self._task_executor.set_new_tasks(task_data=task_data)
-            return 0.0
-
-        # Load collected data from async collectors
-        call_data = {}  # type: Dict[str, Dict[str, Any]]
-        for collector_key in self._collectors:
-            collector = self._collectors[collector_key]
-            data = collector.data
-            if data is not None:
-                call_data[collector_key] = data
-
-        # Load debug data
-        debug_data = self._debug_collector.data
-        debug_references = None  # type: Optional[List[float]]
-        if debug_data is not None:
-            call_data['debug'], debug_references = debug_data
-
-        # Send data to the cloud and load response
-        call_home_start = time.time()
-        response = self._cloud.call_home(call_data)
-        call_home_duration = time.time() - call_home_start
-        call_home_successful = response.get('success', False)
-        self._sleep_time = response.get('sleep_time', DEFAULT_SLEEP_TIME)
-
-        if call_home_successful:
-            self._last_successful_heartbeat = time.time()
-            self._debug_collector.clear(debug_references)
-
-        # Gather tasks to be executed
-        task_data = {'events': [(OMBusEvents.CLOUD_REACHABLE, call_home_successful)],
-                     'open_vpn': response.get('open_vpn', True),
-                     'update_certs': response.get('update_certs', False),
-                     'connectivity': self._last_successful_heartbeat}
-        for entry in ['configuration', 'intervals']:
-            if entry in response:
-                task_data[entry] = response[entry]
-        self._task_executor.set_new_tasks(task_data=task_data)
-        return call_home_duration
-
-
 def main():
     Logs.setup_logger()
-    setup_minimal_vpn_platform(message_client_name='vpn_service')
+    # setup_minimal_vpn_platform(message_client_name='vpn_service')
+    from ioc import Injectable
+    Injectable.value(message_client=None)
 
     logger.info('Starting VPN service')
     heartbeat_service = HeartbeatService()
