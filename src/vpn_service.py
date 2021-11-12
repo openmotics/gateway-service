@@ -627,18 +627,24 @@ class TaskExecutor(object):
             if should_update:
                 logger.info('Rotating client certificates...')
 
-                if self._cloud.confirm_client_certs():
-                    logger.info('Confirmed existing client certificates')
-                    return
-
                 files = CertificateFiles()
                 files.setup_links()
+
+                if self._cloud.confirm_client_certs():
+                    try:
+                        self._verify_client_certificates(files.current)
+                        logger.info('Confirmed existing client certificates')
+                        return
+                    except Exception:
+                        pass
+
                 files.cleanup_versions()
                 data = self._cloud.issue_client_certs()
                 target = datetime.now().strftime('%Y%m%d%H%M')
                 files.setup_certs(target, data)
 
                 logger.info('Validating client certificates...')
+                self._verify_client_certificates(files.cert_path(target))
                 confirmed = self._cloud.confirm_client_certs(key_path=files.cert_path(target, 'client.key'))
                 try:
                     if confirmed:
@@ -672,6 +678,11 @@ class TaskExecutor(object):
                     subprocess.call('sync && reboot', shell=True)
         except Exception:
             logger.exception('Unexpected exception checking connectivity')
+
+    @staticmethod
+    def _verify_client_certificates(path):
+        subprocess.check_output(['openssl', 'rsa', '-check', '-noout', '-in', os.path.join(path, 'client.key')])
+        subprocess.check_output(['openssl', 'verify', '-CAfile', os.path.join(path, 'ca.crt'), os.path.join(path, 'client.crt')])
 
     @staticmethod
     def _ping(target, verbose=True):
