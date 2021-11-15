@@ -317,16 +317,24 @@ class Toolbox(object):
                 self.ensure_shutter_exists(module.shutters[-1], timeout=300)
 
         # Make sure the eeprom cache of the gateway is filled
-        self.dut.get('/get_input_configurations')
-        self.dut.get('/get_output_configurations')
-        self.dut.get('/get_shutter_configurations')
-        self.dut.get('/get_shutter_group_configurations')
-        self.dut.get('/get_ventilation_configurations')
-        self.dut.get('/get_scheduled_action_configurations')
-        self.dut.get('/get_group_action_configurations')
-        self.dut.get('/get_cooling_configurations')
-        self.dut.get('/get_sensor_configurations')
-        self.dut.get('/get_thermostat_configurations')
+        def _call(call):
+            try:
+                self.dut.get(call)
+            except Exception:
+                time.sleep(3)
+                self.dut.get(call)
+
+        _call('/get_cooling_configurations')
+        _call('/get_input_configurations')
+        _call('/get_output_configurations')
+        _call('/get_shutter_configurations')
+        _call('/get_shutter_group_configurations')
+        _call('/get_ventilation_configurations')
+        _call('/get_scheduled_action_configurations')
+        _call('/get_group_action_configurations')
+        _call('/get_sensor_configurations')
+        _call('/get_thermostat_configurations')
+
         time.sleep(20)  # Give the master some additional rest before testing begins
 
     def print_logs(self):
