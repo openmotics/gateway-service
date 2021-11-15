@@ -491,6 +491,7 @@ class Toolbox(object):
 
         master_modules_found = False
         energy_module_found = not need_energy_module
+        data = None
         while (master_modules_found is False or energy_module_found is False) and since > time.time() - timeout:
             data = self.dut.get('/get_modules_information')
             if need_energy_module:
@@ -499,7 +500,7 @@ class Toolbox(object):
             if new_module_addresses.issubset(synced_addresses):
                 master_modules_found = True
         if master_modules_found is False or energy_module_found is False:
-            raise AssertionError('Discovered modules did not correctly sync')
+            raise AssertionError('Discovered modules did not correctly sync: {0}'.format(data))
         return True
 
     def add_virtual_modules(self, module_amounts, timeout=120):
