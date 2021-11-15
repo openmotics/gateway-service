@@ -405,17 +405,29 @@ class Toolbox(object):
     def module_discover_start(self):
         # type: () -> None
         logger.debug('start module discover')
+        master_discovery_active = False
         self.dut.get('/module_discover_start')
         for _ in range(10):
             data = self.dut.get('/module_discover_status')
             if data['running']:
-                return
+                master_discovery_active = True
+                break
             time.sleep(0.2)
+        energy_discovery_active = False
+        self.dut.get('/start_power_address_mode')
+        for _ in range(10):
+            data = self.dut.get('/in_power_address_mode')
+            if data['address_mode']:
+                energy_discovery_active = True
+                break
+            time.sleep(0.2)
+        assert master_discovery_active and energy_discovery_active, 'Could not start discovery'
 
     def module_discover_stop(self):
         # type: () -> None
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
+        self.dut.get('/stop_power_address_mode')
 
     def discover_modules(self, output_modules, input_modules, shutter_modules, dimmer_modules, sensor_modules, can_controls, energy_modules, timeout=120):
         logger.info('Discovering modules')
