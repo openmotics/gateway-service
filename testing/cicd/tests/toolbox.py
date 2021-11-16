@@ -28,7 +28,7 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, \
     TEMPERATURE_MODULE_LAYOUT, TEST_PLATFORM, TESTER, Input, Module, Output, \
-    TestPlatform, Shutter, SHUTTER_MODULE_LAYOUT
+    TestPlatform, Shutter, SHUTTER_MODULE_LAYOUT, ENERGY_MODULE_LAYOUT
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,6 @@ class Toolbox(object):
         # type: () -> None
         self._tester = None  # type: Optional[TesterGateway]
         self._dut = None  # type: Optional[Client]
-        self._dut_energy_cts = None  # type: Optional[List[Tuple[int, int]]]
         self.dirty_shutters = []  # type: List[Shutter]
 
     @property
@@ -236,16 +235,6 @@ class Toolbox(object):
             self._dut = Client('dut', dut_host, auth=dut_auth)
         return self._dut
 
-    @property
-    def dut_energy_cts(self):
-        if self._dut_energy_cts is None:
-            cts = []
-            energy_modules = self.list_energy_modules(module_type='energy')
-            for module in energy_modules:
-                cts += [(module['address'], input_id) for input_id in range(12)]
-            self._dut_energy_cts = cts
-        return self._dut_energy_cts
-
     def initialize(self):
         # type: () -> None
         logger.info('checking prerequisites')
@@ -262,7 +251,8 @@ class Toolbox(object):
                             Module.HardwareType.PHYSICAL: {},
                             Module.HardwareType.EMULATED: {},
                             Module.HardwareType.INTERNAL: {}}
-        for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
+        for module in (OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT +
+                       SHUTTER_MODULE_LAYOUT + ENERGY_MODULE_LAYOUT):
             hardware_type = module.hardware_type
             if module.module_type not in expected_modules[hardware_type]:
                 expected_modules[hardware_type][module.module_type] = 0
@@ -270,22 +260,29 @@ class Toolbox(object):
         logger.info('Expected modules: {0}'.format(expected_modules))
 
         missing_modules = set()
-        modules = self.count_modules(source='master')
+        missing_emulated_modules = set()
+        modules = self.count_modules()
         logger.info('Initial modules: {0}'.format(modules))
-        for module_type, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-            if modules[Module.HardwareType.PHYSICAL].get(module_type, 0) == 0:
-                missing_modules.add(module_type)
-        if missing_modules:
+        for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED]:
+            for module_type, expected_amount in expected_modules[hardware_type].items():
+                if modules[hardware_type].get(module_type, 0) == 0:
+                    if hardware_type == Module.HardwareType.PHYSICAL:
+                        missing_modules.add(module_type)
+                    else:
+                        missing_emulated_modules.add(module_type)
+        if missing_modules or missing_emulated_modules:
             logger.info('Discovering modules...')
-            self.discover_modules(output_modules='output' in missing_modules,
-                                  input_modules='input' in missing_modules,
-                                  shutter_modules='shutter' in missing_modules,
-                                  dimmer_modules='dim_control' in missing_modules,
-                                  sensor_modules='sensor' in missing_modules,
-                                  can_controls='can_control' in missing_modules,
-                                  ucans='ucan' in missing_modules)
+            self.discover_modules(output_modules={Module.HardwareType.PHYSICAL: 'output' in missing_modules},
+                                  input_modules={Module.HardwareType.PHYSICAL: 'input' in missing_modules,
+                                                 Module.HardwareType.EMULATED: 'input' in missing_emulated_modules},
+                                  shutter_modules={Module.HardwareType.PHYSICAL: 'shutter' in missing_modules},
+                                  dimmer_modules={Module.HardwareType.PHYSICAL: 'dim_control' in missing_modules},
+                                  sensor_modules={Module.HardwareType.PHYSICAL: 'sensor' in missing_modules,
+                                                  Module.HardwareType.EMULATED: 'sensor' in missing_emulated_modules},
+                                  can_controls={Module.HardwareType.PHYSICAL: 'can_control' in missing_modules},
+                                  energy_modules={Module.HardwareType.PHYSICAL: 'energy' in missing_modules})
 
-        modules = self.count_modules('master')
+        modules = self.count_modules()
         logger.info('Post-discovery modules: {0}'.format(modules))
         for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.INTERNAL, Module.HardwareType.EMULATED]:
             for module_type in set(list(expected_modules[hardware_type].keys())):
@@ -303,7 +300,7 @@ class Toolbox(object):
                 assert extra_needed_amount > 0
                 self.add_virtual_modules(module_amounts={module_type: extra_needed_amount})
 
-        modules = self.count_modules('master')
+        modules = self.count_modules()
         logger.info('Post add virtual modules: {0}'.format(modules))
         for module_type, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
             assert modules[Module.HardwareType.VIRTUAL].get(module_type, 0) >= expected_amount
@@ -320,16 +317,24 @@ class Toolbox(object):
                 self.ensure_shutter_exists(module.shutters[-1], timeout=300)
 
         # Make sure the eeprom cache of the gateway is filled
-        self.dut.get('/get_input_configurations')
-        self.dut.get('/get_output_configurations')
-        self.dut.get('/get_shutter_configurations')
-        self.dut.get('/get_shutter_group_configurations')
-        self.dut.get('/get_ventilation_configurations')
-        self.dut.get('/get_scheduled_action_configurations')
-        self.dut.get('/get_group_action_configurations')
-        self.dut.get('/get_cooling_configurations')
-        self.dut.get('/get_sensor_configurations')
-        self.dut.get('/get_thermostat_configurations')
+        def _call(call):
+            try:
+                self.dut.get(call)
+            except Exception:
+                time.sleep(3)
+                self.dut.get(call)
+
+        _call('/get_cooling_configurations')
+        _call('/get_input_configurations')
+        _call('/get_output_configurations')
+        _call('/get_shutter_configurations')
+        _call('/get_shutter_group_configurations')
+        _call('/get_ventilation_configurations')
+        _call('/get_scheduled_action_configurations')
+        _call('/get_group_action_configurations')
+        _call('/get_sensor_configurations')
+        _call('/get_thermostat_configurations')
+
         time.sleep(20)  # Give the master some additional rest before testing begins
 
     def print_logs(self):
@@ -348,34 +353,22 @@ class Toolbox(object):
         params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm, 'can': False}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
-    def list_modules(self, source):
-        # type: () -> Dict[str, Any]
-        return self.dut.get('/get_modules_information')['modules'].get(source, {})
-
-    def count_modules(self, source):
-        modules = self.list_modules(source=source)
+    def count_modules(self):
+        modules = self.dut.get('/get_modules_information')['modules']
         counts = {Module.HardwareType.VIRTUAL: {},
                   Module.HardwareType.PHYSICAL: {},
                   Module.HardwareType.INTERNAL: {},
                   Module.HardwareType.EMULATED: {}}
-        for module in modules.values():
-            hardware_type = module['hardware_type']
-            module_type = module['module_type']
-            if module_type not in counts[hardware_type]:
-                counts[hardware_type][module_type] = 0
-            counts[hardware_type][module_type] += 1
-        return counts
-
-    def list_energy_modules(self, module_type, min_modules=1):
-        # type: (str, int) -> List[Dict[str, Any]]
-        data = self.list_modules(source='gateway')
-        modules = []
-        for address, info in data.items():
-            if info['module_type'] != module_type or not info['firmware_version']:
+        for source in ['master', 'gateway']:
+            if source not in modules:
                 continue
-            modules.append(info)
-        assert len(modules) >= min_modules, 'Not enough energy modules of type \'{}\' available in {}'.format(module_type, data)
-        return modules
+            for module in modules[source].values():
+                hardware_type = module['hardware_type']
+                module_type = module['module_type']
+                if module_type not in counts[hardware_type]:
+                    counts[hardware_type][module_type] = 0
+                counts[hardware_type][module_type] += 1
+        return counts
 
     def authorized_mode_start(self):
         # type: () -> None
@@ -412,80 +405,115 @@ class Toolbox(object):
     def module_discover_start(self):
         # type: () -> None
         logger.debug('start module discover')
+        master_discovery_active = False
         self.dut.get('/module_discover_start')
         for _ in range(10):
             data = self.dut.get('/module_discover_status')
             if data['running']:
-                return
+                master_discovery_active = True
+                break
             time.sleep(0.2)
+        energy_discovery_active = False
+        self.dut.get('/start_power_address_mode')
+        for _ in range(10):
+            data = self.dut.get('/in_power_address_mode')
+            if data['address_mode']:
+                energy_discovery_active = True
+                break
+            time.sleep(0.2)
+        assert master_discovery_active and energy_discovery_active, 'Could not start discovery'
 
     def module_discover_stop(self):
         # type: () -> None
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
+        self.dut.get('/stop_power_address_mode')
 
-    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, sensor_modules=False, can_controls=False, ucans=False, timeout=120):
+    def discover_modules(self, output_modules, input_modules, shutter_modules, dimmer_modules, sensor_modules, can_controls, energy_modules, timeout=120):
         logger.info('Discovering modules')
         since = time.time()
-        expected_ucan_emulated_modules = {'I': 0, 'T': 0}
-        if ucans:
+        expected_emulated_modules = {}
+        if input_modules[Module.HardwareType.EMULATED] or sensor_modules[Module.HardwareType.EMULATED]:
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
                 if module.is_can:
                     ucan_inputs += module.inputs
-                    expected_ucan_emulated_modules[module.module_type] += 1
+                    if module.module_type not in expected_emulated_modules:
+                        expected_emulated_modules[module.module_type] = 0
+                    expected_emulated_modules[module.module_type] += 1
             for module in TEMPERATURE_MODULE_LAYOUT:
                 if module.is_can:
-                    expected_ucan_emulated_modules[module.module_type] += 1
-            logger.info('* Toggle uCAN inputs for discovery: %s', ucan_inputs)
-            for ucan_input in ucan_inputs:
-                self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
-                time.sleep(0.5)
-            time.sleep(5)  # Give a brief moment for the CC to settle
+                    if module.module_type not in expected_emulated_modules:
+                        expected_emulated_modules[module.module_type] = 0
+                    expected_emulated_modules[module.module_type] += 1
+            if ucan_inputs:
+                logger.info('* Toggle uCAN inputs for discovery: %s', ucan_inputs)
+                for ucan_input in ucan_inputs:
+                    self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
+                    time.sleep(0.5)
+                time.sleep(5)  # Give a brief moment for the CC to settle
 
+        def _press_discover_button(button):
+            self.tester.toggle_output(button, delay=0.5)
+            time.sleep(1)
+            self.tester.toggle_output(button, delay=0.5)
+
+        need_energy_module = False
         new_modules = []
         self.clear_module_discovery_log()
         self.module_discover_start()
         try:
             addresses = []
-            if output_modules:
+            if output_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover output module')
-                self.tester.toggle_output(TESTER.Button.output, delay=0.5)
+                _press_discover_button(TESTER.Button.output)
                 new_modules += self.watch_module_discovery_log(module_amounts={'O': 1}, addresses=addresses)
-            if shutter_modules:
+            if shutter_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover shutter module')
-                self.tester.toggle_output(TESTER.Button.shutter, delay=0.5)
+                _press_discover_button(TESTER.Button.shutter)
                 new_modules += self.watch_module_discovery_log(module_amounts={'R': 1}, addresses=addresses)
-            if input_modules:
+            if input_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover input module')
-                self.tester.toggle_output(TESTER.Button.input, delay=0.5)
+                _press_discover_button(TESTER.Button.input)
                 new_modules += self.watch_module_discovery_log(module_amounts={'I': 1}, addresses=addresses)
-            if dimmer_modules:
+            if dimmer_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover dim control module')
-                self.tester.toggle_output(TESTER.Button.dimmer, delay=0.5)
+                _press_discover_button(TESTER.Button.dimmer)
                 new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
-            if sensor_modules:
+            if sensor_modules[Module.HardwareType.PHYSICAL]:
                 logger.info('* Discover sensor module')
-                self.tester.toggle_output(TESTER.Button.temp, delay=0.5)
+                _press_discover_button(TESTER.Button.temp)
                 new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
-            if can_controls or ucans:
+            if can_controls[Module.HardwareType.PHYSICAL] or expected_emulated_modules.get('input', 0) or expected_emulated_modules.get('sensor', 0):
                 logger.info('* Discover can control')
-                self.tester.toggle_output(TESTER.Button.can, delay=0.5)
-                # TODO: Fix these hardcoded values.
-                module_amounts = {'C': 1}
-                module_amounts.update(expected_ucan_emulated_modules)
+                _press_discover_button(TESTER.Button.can)
+                module_amounts = {'C': 1,  # TODO: Fix these hardcoded values
+                                  'T': expected_emulated_modules.get('sensor', 0),
+                                  'I': expected_emulated_modules.get('input', 0)}
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses, timeout=30)
             new_module_addresses = set(module['address'] for module in new_modules)
+            if energy_modules[Module.HardwareType.PHYSICAL]:
+                need_energy_module = True
+                logger.info('* Discover energy module')
+                _press_discover_button(TESTER.Button.energy)
+                time.sleep(3)
         finally:
             self.module_discover_stop()
             time.sleep(30)  # Give time for the master to clear the eeprom cache
 
-        while since > time.time() - timeout:
+        master_modules_found = False
+        energy_module_found = not need_energy_module
+        data = None
+        while (master_modules_found is False or energy_module_found is False) and since > time.time() - timeout:
             data = self.dut.get('/get_modules_information')
+            if need_energy_module:
+                energy_module_found = len(data['modules'].get('gateway', {})) > 0
             synced_addresses = set(data['modules'].get('master', {}).keys())
             if new_module_addresses.issubset(synced_addresses):
-                return True
-        raise AssertionError('Discovered modules did not correctly sync')
+                master_modules_found = True
+        if master_modules_found is False or energy_module_found is False:
+            raise AssertionError('Discovered modules did not correctly sync: {0}'.format(data))
+        return True
 
     def add_virtual_modules(self, module_amounts, timeout=120):
         since = time.time()
@@ -642,7 +670,7 @@ class Toolbox(object):
             assert pending == []
         return pending
 
-    def wait_for_completed_update(self, timeout=300):
+    def wait_for_completed_update(self, timeout=600):
         # type: (float) -> None
         def _log_status_detail(logger_, status_detail):
             logger_('Update status overview:')

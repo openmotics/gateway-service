@@ -60,6 +60,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                       'output0': None,
                       'output1': None,
                       'state': 'on',
+                      'mode': 'heating',
                       'steering_power': None}
             self.controller._thermostats_config = {1: ThermostatDTO(1)}
             self.controller._thermostat_status._report_change(1, status)
@@ -67,6 +68,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
             event_data = {'id': 1,
                           'status': {'preset': 'AUTO',
                                      'state': 'ON',
+                                     'mode': 'HEATING',
                                      'current_setpoint': None,
                                      'actual_temperature': None,
                                      'output_0': None,

@@ -119,6 +119,39 @@ class MemoryFileTest(unittest.TestCase):
         self.assertEqual([{'type': MemoryTypes.EEPROM, 'page': 5, 'start': 129, 'data': bytearray([20, 21, 22, 23])}],
                          mocked_core.write_log)
 
+    def test_multichunk_write(self):
+        mocked_core = MockedCore()
+        memory = mocked_core.memory[MemoryTypes.EEPROM]
+        memory_file = mocked_core.memory_file
+
+        memory[5] = bytearray([255] * 256)
+        address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=16, length=64)
+
+        self.assertEqual({address: bytearray([255] * 64)},
+                         memory_file.read([address]))
+
+        # Prepare thread mock
+        thread = mock.Mock(Thread())
+        with mock.patch.object(threading, 'current_thread', thread):
+            self.assertIsNotNone(threading.current_thread().ident)
+
+        # Execute write
+        with mock.patch.object(threading, 'current_thread', thread):
+            memory_file.write({address: bytearray([10 + i for i in range(64)])})
+
+        # Activate from within thread
+        mocked_core.write_log = []
+        with mock.patch.object(threading, 'current_thread', thread):
+            memory_file.activate()
+
+        self.assertEqual({address: bytearray([10 + i for i in range(64)])},
+                         memory_file.read([address]))
+
+        # Validate write log, since thread_0 wrote over the 127/128 byte boundary
+        self.assertEqual([{'type': MemoryTypes.EEPROM, 'page': 5, 'start': 16, 'data': bytearray([10 + i for i in range(32)])},
+                          {'type': MemoryTypes.EEPROM, 'page': 5, 'start': 48, 'data': bytearray([10 + 32 + i for i in range(32)])}],
+                         mocked_core.write_log)
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

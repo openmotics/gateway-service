@@ -165,9 +165,3 @@ def test_factory_reset(toolbox, authorized_mode, factory_reset):
     assert 'output' in set(x['module_type'] for x in modules)
     assert 'input' in set(x['module_type'] for x in modules)
     assert 'shutter' in set(x['module_type'] for x in modules)
-    # Filter out CAN inputs since those are expected to not have a firmware version.
-    assert None not in [x['firmware_version'] for x in modules
-                        if x['module_type'] in ['input', 'output',
-                                                'shutter', 'dim_control',
-                                                'sensor']
-                        and x['hardware_type'] != 'emulated']
