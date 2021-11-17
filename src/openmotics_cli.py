@@ -177,7 +177,8 @@ def cmd_vpn_rotate_client_certs(args):
 
     from vpn_service import Cloud, TaskExecutor
     executor = TaskExecutor(cloud=Cloud())
-    executor.set_new_tasks({'connectivity': time.time(), 'update_certs': True})
+    executor.configure_tasks()
+    executor.enqueue({'cloud_enabled': True, 'heartbeat_success': True, 'open_vpn': True, 'update_certs': True})
     executor.execute_tasks()
 
 

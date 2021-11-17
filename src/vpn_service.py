@@ -173,8 +173,7 @@ class Cloud(object):
                 self.authenticate()
             response = self._post('/api/gateway/heartbeat', extra_data)
             data = {'success': True}
-            data.update({k: v for k, v in response.items() if k in
-                         ('sleep_time', 'open_vpn', 'update_certs', 'configuration', 'intervals')})
+            data.update({k: v for k, v in response.items()})
             return data
         except Exception:
             logger.exception('Exception occured during call home')
@@ -452,7 +451,7 @@ class TaskExecutor(object):
                                     target=self.execute_tasks,
                                     interval=300)
 
-    def start(self):
+    def configure_tasks(self):
         self._tasks = [
             EventsTask(),
             ConfigurationTask(),
@@ -461,6 +460,9 @@ class TaskExecutor(object):
             OpenVPNTask(),
             UpdateCertsTask(self._cloud),
         ]
+
+    def start(self):
+        self.configure_tasks()
         self._thread.start()
 
     def enqueue(self, data):
@@ -609,10 +611,8 @@ class HeartbeatService(object):
         # Gather tasks to be executed
         task_data = {'events': [(OMBusEvents.CLOUD_REACHABLE, success)],
                      'cloud_enabled': True,
-                     'open_vpn': response.get('open_vpn', True),
-                     'update_certs': response.get('update_certs', False),
                      'heartbeat_success': success}
-        for entry in ['configuration', 'intervals']:
+        for entry in ['configuration', 'intervals', 'open_vpn', 'update_certs']:
             if entry in response:
                 task_data[entry] = response[entry]
         self._executor.enqueue(task_data)
@@ -624,8 +624,9 @@ class ConfigurationTask(object):
         self._configuration = {}
 
     def run(self, context):
-        data = context['configuration']
-        if self._configuration != data:
+        logger.debug('Running configuration task...')
+        data = context.get('configuration')
+        if data is not None and self._configuration != data:
             for setting, value in data.items():
                 Config.set_entry(setting, value)
             logger.info('Configuration changed: %s', data)
@@ -637,10 +638,11 @@ class EventsTask(object):
         self._intervals = {}
 
     def run(self, context):
-        for event in context['events']:
+        logger.debug('Running events task...')
+        for event in context.get('events', []):
             yield event
-        data = context['intervals']
-        if self._intervals != data:
+        data = context.get('intervals')
+        if data is not None and self._intervals != data:
             yield (OMBusEvents.METRICS_INTERVAL_CHANGE, data)
             logger.info('Intervals changed: %s', data)
         self._intervals = data
@@ -652,7 +654,7 @@ class ConnectivityTask(object):
         self.last_heartbeat = time.time()  # unknown
 
     def run(self, context):
-
+        logger.debug('Running connectivity task...')
         timeout = time.time() - CHECK_CONNECTIVITY_TIMEOUT
         if context['heartbeat_success']:
             if self.last_heartbeat is None or self.last_heartbeat < timeout:
@@ -703,6 +705,7 @@ class ConnectivityTask(object):
 
 class RebootTask(object):
     def run(self, context):
+        logger.debug('Running reboot task...')
         if context.get('perform_reboot', False):
             subprocess.call('sync && reboot', shell=True)
 
@@ -713,12 +716,13 @@ class OpenVPNTask(object):
         self.connect_retries = 0
 
     def run(self, context):
+        logger.debug('Running open vpn task...')
         # Requires connectivity
         if not context['connectivity_success']:
             return
 
         is_running = Util.check_vpn()
-        should_open = context['open_vpn']
+        should_open = context.get('open_vpn', True)
         if should_open:
             rollback = False
             if context['heartbeat_success']:
@@ -785,12 +789,13 @@ class UpdateCertsTask(object):
         self._cloud = cloud
 
     def run(self, context):
+        logger.debug('Running update certs task...')
         changed = False
         # Requires cloud to be accessible
         if not context['heartbeat_success']:
             return
 
-        should_update = context['update_certs']
+        should_update = context.get('update_certs', False)
         try:
             if should_update:
                 logger.info('Rotating client certificates...')
@@ -923,9 +928,7 @@ class Util(object):
 
 def main():
     Logs.setup_logger()
-    # setup_minimal_vpn_platform(message_client_name='vpn_service')
-    from ioc import Injectable
-    Injectable.value(message_client=None)
+    setup_minimal_vpn_platform(message_client_name='vpn_service')
 
     logger.info('Starting VPN service')
     heartbeat_service = HeartbeatService()

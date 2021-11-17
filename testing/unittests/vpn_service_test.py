@@ -146,9 +146,7 @@ class VPNServiceTest(TestCase):
                     tasks = service._executor._queue.pop()
                     self.assertEqual({'events': [(OMBusEvents.CLOUD_REACHABLE, True)],
                                       'cloud_enabled': True,
-                                      'heartbeat_success': True,
-                                      'open_vpn': True,
-                                      'update_certs': False}, tasks)
+                                      'heartbeat_success': True}, tasks)
                     self.assertEqual(DEFAULT_SLEEP_TIME, service._sleep_time)
                     self.assertEqual(now, service._last_successful_heartbeat)
 
@@ -162,9 +160,7 @@ class VPNServiceTest(TestCase):
                     tasks = service._executor._queue.pop()
                     self.assertEqual({'events': [(OMBusEvents.CLOUD_REACHABLE, True)],
                                       'cloud_enabled': True,
-                                      'heartbeat_success': True,
-                                      'open_vpn': True,
-                                      'update_certs': False}, tasks)
+                                      'heartbeat_success': True}, tasks)
                     self.assertEqual(DEFAULT_SLEEP_TIME, service._sleep_time)
                     self.assertEqual(now, service._last_successful_heartbeat)
 
@@ -179,6 +175,8 @@ class VPNServiceTest(TestCase):
 
                 response = VPNServiceTest._fake_response({'success': True,
                                                           'sleep_time': 2,
+                                                          'open_vpn': True,
+                                                          'update_certs': True,
                                                           'intervals': {'foo': 0},
                                                           'configuration': {'foo': 1}})
                 with mock.patch.object(service._cloud, 'authenticate'), \
@@ -189,10 +187,10 @@ class VPNServiceTest(TestCase):
                     self.assertEqual({'events': [(OMBusEvents.CLOUD_REACHABLE, True)],
                                       'cloud_enabled': True,
                                       'heartbeat_success': True,
-                                      'intervals': {'foo': 0},
-                                      'configuration': {'foo': 1},
                                       'open_vpn': True,
-                                      'update_certs': False}, tasks)
+                                      'update_certs': True,
+                                      'intervals': {'foo': 0},
+                                      'configuration': {'foo': 1}}, tasks)
                     self.assertEqual(2, service._sleep_time)
                     self.assertEqual(now, service._last_successful_heartbeat)
                     post.assert_called_once_with('https://example.org/api/gateway/heartbeat',
