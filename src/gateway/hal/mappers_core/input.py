@@ -69,26 +69,21 @@ class InputMapper(object):
         if orm_object.has_direct_output_link:
             # No specific actions; this Input is directly linked to an Output
             return orm_object.input_link.output_id, []
-        if orm_object.input_link.enable_press_and_release:
-            # Press/release actions are enabled
+        if orm_object.input_link.enable_press_and_release or orm_object.input_link.enable_2s_press:
             basic_actions = []  # type: List[int]
-            if orm_object.basic_action_press.in_use:
-                _, actions = GroupActionMapper.core_actions_to_classic_actions([orm_object.basic_action_press])
-                basic_actions += actions
-                if len(basic_actions) == 2 and basic_actions[0] in [163, 164]:
-                    return 242 if basic_actions[0] == 163 else 241, []
-            if orm_object.basic_action_release.in_use:
-                if not orm_object.basic_action_release.is_execute_group_action:
-                    raise ValueError('Actions are limited to executing GroupActions')
-                basic_actions += [236, 0, 2, orm_object.basic_action_release.device_nr, 236, 255]
-            return 240, basic_actions
-        # Timing-related presses are used
-        if orm_object.input_link.enable_2s_press:
-            if not orm_object.basic_action_2s_press.is_execute_group_action:
-                raise ValueError('Actions are limited to executing GroupActions')
-            return 240, [207, orm_object.basic_action_2s_press.device_nr]
-        else:
-            raise ValueError('Only 2s presses can be translated')
+            if orm_object.input_link.enable_press_and_release:
+                if orm_object.basic_action_press.in_use:
+                    _, actions = GroupActionMapper.core_actions_to_classic_actions([orm_object.basic_action_press])
+                    basic_actions += actions
+                    if len(basic_actions) == 2 and basic_actions[0] in [163, 164]:
+                        return 242 if basic_actions[0] == 163 else 241, []
+                if orm_object.basic_action_release.is_execute_group_action:
+                    basic_actions += [236, 0, 2, orm_object.basic_action_release.device_nr, 236, 255]
+            if orm_object.input_link.enable_2s_press:
+                if orm_object.basic_action_2s_press.is_execute_group_action:
+                    basic_actions = [207, orm_object.basic_action_2s_press.device_nr] + basic_actions
+            if basic_actions:
+                return 240, basic_actions
         raise ValueError('The current configuration cannot be translated')
 
     @staticmethod
@@ -113,7 +108,7 @@ class InputMapper(object):
         if action is None or action == 255:
             return data
 
-        # Change default data
+        # The input is configured, changing defaults
         data['input_link'].update({'dimming_up': False,
                                    'enable_press_and_release': False,
                                    'enable_1s_press': False,
@@ -121,59 +116,64 @@ class InputMapper(object):
                                    'not_used': False,
                                    'enable_double_press': False})
 
-        # If theaction is < 240, it means that the input directly controls an output
+        # If the action is < 240, it means that the input directly controls an output
         if action < 240:
             data['input_link']['output_id'] = action
             return data
 
-        # If the action is 241 or 242
+        # Process special actions 241 and 242:
+        # * 241 = Turn off all lights + outputs
+        # * 242 = Turn off all lights
         if action in [241, 242]:
             data['input_link']['enable_press_and_release'] = True
             data['basic_action_press'] = BasicAction(action_type=0, action=255,
                                                      device_nr=2 if action == 241 else 1)
             return data
 
-        # Otherwise, it means that the input is supposed to execute a list of basic actions
-        # but this is not supported anymore on the Core.
+        # The input is configured as "execute a list of basic actions" which is not supported
+        # on the Core. This means that below code will do a best-effort to translate the configured
+        # actions into something that is supported by the Core input configurations.
         # TODO: Convert any list of actions to one or more group actions and use these instead
 
-        action_types = set(basic_actions[i] for i in range(0, len(basic_actions), 2))
-
-        # Delayed action(s)
-        if 207 in action_types:
-            if len(basic_actions) != 2:
-                raise ValueError('Timing settings cannot be combined with other actions')
-            data['input_link']['enable_2s_press'] = True
-            data['basic_action_2s_press'] = BasicAction(action_type=19, action=0,
-                                                        device_nr=basic_actions[1])
-            return data
-
-        # Possible single on-press actions
-        if action_types - {2, 236}:
-            actions = GroupActionMapper.classic_actions_to_core_actions(basic_actions)
-            if len(actions) != 1:
-                raise ValueError('Only simple input configrations are supported')
-            data['input_link']['enable_press_and_release'] = True
-            data['basic_action_press'] = actions[0]
-            return data
-
-        # Press/release actions
-        release_data = False
-        release_action = None  # type: Optional[int]
-        press_action = None  # type: Optional[int]
-        for i in range(0, len(basic_actions), 2):
-            action_type = basic_actions[i]
-            action_number = basic_actions[i + 1]
-            if action_type == 236:
-                release_data = action_number == 0
-            elif release_data:
-                release_action = action_number
+        # Process single "execute group action" scenarios
+        # * 2 = Execute group action
+        # * 207 = Execute group action when pressed more than 2s
+        if len(basic_actions) == 2 and basic_actions[0] in [2, 207]:
+            if basic_actions[0] == 2:
+                enabled_link = 'enable_press_and_release'
+                press_action = 'basic_action_press'
             else:
-                press_action = action_number
-        if press_action is not None:
+                enabled_link = 'enable_2s_press'
+                press_action = 'basic_action_2s_press'
+            data['input_link'][enabled_link] = True
+            data[press_action] = BasicAction(action_type=19, action=0, device_nr=basic_actions[1])
+            return data
+
+        # Process scenario where (long and/or short) press and release are configured.
+        # Sequences:
+        # * 207, _, 236, 0, 2, _, 236, 255 (on long press + on release)
+        # * 2, _, 236, 0, 2, _, 236, 255 (on press + on release)
+        # * 236, 0, 2, _, 236, 255 (only on release)
+        if len(basic_actions) in [6, 8]:
+            release_reference = [basic_actions[i] for i in [-6, -5, -4, -2, -1]]
+            if release_reference != [236, 0, 2, 236, 255]:
+                raise ValueError('Unsupported action sequence: {0}'.format(basic_actions))
             data['input_link']['enable_press_and_release'] = True
-            data['basic_action_press'] = BasicAction(action_type=19, action=0, device_nr=press_action)
-        if release_action is not None:
-            data['input_link']['enable_press_and_release'] = True
-            data['basic_action_release'] = BasicAction(action_type=19, action=0, device_nr=release_action)
+            data['basic_action_release'] = BasicAction(action_type=19, action=0, device_nr=basic_actions[-3])
+            if len(basic_actions) == 8:
+                if basic_actions[0] not in [2, 207]:
+                    raise ValueError('Unsupported action sequence: {0}'.format(basic_actions))
+                if basic_actions[0] == 2:
+                    data['basic_action_press'] = BasicAction(action_type=19, action=0, device_nr=basic_actions[1])
+                else:
+                    data['input_link']['enable_2s_press'] = True
+                    data['basic_action_2s_press'] = BasicAction(action_type=19, action=0, device_nr=basic_actions[1])
+            return data
+
+        # Process whatever is left if it's translatable to a single-press action
+        actions = GroupActionMapper.classic_actions_to_core_actions(basic_actions)
+        if len(actions) != 1:
+            raise ValueError('Only simple input configuration are supported')
+        data['input_link']['enable_press_and_release'] = True
+        data['basic_action_press'] = actions[0]
         return data
