@@ -165,15 +165,13 @@ class EsafeEvent(BaseEvent):
     Data formats:
 
     * CONFIG_CHANGE
-      {'type': str}  # config type: Global, Doorbell, RFID, User, Apartment
+      {'type': str,   # config type: Global, Doorbell, RFID, User, Apartment
+       'value': dict} # OPTIONAL: The new value of the config change: For example: when a user is updated, the new user value is populated in this field
 
     * DELIVERY_CHANGE
       {'id': int,                # The id of the delivery
-       'type': str,              # Delivery type: DELIVERY or RETURN
        'action': str,            # action type: DELIVERY or PICKUP
-       'user_delivery_id': int,  # ID of the delivery user (can be None)
-       'user_pickup_id': int,    # ID of the pickup user (Always has a value, but can be a courier)
-       'parcel_rebus_id': int}   # Rebus id of the used parcelbox
+       'delivery': dict }        # The delivery information
 
     * LOCK_CHANGE
       {'id': int,      # Rebus lock id

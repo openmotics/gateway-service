@@ -27,6 +27,7 @@ import six
 import uuid
 
 import constants
+from gateway.api.serializers import UserSerializer
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.delivery_controller import DeliveryController
 from gateway.dto.user import UserDTO
@@ -67,11 +68,11 @@ class UserController(object):
         self.load_users()
 
     @Inject
-    def send_event(self, event_error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
-        # type: (Dict[str, Any], PubSub) -> None
+    def send_event(self, user_dto, event_error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
+        # type: (UserDTO, Dict[str, Any], PubSub) -> None
         _ = self
         event_type = "user"
-        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': event_type}, error=event_error)
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': event_type, 'value': UserSerializer.serialize(user_dto, show_pin_code=True)}, error=event_error)
         pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
 
     def start(self):
@@ -145,7 +146,7 @@ class UserController(object):
         if user_orm.apartment is not None:
             user_orm.apartment.save()
         user_dto_saved = UserMapper.orm_to_dto(user_orm)
-        self.send_event()
+        self.send_event(user_dto_saved)
         return user_dto_saved
 
     def save_users(self, users):
@@ -208,7 +209,7 @@ class UserController(object):
             self.authentication_controller.remove_tokens_for_user(user_dto)
             user_orm.is_active = True
             user_orm.save()
-            self.send_event()
+            self.send_event(UserMapper.orm_to_dto(user_orm))
         except Exception as e:
             raise RuntimeError('Could not save the is_active flag to the database: {}'.format(e))
 
@@ -238,7 +239,7 @@ class UserController(object):
             raise GatewayException(UserEnums.DeleteErrors.LAST_ACCOUNT)
 
         User.delete().where(User.username == username).execute()
-        self.send_event()
+        self.send_event(user_dto)
 
     def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None):
         # type: (UserDTO, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]

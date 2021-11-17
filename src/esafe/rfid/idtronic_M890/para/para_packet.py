@@ -304,7 +304,7 @@ class ParaPacketFactory(object):
     @staticmethod
     def get_auto_listing_request(card_type, period, antenna, notice=0x00):
         # type: (CardType, int, int, int) -> ParaPacket
-        data = [card_type.value, period, antenna, notice, 0x00]
         #       Card type,       period, antenna, notice, reserved for future use
+        data = [card_type.value, period, antenna, notice, 0x00]
         packet = ParaPacket.create(ParaPacketType.AutoListCard, data)
         return packet
