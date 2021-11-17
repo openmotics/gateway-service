@@ -141,12 +141,12 @@ class InputMapper(object):
         if len(basic_actions) == 2 and basic_actions[0] in [2, 207]:
             if basic_actions[0] == 2:
                 enabled_link = 'enable_press_and_release'
-                action = 'basic_action_press'
+                press_action = 'basic_action_press'
             else:
                 enabled_link = 'enable_2s_press'
-                action = 'basic_action_2s_press'
+                press_action = 'basic_action_2s_press'
             data['input_link'][enabled_link] = True
-            data[action] = BasicAction(action_type=19, action=0, device_nr=basic_actions[1])
+            data[press_action] = BasicAction(action_type=19, action=0, device_nr=basic_actions[1])
             return data
 
         # Process scenario where (long and/or short) press and release are configured.
