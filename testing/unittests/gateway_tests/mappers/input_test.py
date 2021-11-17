@@ -151,23 +151,41 @@ class InputCoreMapperTest(unittest.TestCase):
         self.assertEqual(240, dto.action)
         self.assertEqual([2, 1, 236, 0, 2, 2, 236, 255], dto.basic_actions)
 
+    def test_actions_short_long_press(self):
+        orm = InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[207, 1, 236, 0, 2, 2, 236, 255])
+        self._validate_orm(orm,
+                           in_use=True,
+                           enable_2s_press=True,
+                           enable_press_and_release=True,
+                           basic_action_2s_press=True,
+                           basic_action_release=True)
+        self.assertEqual(BasicAction(action_type=19, action=0, device_nr=1), orm.basic_action_2s_press)
+        self.assertEqual(BasicAction(action_type=19, action=0, device_nr=2), orm.basic_action_release)
+
+        dto = InputCoreMapperTest._orm_to_dto(input_link={'enable_1s_press': False,
+                                                          'enable_double_press': False},
+                                              basic_action_2s_press=BasicAction(action_type=19, action=0, device_nr=1),
+                                              basic_action_release=BasicAction(action_type=19, action=0, device_nr=2))
+        self.assertEqual(240, dto.action)
+        self.assertEqual([207, 1, 236, 0, 2, 2, 236, 255], dto.basic_actions)
+
     def test_actions_invalid(self):
         with self.assertRaises(ValueError):
             InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[148, 1])
 
     def _validate_orm(self, orm, **kwargs):
-        self.assertEqual(kwargs.get('has_direct_output_link', False), orm.has_direct_output_link)
-        self.assertEqual(kwargs.get('in_use', False), orm.in_use)
-        self.assertEqual(kwargs.get('output_id', 1023), orm.input_link.output_id)
-        self.assertEqual(kwargs.get('enable_press_and_release', False), orm.input_link.enable_press_and_release)
-        self.assertEqual(kwargs.get('enable_1s_press', False), orm.input_link.enable_1s_press)
-        self.assertEqual(kwargs.get('enable_2s_press', False), orm.input_link.enable_2s_press)
-        self.assertEqual(kwargs.get('enable_double_press', False), orm.input_link.enable_double_press)
-        self.assertEqual(kwargs.get('basic_action_press', False), orm.basic_action_press.in_use)
-        self.assertEqual(kwargs.get('basic_action_release', False), orm.basic_action_release.in_use)
-        self.assertEqual(kwargs.get('basic_action_1s_press', False), orm.basic_action_1s_press.in_use)
-        self.assertEqual(kwargs.get('basic_action_2s_press', False), orm.basic_action_2s_press.in_use)
-        self.assertEqual(kwargs.get('basic_action_double_press', False), orm.basic_action_double_press.in_use)
+        self.assertEqual(kwargs.get('has_direct_output_link', False), orm.has_direct_output_link, 'Incorrect `has_direct_output_link`')
+        self.assertEqual(kwargs.get('in_use', False), orm.in_use, 'Incorrect `in_use`')
+        self.assertEqual(kwargs.get('output_id', 1023), orm.input_link.output_id, 'Incorrect `output_id`')
+        self.assertEqual(kwargs.get('enable_press_and_release', False), orm.input_link.enable_press_and_release, 'Incorrect `enable_press_and_release`')
+        self.assertEqual(kwargs.get('enable_1s_press', False), orm.input_link.enable_1s_press, 'Incorrect `enable_1s_press`')
+        self.assertEqual(kwargs.get('enable_2s_press', False), orm.input_link.enable_2s_press, 'Incorrect `enable_2s_press`')
+        self.assertEqual(kwargs.get('enable_double_press', False), orm.input_link.enable_double_press, 'Incorrect `enable_double_press`')
+        self.assertEqual(kwargs.get('basic_action_press', False), orm.basic_action_press.in_use, 'Incorrect `basic_action_press`')
+        self.assertEqual(kwargs.get('basic_action_release', False), orm.basic_action_release.in_use, 'Incorrect `basic_action_release`')
+        self.assertEqual(kwargs.get('basic_action_1s_press', False), orm.basic_action_1s_press.in_use, 'Incorrect `basic_action_1s_press`')
+        self.assertEqual(kwargs.get('basic_action_2s_press', False), orm.basic_action_2s_press.in_use, 'Incorrect `basic_action_2s_press`')
+        self.assertEqual(kwargs.get('basic_action_double_press', False), orm.basic_action_double_press.in_use, 'Incorrect `basic_action_double_press`')
 
     @staticmethod
     def _dto_to_orm(action, basic_actions):

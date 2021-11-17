@@ -147,7 +147,7 @@ class MemoryFileTest(unittest.TestCase):
         self.assertEqual({address: bytearray([10 + i for i in range(64)])},
                          memory_file.read([address]))
 
-        # Validate write log, since thread_0 wrote over the 127/128 byte boundary
+        # Validate write log, since two chunks have been written
         self.assertEqual([{'type': MemoryTypes.EEPROM, 'page': 5, 'start': 16, 'data': bytearray([10 + i for i in range(32)])},
                           {'type': MemoryTypes.EEPROM, 'page': 5, 'start': 48, 'data': bytearray([10 + 32 + i for i in range(32)])}],
                          mocked_core.write_log)
