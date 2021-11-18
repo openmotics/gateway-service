@@ -274,7 +274,7 @@ class CertificateFiles(object):
                 logger.info('Rolling back vpn certificates %s -> %s', vpn_target, target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
-                os.replace(temp_link, self.vpn)
+                os.rename(temp_link, self.vpn)
                 return True
         else:
             try:
@@ -290,7 +290,7 @@ class CertificateFiles(object):
                 logger.info('Activating vpn certificates %s', target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
-                os.replace(temp_link, self.vpn)
+                os.rename(temp_link, self.vpn)
                 return True
         return False
 
@@ -315,7 +315,7 @@ class CertificateFiles(object):
                 if latest:
                     temp_link = tempfile.mktemp(dir=self.cert_path())
                     os.symlink(latest, temp_link)
-                    os.replace(temp_link, link)
+                    os.rename(temp_link, link)
                 else:
                     logger.warning('No certificates available')
 
@@ -354,17 +354,17 @@ class CertificateFiles(object):
         except Exception:
             previous_target = None
         os.symlink(target, temp_link)
-        os.replace(temp_link, self.current)
+        os.rename(temp_link, self.current)
         if previous_target:
             os.symlink(previous_target, temp_link)
-            os.replace(temp_link, self.previous)
+            os.rename(temp_link, self.previous)
 
     def rollback(self):
         previous_target = os.readlink(self.previous).split(os.path.sep)[-1]
         logger.info('Rolling back certificates %s', previous_target)
         temp_link = tempfile.mktemp(dir=self.cert_path())
         os.symlink(previous_target, temp_link)
-        os.replace(temp_link, self.current)
+        os.rename(temp_link, self.current)
         os.unlink(self.previous)
 
 
