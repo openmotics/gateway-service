@@ -491,9 +491,9 @@ class TaskExecutor(object):
             except IndexError:
                 return
             _, events = self.execute(self._tasks, data)
-            for event in events:
+            for event_type, event_data in events:
                 if self._message_client:
-                    self._message_client.send_event(event)
+                    self._message_client.send_event(event_type, event_data)
 
 
 class HeartbeatService(object):
