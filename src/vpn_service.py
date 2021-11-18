@@ -120,7 +120,7 @@ class Cloud(object):
         except Exception as exc:
             backoff = 4 ** self._auth_retries
             self._auth_retries += 1
-            self._refresh_timeout = time.time() + backoff
+            self._refresh_timeout = time.time() + min(backoff, 3600)
             if isinstance(exc, HTTPError):
                 logger.error('retrying (%s) authentication failure in %ss: %s', self._auth_retries, backoff, exc.response.text)
             else:
