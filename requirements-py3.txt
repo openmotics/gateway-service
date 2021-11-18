@@ -15,6 +15,7 @@ msgpack==0.6.2
 peewee-migrate==1.1.6
 peewee==3.13.3
 psutil==5.7.2
+PyJWT == 1.7.1
 pyserial==3.4
 pytest-cov==2.10.1
 pytest==4.6.11
