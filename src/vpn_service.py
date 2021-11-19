@@ -868,21 +868,18 @@ class Util(object):
     def start_vpn():
         """ Start openvpn """
         logger.info('Starting VPN')
-        return True
-        # return subprocess.call(Util.start_cmd, shell=True) == 0
+        return subprocess.call(Util.start_cmd, shell=True) == 0
 
     @staticmethod
     def stop_vpn():
         """ Stop openvpn """
         logger.info('Stopping VPN')
-        return True
-        # return subprocess.call(Util.stop_cmd, shell=True) == 0
+        return subprocess.call(Util.stop_cmd, shell=True) == 0
 
     @staticmethod
     def check_vpn():
         """ Check if openvpn is running """
-        return True
-        # return subprocess.call(Util.check_cmd, shell=True) == 0
+        return subprocess.call(Util.check_cmd, shell=True) == 0
 
     @staticmethod
     def ping(target, verbose=True):
