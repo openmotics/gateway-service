@@ -55,7 +55,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
 from master.core.memory_types import MemoryActivator, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.slave_updater import SlaveUpdater
-from master.core.system_value import Humidity, Temperature
+from master.core.system_value import Humidity, Temperature, Dimmer
 from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 from platform_utils import Hardware
@@ -547,14 +547,16 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        self._do_basic_action(BasicAction(action_type=0,
-                                          action=1 if state else 0,
-                                          device_nr=output_id))
-        if dimmer is not None:
+        if not state or dimmer is None:
             self._do_basic_action(BasicAction(action_type=0,
-                                              action=9,
+                                              action=1 if state else 0,
+                                              device_nr=output_id))
+        else:
+            dimmer_svt = Dimmer.dimmer_to_system_value(dimmer)  # Map 0-100 to 0-255
+            self._do_basic_action(BasicAction(action_type=0,
+                                              action=2,
                                               device_nr=output_id,
-                                              extra_parameter=int(2.55 * dimmer)))  # Map 0-100 to 0-255
+                                              extra_parameter=dimmer_svt))
         if timer is not None:
             self._do_basic_action(BasicAction(action_type=0,
                                               action=11,
@@ -606,7 +608,7 @@ class MasterCoreController(MasterController):
             output_status.append(OutputStatusDTO(id=i,
                                                  status=bool(data['status']),
                                                  ctimer=timer,
-                                                 dimmer=int(data['dimmer']),
+                                                 dimmer=Dimmer.system_value_to_dimmer(data['dimmer']),
                                                  locked=output.locking.locked))
         return output_status
 

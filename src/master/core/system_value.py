@@ -65,3 +65,23 @@ class Timer(object):
         if timer_type == Timer.EventTimerType.PER_1_M:
             return timer_value * 60
         return 0
+
+
+class Dimmer(object):
+    PERCENTAGE_TO_SVT = {}
+    SVT_TO_PERCENTAGE = {}
+    for svt in range(256):
+        percentage = int(svt / 255.0 * 100)
+        SVT_TO_PERCENTAGE[svt] = percentage
+        if percentage not in PERCENTAGE_TO_SVT:
+            PERCENTAGE_TO_SVT[percentage] = svt
+    print(SVT_TO_PERCENTAGE)
+    print(PERCENTAGE_TO_SVT)
+
+    @staticmethod
+    def dimmer_to_system_value(dimmer):  # type: (int) -> int
+        return Dimmer.PERCENTAGE_TO_SVT.get(dimmer, 0)
+
+    @staticmethod
+    def system_value_to_dimmer(system_value):  # type: (int) -> int
+        return Dimmer.SVT_TO_PERCENTAGE.get(system_value, 0)

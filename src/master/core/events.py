@@ -20,7 +20,7 @@ from __future__ import absolute_import
 import logging
 from gateway.enums import ModuleType
 from master.core.fields import WordField, AddressField
-from master.core.system_value import Temperature, Humidity, Timer
+from master.core.system_value import Temperature, Humidity, Timer, Dimmer
 from master.core.basic_action import BasicAction
 
 logger = logging.getLogger(__name__)
@@ -208,12 +208,11 @@ class Event(object):
             parsed_data = {'output': device_nr}
             if action in [0, 1]:
                 timer_type = data[1]  # type: int
-                print(data[2:])
                 timer_value = word_helper.decode(bytearray(data[2:])) or 0  # type: int
                 timer = Timer.event_timer_type_to_seconds(timer_type, timer_value)
                 parsed_data.update({'type': Event.IOEventTypes.STATUS,
                                     'status': action == 1,
-                                    'dimmer_value': data[0],
+                                    'dimmer_value': Dimmer.system_value_to_dimmer(data[0]),
                                     'timer': timer})
             else:
                 parsed_data.update({'type': Event.IOEventTypes.LOCKING,
