@@ -55,7 +55,7 @@ from ioc import INJECTED, Inject
 from logs import Logs
 
 if False:  # MYPY
-    from typing import Any, Dict, Optional, List, Tuple
+    from typing import Any, Deque, Dict, Optional, List, Tuple
 
 REBOOT_TIMEOUT = 900
 CHECK_CONNECTIVITY_TIMEOUT = 60
@@ -109,7 +109,7 @@ class Cloud(object):
             token = jwt.encode(payload, client_key, algorithm='RS256')
             data = {'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
                     'assertion': token.decode(),
-                    'scope': 'device'}
+                    'scope': 'device'}  # type: Dict[str, Any]
             response = requests.post(self._build_url('/api/v1/authentication/oauth2/token'), data=data)
             response.raise_for_status()
             data = response.json()
@@ -188,7 +188,7 @@ class Gateway(object):
         config = ConfigParser()
         config.read(constants.get_config_file())
         if config.has_option('OpenMotics', 'http_port'):
-            self._port = config.get('OpenMotics', 'http_port')
+            self._port = int(config.get('OpenMotics', 'http_port'))
         else:
             self._port = 80
 
@@ -445,7 +445,7 @@ class TaskExecutor(object):
         self.connect_retries = 0
         self._cloud = cloud
         self._message_client = message_client
-        self._queue = deque()
+        self._queue = deque()  # type: Deque[Dict[str,Any]]
         self._tasks = []
         self._thread = DaemonThread(name='taskexecutor',
                                     target=self.execute_tasks,
@@ -900,7 +900,7 @@ class Util(object):
                     stdout_data, stderr_data = ping_process.communicate()
                     if ping_process.returncode == 0:
                         return True
-                    raise Exception('Non-zero exit code. Stdout: {0}, stderr: {1}'.format(stdout_data, stderr_data))
+                    raise Exception('Non-zero exit code. Stdout: {0}, stderr: {1}'.format(stdout_data.decode(), stderr_data.decode()))
             logger.warning('Got timeout during ping to {0}. Killing'.format(target))
             ping_process.kill()
             del ping_process  # Make sure to clean up everything (or make it cleanable by the GC)
