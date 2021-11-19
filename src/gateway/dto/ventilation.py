@@ -57,7 +57,7 @@ class VentilationStatusDTO(BaseDTO):
         MANUAL = 'manual'
 
     def __init__(self, id, mode, level=None, timer=None, remaining_time=None, last_seen=None):
-        # type: (int, str, Optional[int], Optional[float], Optional[float], Optional[float]) -> None
+        # type: (int, Optional[str], Optional[int], Optional[float], Optional[float], Optional[float]) -> None
         self.id = id
         self.mode = mode
         self.level = level

@@ -99,11 +99,10 @@ class Rfid(RestAPIEndpoint):
             if user_id != auth_token.user.id:
                 raise UnAuthorizedException('Cannot start an add_rfid_badge session: As a normal user, you only can add a badge to yourselves')
 
-        if not self.user_controller.user_id_exists(user_id):
+        user_dto = self.user_controller.load_user(user_id)
+        if user_dto is None:
             raise ItemDoesNotExistException('Cannot start add_rfid_badge session: There is no user with user_id: {}'.format(user_id))
-
-        user = self.user_controller.load_user(user_id)
-        self.rfid_controller.start_add_rfid_session(user, label)
+        self.rfid_controller.start_add_rfid_session(user_dto, label)
         return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None, auth_level=AuthenticationLevel.HIGH,
