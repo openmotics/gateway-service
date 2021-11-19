@@ -75,8 +75,6 @@ class Dimmer(object):
         SVT_TO_PERCENTAGE[svt] = percentage
         if percentage not in PERCENTAGE_TO_SVT:
             PERCENTAGE_TO_SVT[percentage] = svt
-    print(SVT_TO_PERCENTAGE)
-    print(PERCENTAGE_TO_SVT)
 
     @staticmethod
     def dimmer_to_system_value(dimmer):  # type: (int) -> int
