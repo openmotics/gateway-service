@@ -288,6 +288,7 @@ class VPNServiceTest(TestCase):
         with mock.patch.object(CertificateFiles, 'activate_vpn', return_value=False) as activate, \
              mock.patch.object(Util, 'ping', return_value=False), \
              mock.patch.object(Util, 'check_vpn', return_value=False), \
+             mock.patch.object(Util, 'check_vpn_route', return_value=False), \
              mock.patch.object(Util, 'start_vpn') as start_vpn, \
              mock.patch.object(Util, 'stop_vpn') as stop_vpn:
             # VPN disabled
@@ -310,6 +311,7 @@ class VPNServiceTest(TestCase):
         with mock.patch.object(CertificateFiles, 'activate_vpn', return_value=False) as activate, \
              mock.patch.object(Util, 'ping', return_value=False), \
              mock.patch.object(Util, 'check_vpn', return_value=True), \
+             mock.patch.object(Util, 'check_vpn_route', return_value=True), \
              mock.patch.object(Util, 'start_vpn') as start_vpn, \
              mock.patch.object(Util, 'stop_vpn') as stop_vpn:
             # Stop service
@@ -324,6 +326,7 @@ class VPNServiceTest(TestCase):
         with mock.patch.object(CertificateFiles, 'activate_vpn', return_value=True) as activate, \
              mock.patch.object(Util, 'ping', return_value=False), \
              mock.patch.object(Util, 'check_vpn', return_value=True), \
+             mock.patch.object(Util, 'check_vpn_route', return_value=True), \
              mock.patch.object(Util, 'start_vpn') as start_vpn, \
              mock.patch.object(Util, 'stop_vpn') as stop_vpn:
             # Attempt rollback
@@ -337,6 +340,7 @@ class VPNServiceTest(TestCase):
         with mock.patch.object(CertificateFiles, 'activate_vpn', return_value=True) as activate, \
              mock.patch.object(Util, 'ping', return_value=True), \
              mock.patch.object(Util, 'check_vpn', return_value=True), \
+             mock.patch.object(Util, 'check_vpn_route', return_value=True), \
              mock.patch.object(Util, 'start_vpn') as start_vpn, \
              mock.patch.object(Util, 'stop_vpn') as stop_vpn:
             # Restart after activation
@@ -346,17 +350,23 @@ class VPNServiceTest(TestCase):
             stop_vpn.assert_called()
             activate.assert_called_with(rollback=False)
 
-    def test_openvpn_check_status(self):
-        task = OpenVPNTask()
-        with mock.patch.object(subprocess, 'check_output', return_value=''):
-            self.assertTrue(task._check_status())
+    def test_check_openvpn_route(self):
+        with mock.patch.object(subprocess, 'check_output', return_value=b''), \
+             mock.patch.object(Util, 'ping', return_value=False) as ping:
+            self.assertFalse(Util.check_vpn_route())
+            ping.assert_not_called()
 
-        ip_r_output = '10.0.128.0/24 via 10.37.0.9 dev tun0\n' + \
-                      '10.0.129.0/24 via 10.37.0.9 dev tun0\n' + \
-                      '10.37.0.1 via 10.37.0.9 dev tun0'
-        with mock.patch.object(subprocess, 'check_output', return_value=ip_r_output):
-            self.assertTrue(task._check_status())
-
+        ip_r_output = b'10.0.128.0/24 via 10.37.0.9 dev tun0\n' + \
+                      b'10.0.129.0/24 via 10.37.0.9 dev tun0\n' + \
+                      b'10.37.0.1 via 10.37.0.9 dev tun0'
+        with mock.patch.object(subprocess, 'check_output', return_value=ip_r_output), \
+             mock.patch.object(Util, 'ping', return_value=False) as ping:
+            self.assertFalse(Util.check_vpn_route())
+            ping.assert_called_with('10.37.0.1', verbose=False)
+        with mock.patch.object(subprocess, 'check_output', return_value=ip_r_output), \
+             mock.patch.object(Util, 'ping', return_value=True) as ping:
+            self.assertTrue(Util.check_vpn_route())
+            ping.assert_called_with('10.37.0.1', verbose=False)
 
     def test_update_certs_task(self):
         cloud = mock.Mock(Cloud)

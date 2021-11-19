@@ -256,18 +256,22 @@ class CertificateFiles(object):
                 vpn_target = None
 
             versions = self.get_versions()
+            target = None
             try:
                 current_target = os.readlink(self.current).split(os.path.sep)[-1]
+                if os.path.exists(self.cert_path(current_target, '.failure')):
+                    current_target = None
+                else:
+                    target = current_target
             except Exception:
                 current_target = None
-            target = None
-            if os.path.exists(self.cert_path(current_target, '.failure')):
+
+            if target is None and current_target is None:
                 for version in sorted(versions, reverse=True):
                     if not os.path.exists(self.cert_path(version, '.failure')):
                         target = version
                         break
-            else:
-                target = current_target
+
             if target is None:
                 target = current_target
             if target != vpn_target:
@@ -753,35 +757,12 @@ class OpenVPNTask(object):
             logger.info('Closing vpn...')
             Util.stop_vpn()
             logger.info('Closing vpn... Done')
-        status = Util.check_vpn() and self._check_status()
+        status = Util.check_vpn() and Util.check_vpn_route()
         if self.open != status:
             logger.info('OpenVPN changed: open=%s', status)
             self.open = status
 
         yield (OMBusEvents.VPN_OPEN, status)
-
-    def _check_status(self):
-        """ Checks if the VPN tunnel is connected """
-        return True
-        try:
-            routes = subprocess.check_output('ip r | grep tun | grep via || true', shell=True).strip()
-            # example output:
-            # 10.0.0.0/24 via 10.37.0.5 dev tun0\n
-            # 10.37.0.1 via 10.37.0.5 dev tun0
-            result = False
-            if routes:
-                if not isinstance(routes, str):  # to ensure python 2 and 3 compatibility
-                    routes = routes.decode()
-
-                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
-                for vpn_server in vpn_servers:
-                    if Util.ping(vpn_server, verbose=False):
-                        result = True
-                        break
-            return result
-        except Exception as ex:
-            logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
-            return False
 
 
 class UpdateCertsTask(object):
@@ -880,6 +861,26 @@ class Util(object):
     def check_vpn():
         """ Check if openvpn is running """
         return subprocess.call(Util.check_cmd, shell=True) == 0
+
+    @staticmethod
+    def check_vpn_route():
+        """ Checks if the VPN tunnel is connected """
+        try:
+            routes = subprocess.check_output('ip r | grep tun | grep via || true', shell=True).decode().strip()
+            # example output:
+            # 10.0.0.0/24 via 10.37.0.5 dev tun0\n
+            # 10.37.0.1 via 10.37.0.5 dev tun0
+            result = False
+            if routes:
+                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
+                for vpn_server in vpn_servers:
+                    if Util.ping(vpn_server, verbose=False):
+                        result = True
+                        break
+            return result
+        except Exception as ex:
+            logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
+            return False
 
     @staticmethod
     def ping(target, verbose=True):

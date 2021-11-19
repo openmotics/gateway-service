@@ -62,6 +62,10 @@ class UpdateController(object):
     VERSIONS_CURRENT_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('{0}', 'current')  # e.g. /x/versions/{0}/current
     VERSIONS_PREVIOUS_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('{0}', 'previous')  # e.g. /x/versions/{0}/previous
 
+    CERTIFICATES_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('certificates', '{0}')  # e.g. /x/versions/certificates/{0}
+    CERTIFICATES_CURRENT = VERSIONS_BASE_TEMPLATE.format('certificates', 'current')  # e.g. /x/versions/certificates/current
+    CERTIFICATES_VPN = VERSIONS_BASE_TEMPLATE.format('certificates', 'vpn')  # e.g. /x/versions/certificates/vpn
+
     SERVICE_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('service', '{0}')  # e.g. /x/versions/service/{0}
     SERVICE_CURRENT = VERSIONS_CURRENT_TEMPLATE.format('service')  # e.g. /x/versions/service/current
     SERVICE_PREVIOUS = VERSIONS_PREVIOUS_TEMPLATE.format('service')  # e.g. /x/versions/service/previous
@@ -114,6 +118,11 @@ class UpdateController(object):
                                                    'input', 'output', 'dimmer', 'can',
                                                    'energy', 'p1_concentrator'],
                            Platform.Type.ESAFE: ['gateway_service']}
+
+    if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
+        OPENVPN_CONFIG = '/etc/openvpn/vpn.conf'
+    else:
+        OPENVPN_CONFIG = '/etc/openvpn/client/omcloud.conf'
 
     @Inject
     def __init__(self, gateway_uuid=INJECTED, module_controller=INJECTED, master_controller=INJECTED, energy_module_controller=INJECTED, cloud_url=INJECTED):
@@ -418,6 +427,7 @@ class UpdateController(object):
         # This code will execute after the new version is in place and before the
         # services are started. It runs the new code, has the new imports
         # available, ...
+        UpdateController._move_openvpn_certificates(logger)
         logger.info('Preparation for first startup completed')
 
     def _execute_pending_updates(self):
@@ -781,6 +791,57 @@ class UpdateController(object):
                                              logger=logger)
 
         logger.info('Update completed')
+
+    @staticmethod
+    def _move_openvpn_certificates(logger):  # type: (Logger) -> None
+        vpn_prefix = UpdateController.CERTIFICATES_VPN
+        settings = {'ca': os.path.join(vpn_prefix, 'ca.crt'),
+                    'cert': os.path.join(vpn_prefix, 'client.crt'),
+                    'key': os.path.join(vpn_prefix, 'client.key')}
+        if System.get_operating_system().get('ID') != System.OS.ANGSTROM:
+            settings.update({'cipher': 'AES-256-CBC'})
+
+        changed = False
+        lines = []
+        with open(UpdateController.OPENVPN_CONFIG, 'r') as fd:
+            for line in (x.rstrip() for x in fd.readlines()):
+                prefix, _, value = line.partition(' ')
+                if prefix in settings and settings[prefix] != value:
+                    changed = True
+                    lines.append('{0} {1}'.format(prefix, settings[prefix]))
+                else:
+                    lines.append(line)
+        if not changed:
+            return
+
+        logger.info('Copying openvpn certificates...')
+        unknown = UpdateController.CERTIFICATES_BASE_TEMPLATE.format('unknown')
+        if os.path.exists(unknown):
+            shutil.rmtree(unknown)
+
+        os.makedirs(unknown)
+        for file in ('ca.crt', 'client.crt', 'client.key'):
+            shutil.copy(src=os.path.join(os.path.dirname(UpdateController.OPENVPN_CONFIG), file),
+                        dst=os.path.join(unknown, file))
+
+        for link in (UpdateController.CERTIFICATES_CURRENT, UpdateController.CERTIFICATES_VPN):
+            if os.path.exists(link):
+                os.unlink(link)
+            os.symlink('unknown', link)
+
+        try:
+            logger.info('Updating openvpn config...')
+            UpdateController._execute(command=['mount', '-o', 'remount,rw', '/'],
+                                      logger=logger)
+            if not os.path.exists(UpdateController.OPENVPN_CONFIG + '.BACKUP'):
+                shutil.copy(UpdateController.OPENVPN_CONFIG, UpdateController.OPENVPN_CONFIG + '.BACKUP')
+            temp_config = tempfile.mktemp(dir=os.path.dirname(UpdateController.OPENVPN_CONFIG))
+            with open(temp_config, 'w') as fd:
+                fd.write('\n'.join(lines))
+            os.rename(temp_config, UpdateController.OPENVPN_CONFIG)
+        finally:
+            UpdateController._execute(command=['mount', '-o', 'remount,ro', '/'],
+                                      logger=logger)
 
     def _fetch_version(self, logger, firmware_type):  # type: (Logger, str) -> Optional[str]
         try:
