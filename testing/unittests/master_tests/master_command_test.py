@@ -14,8 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 Tests for MasterCommand module.
-
-@author: fryckbos
 """
 
 from __future__ import absolute_import
@@ -24,7 +22,7 @@ import xmlrunner
 
 import master.classic.master_api as master_api
 from master.classic.master_command import MasterCommandSpec, Field, OutputFieldType, DimmerFieldType, \
-                                  ErrorListFieldType
+    ErrorListFieldType
 
 
 class MasterCommandSpecTest(unittest.TestCase):
@@ -121,10 +119,24 @@ class MasterCommandSpecTest(unittest.TestCase):
 
     def test_dimmer(self):
         """ Test for DimmerFieldType.encode and DimmerFieldType.decode """
+        # Validates a stable conversion:
+        # +----------------------> Original percentage set by external user -> `percentage` in test below
+        # |    +-----------------> Original value converted to svt (precision loss) -> `svt` in test below
+        # |    |    +------------> Recovered percentage -> `recovered_percentage` in test below
+        # |    |    |    +-------> New svt based on recovered percentage (should be stable with first svt conversion) -> `new_svt`in test below
+        # |    |    |    |    +--> New percentage (should be stable with recovered percentage) -> `new_percentage` in test below
+        # 0 -> 0 -> 0 -> 0 -> 0
+        # 1 -> 0 -> 0 -> 0 -> 0
+        # 2 -> 1 -> 2 -> 1 -> 2
+        # 3 -> 1 -> 2 -> 1 -> 2
         dimmer_type = DimmerFieldType()
-        for value in range(0, 64):
-            val = bytearray([value])
-            self.assertEqual(dimmer_type.encode(dimmer_type.decode(val)), val)
+        for percentage in range(0, 101):
+            svt = dimmer_type.encode(percentage)
+            recovered_percentage = dimmer_type.decode(svt)
+            new_svt = dimmer_type.encode(recovered_percentage)
+            self.assertEqual(svt, new_svt)
+            new_percentage = dimmer_type.decode(new_svt)
+            self.assertEqual(recovered_percentage, new_percentage)
 
     def test_output_wiht_crc(self):
         """ Test crc and is_crc functions. """
@@ -178,7 +190,7 @@ class MasterCommandSpecTest(unittest.TestCase):
     def test_input_with_crc(self):
         """ Test encoding with crc. """
         spec = MasterCommandSpec('TE',
-                    [Field.byte('one'), Field.byte('two'), Field.crc()], [])
+                                 [Field.byte('one'), Field.byte('two'), Field.crc()], [])
         spec_input = spec.create_input(1, {"one": 255, "two": 128})
 
         self.assertEqual(13, len(spec_input))
@@ -255,7 +267,7 @@ class MasterCommandSpecTest(unittest.TestCase):
         """ Test for MasterCommandSpec.consume_output with a variable length output field. """
         def dim(byte_value):
             """ Convert a dimmer byte value to the api value. """
-            return int(byte_value * 10.0 / 6.0)
+            return DimmerFieldType.decode(bytearray([byte_value]))
 
         basic_action = MasterCommandSpec('OL',
                                          [],
