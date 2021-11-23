@@ -79,8 +79,7 @@ class DeliveryController(object):
         if delivery_type is not None:
             query = query.where(Delivery.type == delivery_type)
         # filter on picked up when needed
-        if history is False:
-            query = query.where(Delivery.timestamp_pickup.is_null(True))
+        query = query.where(Delivery.timestamp_pickup.is_null(not history))
 
         # add the from_id
         if before_id is not None:
