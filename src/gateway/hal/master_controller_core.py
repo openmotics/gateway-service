@@ -1313,6 +1313,8 @@ class MasterCoreController(MasterController):
 
         cycle = [False]  # type: List[Union[bool, float]]
         if power_on:
+            self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
+                                                      active=True)
             cycle += [2.0, True]
         Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, cycle)
         self._master_communicator.reset_communication_statistics()
