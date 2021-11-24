@@ -135,6 +135,7 @@ class ShutterController(BaseController):
                 shutter_id = shutter_dto.id
                 shutter_ids.append(shutter_id)
                 if shutter_dto != self._shutters.get(shutter_id):
+                    logger.info('Reload internal caches for shutter {0}'.format(shutter_id))
                     changed |= True
                     self._shutters[shutter_id] = shutter_dto
                     self._states[shutter_id] = (0.0, ShutterEnums.State.STOPPED)
@@ -513,12 +514,12 @@ class ShutterController(BaseController):
                             self._position_accuracy[shutter_id] = self._position_accuracy.get(shutter_id, 0) - self.SINGLE_ACTION_ACCURACY_LOSS_PERCENTAGE
                         else:
                             self._position_accuracy[shutter_id] = 0
-                        logger.info('Shutter {0} going {1} for {2} steps ({3:.2f}s). New state {4}.'
+                        logger.info('Shutter {0} going {1} for {2} steps ({3:.2f}s). New state {4}. '
                                     'Actual position: {5}. Position accuracy: {6}'.format(shutter_id, direction,
-                                                                                        position_delta, elapsed_time,
-                                                                                        new_state,
-                                                                                        self._actual_positions[shutter_id],
-                                                                                        self._position_accuracy[shutter_id]))
+                                                                                          position_delta, elapsed_time,
+                                                                                          new_state,
+                                                                                          self._actual_positions[shutter_id],
+                                                                                          self._position_accuracy[shutter_id]))
             else:
                 # Supports position, so state will be calculated on position
                 limit_position = ShutterController._get_limit(direction, steps)
