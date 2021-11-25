@@ -40,7 +40,7 @@ class ORMMigrationsTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        pass  # os.remove(cls._test_db_filename)
+        os.remove(cls._test_db_filename)
 
     def test_migrations(self):
         gateway_src = os.path.abspath(os.path.join(__file__, '..'))
@@ -54,11 +54,17 @@ class ORMMigrationsTest(unittest.TestCase):
             if not filename.endswith('.py') or filename in ['__init__.py']:
                 continue
             base_name = filename.replace('.py', '')
-            if hasattr(self, '_pre_{0}'.format(base_name)):
-                getattr(self, '_pre_{0}'.format(base_name))()
+            pre_name = '_pre_{0}'.format(base_name)
+            if hasattr(self, pre_name):
+                print('Executing {0}...'.format(pre_name))
+                getattr(self, pre_name)()
+                print('Executing {0}... Done'.format(pre_name))
             router.run_one(base_name, router.migrator, fake=False)
-            if hasattr(self, '_post_{0}'.format(base_name)):
-                getattr(self, '_post_{0}'.format(base_name))()
+            post_name = '_post_{0}'.format(base_name)
+            if hasattr(self, post_name):
+                print('Executing {0}...'.format(post_name))
+                getattr(self, post_name)()
+                print('Executing {0}... Done'.format(post_name))
 
     # Below are all the pre- and post-migration test files
 
@@ -81,12 +87,77 @@ class ORMMigrationsTest(unittest.TestCase):
             name = CharField(null=True)
             floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
 
+        class Plugin(BaseModel):
+            id = AutoField()
+            name = CharField(unique=True)
+            version = CharField()
+
+        class Sensor(BaseModel):
+            id = AutoField()
+            source = CharField()  # Options: 'master' or 'plugin'
+            plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
+            external_id = CharField()
+            physical_quantity = CharField(null=True)
+            unit = CharField(null=True)
+            name = CharField()
+            room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+
+            class Meta:
+                indexes = (
+                    (('source', 'plugin_id', 'external_id', 'physical_quantity'), True),
+                )
+
         floor = Floor.create(number=1, name='base floor')
-        Room.create(number=1, name='living', floor=floor)
+        room = Room.create(number=1, name='living', floor=floor)
+        Sensor.create(source='plugin', external_id='foo', name='foo', room=room)
+        Sensor.create(source='plugin', external_id='bar', name='bar')
 
-    def _post_032_fix_room(self):
-        _ = self
+    def _post_021_remove_floors(self):
 
+        class BaseModel(Model):
+            class Meta:
+                database = SqliteDatabase(constants.get_gateway_database_file(),
+                                          pragmas={'foreign_keys': 1})
+
+        class Floor(BaseModel):
+            id = AutoField()
+            number = IntegerField(unique=True)
+            name = CharField(null=True)
+
+        class Room(BaseModel):
+            id = AutoField()
+            number = IntegerField(unique=True)
+            name = CharField(null=True)
+            floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
+
+        class Plugin(BaseModel):
+            id = AutoField()
+            name = CharField(unique=True)
+            version = CharField()
+
+        class Sensor(BaseModel):
+            id = AutoField()
+            source = CharField()  # Options: 'master' or 'plugin'
+            plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
+            external_id = CharField()
+            physical_quantity = CharField(null=True)
+            unit = CharField(null=True)
+            name = CharField()
+            room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+
+            class Meta:
+                indexes = (
+                    (('source', 'plugin_id', 'external_id', 'physical_quantity'), True),
+                )
+
+        room = Room.select().where(Room.number == 1).first()
+        sensor_foo = Sensor.select().where(Sensor.external_id == 'foo').first()
+        sensor_bar = Sensor.select().where(Sensor.external_id == 'bar').first()
+
+        self.assertEqual(room, sensor_foo.room)  # Sensors still have rooms
+        self.assertIsNone(sensor_bar.room)
+
+    def _post_034_restore_room_references(self):
         class BaseModel(Model):
             class Meta:
                 database = SqliteDatabase(constants.get_gateway_database_file(),
@@ -97,8 +168,34 @@ class ORMMigrationsTest(unittest.TestCase):
             number = IntegerField(unique=True)
             name = CharField(null=True)
 
+        class Plugin(BaseModel):
+            id = AutoField()
+            name = CharField(unique=True)
+            version = CharField()
+
+        class Sensor(BaseModel):
+            id = AutoField()
+            source = CharField()  # Options: 'master' or 'plugin'
+            plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
+            external_id = CharField()
+            physical_quantity = CharField(null=True)
+            unit = CharField(null=True)
+            name = CharField()
+            room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+
+            class Meta:
+                indexes = (
+                    (('source', 'plugin_id', 'external_id', 'physical_quantity'), True),
+                )
+
         room = Room.select().where(Room.number == 1).first()
         room.name = 'living 2'
         room.save()
 
-        Room.create(number=2, name='kitchen')  # This failed before `032_fix_room`
+        Room.create(number=2, name='kitchen')  # This failed after `021_remove_floors`
+
+        sensor_foo = Sensor.select().where(Sensor.external_id == 'foo').first()
+        sensor_bar = Sensor.select().where(Sensor.external_id == 'bar').first()
+
+        self.assertEqual(room, sensor_foo.room)  # Sensors still have rooms
+        self.assertIsNone(sensor_bar.room)
