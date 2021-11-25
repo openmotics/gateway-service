@@ -35,22 +35,23 @@ class ORMMigrationsTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        constants.get_gateway_database_file = lambda: cls._test_db_filename
         cls._test_db_filename = tempfile.mktemp(suffix='.db')
+        constants.get_gateway_database_file = lambda: cls._test_db_filename
+
+        gateway_src = os.path.abspath(os.path.join(__file__, '..'))
+        cls._migrations_path = os.path.join(gateway_src, '../../../../src/gateway/migrations/orm')
+
+        from peewee_migrate import Router
+        test_db = SqliteDatabase(cls._test_db_filename, pragmas={'foreign_keys': 1})
+        cls._router = Router(test_db, migrate_dir=cls._migrations_path)
 
     @classmethod
     def tearDownClass(cls):
+        cls._router.database.close()
         os.remove(cls._test_db_filename)
 
     def test_migrations(self):
-        gateway_src = os.path.abspath(os.path.join(__file__, '..'))
-        path = os.path.join(gateway_src, '../../../../src/gateway/migrations/orm')
-
-        from peewee_migrate import Router
-        test_db = SqliteDatabase(self._test_db_filename, pragmas={'foreign_keys': 1})
-        router = Router(test_db, migrate_dir=path)
-
-        for filename in sorted(os.listdir(path)):
+        for filename in sorted(os.listdir(self._migrations_path)):
             if not filename.endswith('.py') or filename in ['__init__.py']:
                 continue
             base_name = filename.replace('.py', '')
@@ -59,7 +60,7 @@ class ORMMigrationsTest(unittest.TestCase):
                 print('Executing {0}...'.format(pre_name))
                 getattr(self, pre_name)()
                 print('Executing {0}... Done'.format(pre_name))
-            router.run_one(base_name, router.migrator, fake=False)
+            self._router.run_one(base_name, self._router.migrator, fake=False)
             post_name = '_post_{0}'.format(base_name)
             if hasattr(self, post_name):
                 print('Executing {0}...'.format(post_name))
