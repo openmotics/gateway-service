@@ -22,7 +22,7 @@ from peewee_migrate import Migrator
 import constants
 
 if False:  # MYPY
-    from typing import Dict, Any, List
+    from typing import Dict, Any, List, Type
 
 
 def migrate(migrator, database, fake=False, **kwargs):
@@ -129,7 +129,8 @@ def migrate(migrator, database, fake=False, **kwargs):
         thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE')
 
     room_map = {room.number: room for room in Room.select()}
-    for model in [Output, Input, Shutter, ShutterGroup, PulseCounter, Sensor, Thermostat]:
+    models = [Output, Input, Shutter, ShutterGroup, PulseCounter, Sensor, Thermostat]  # type: List[Type[BaseModel]]
+    for model in models:
         for entry in model.select():
             if entry.room_number is None:
                 continue

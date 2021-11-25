@@ -22,7 +22,7 @@ from peewee_migrate import Migrator
 import constants
 
 if False:  # MYPY
-    from typing import Dict, Any, List
+    from typing import Dict, Any, Type, List
 
 
 def migrate(migrator, database, fake=False, **kwargs):
@@ -129,7 +129,8 @@ def migrate(migrator, database, fake=False, **kwargs):
         valve_config = CharField(default=ValveConfigs.CASCADE)  # Options: 'cascade' or 'equal'
         thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE')
 
-    for model in [Output, Input, Shutter, ShutterGroup, PulseCounter, Sensor, Thermostat]:
+    models = [Output, Input, Shutter, ShutterGroup, PulseCounter, Sensor, Thermostat]  # type: List[Type[BaseModel]]
+    for model in models:
         for entry in model.select():
             if entry.room is None:
                 continue
