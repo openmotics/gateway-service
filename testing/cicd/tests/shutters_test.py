@@ -83,7 +83,7 @@ def test_shutter_moving(toolbox, clean_shutters, shutter, primary_direction, inv
     toolbox.assert_shutter_changed(shutter=shutter, from_status='stopped', to_status='going_{}'.format(direction), timeout=3, inverted=inverted)
     toolbox.tester.reset()
     toolbox.set_shutter(shutter=shutter, direction=inverted_direction)
-    toolbox.assert_shutter_changed(shutter=shutter, from_status='going_{}'.format(direction), to_status='going_{}'.format(inverted_direction), timeout=3, inverted=inverted)
+    toolbox.assert_shutter_changed(shutter=shutter, from_status='going_{}'.format(direction), to_status='going_{}'.format(inverted_direction), timeout=5, inverted=inverted)
     toolbox.tester.reset()
     toolbox.assert_shutter_changed(shutter=shutter, from_status='going_{}'.format(inverted_direction), to_status='stopped', timeout=13, inverted=inverted)
     toolbox.tester.reset()
