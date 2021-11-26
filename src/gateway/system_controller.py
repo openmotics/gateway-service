@@ -86,12 +86,6 @@ class SystemController(BaseController):
     def get_python_timezone(self):
         return time.tzname[0]
 
-    def get_main_version(self):
-        _ = self
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-        return str(config.get('OpenMotics', 'version'))
-
     # Backup and restore functions
 
     def get_full_backup(self):

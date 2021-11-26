@@ -22,6 +22,12 @@ from master.core.memory_types import MemoryModelDefinition, GlobalMemoryModelDef
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
+    class _DebugComposition(CompositeMemoryModelDefinition):
+        disable_ba_events: bool
+        disable_fram_ba_logging: bool
+        enable_fram_error_logging: bool
+        enable_health_check: bool
+
     hardware_detection: int
     number_of_output_modules: int
     number_of_input_modules: int
@@ -35,7 +41,7 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     scan_time_rs485_can_control_modules: int
     automatic_module_discovery: bool
     can_bus_termination: bool
-    debug_mode: bool
+    debug: _DebugComposition
     groupaction_all_outputs_off: int
     groupaction_startup: int
     groupaction_minutes_changed: int

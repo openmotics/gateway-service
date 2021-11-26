@@ -96,7 +96,7 @@ def _openmotics_api_v1(f, *args, **kwargs):
         data = 'General Error occurred during api call: {}: {}'.format(type(ex).__name__, ex)
         logger.error(data)
         import traceback
-        print(traceback.print_exc())
+        traceback.print_exc()
 
     timings['process'] = ('Processing', time.time() - start)
     serialization_start = time.time()
@@ -298,7 +298,7 @@ class APIEndpointRegister(object):
 
     def register(self, api):
         # type: (Type[RestAPIEndpoint]) -> None
-        logger.info("Registering a new API: {:<20} @ {}".format(api.__name__, api.API_ENDPOINT))
+        logger.debug("Registering a new API: {:<20} @ {}".format(api.__name__, api.API_ENDPOINT))
         self.endpoints.append(api)
 
     def __len__(self):
@@ -326,7 +326,8 @@ class WebServiceV1(object):
         self.endpoints = api_endpoint_register
 
     def start(self):
-        logger.info('Starting the V1 webservice: {}'.format(self))
+        logger.info('Starting the V1 webservice')
+        logger.debug('Endpoints: {0}'.format(self.endpoints.endpoints))
         self.add_api_tree()
 
     def stop(self):

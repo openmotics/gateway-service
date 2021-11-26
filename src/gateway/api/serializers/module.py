@@ -22,7 +22,7 @@ from gateway.dto import ModuleDTO
 from gateway.enums import ModuleType, HardwareType
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Tuple, Any
+    from typing import Dict, Optional, List, Any
 
 
 class ModuleSerializer(object):
@@ -30,36 +30,13 @@ class ModuleSerializer(object):
 
     @staticmethod
     def serialize(module_dto, fields):  # type: (ModuleDTO, Optional[List[str]]) -> Dict
-        data = {'address': module_dto.address}  # type: Dict[str, Any]
-        if module_dto.source == ModuleDTO.Source.MASTER:
-            category_map = {ModuleType.CAN_CONTROL: 'INPUT',
-                            ModuleType.SENSOR: 'INPUT',
-                            ModuleType.INPUT: 'INPUT',
-                            ModuleType.SHUTTER: 'SHUTTER',
-                            ModuleType.OUTPUT: 'OUTPUT',
-                            ModuleType.DIM_CONTROL: 'OUTPUT',
-                            ModuleType.OPEN_COLLECTOR: 'OUTPUT',
-                            None: 'UNKNOWN'}
-            type_int = int(module_dto.address.split('.')[0])
-            data.update({'type': chr(type_int) if 32 <= type_int <= 126 else None,
-                         'hardware_type': module_dto.hardware_type,
-                         'module_nr': module_dto.order,
-                         'is_can': (module_dto.hardware_type == HardwareType.EMULATED or
-                                    module_dto.module_type == ModuleType.CAN_CONTROL),
-                         'is_virtual': module_dto.hardware_type == HardwareType.VIRTUAL,
-                         'category': category_map.get(module_dto.module_type, 'UNKNOWN')})
-            if module_dto.hardware_type == HardwareType.PHYSICAL:
-                data.update({'firmware': module_dto.firmware_version,
-                             'hardware': module_dto.hardware_version})
-        else:
-            module_type_map = {ModuleType.ENERGY: 'E',
-                               ModuleType.POWER: 'P',
-                               ModuleType.P1_CONCENTRATOR: 'C',
-                               None: 'U'}
-            data.update({'type': module_type_map.get(module_dto.module_type, 'U'),
-                         'firmware': module_dto.firmware_version,
-                         'address': module_dto.address,
-                         'id': module_dto.order})
+        data = {'address': module_dto.address,
+                'source': module_dto.source,
+                'module_type': module_dto.module_type,
+                'hardware_type': module_dto.hardware_type,
+                'firmware_version': module_dto.firmware_version,
+                'order': module_dto.order,
+                'update_success': module_dto.update_success}  # type: Dict[str, Any]
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

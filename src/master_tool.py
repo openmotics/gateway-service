@@ -123,18 +123,10 @@ def main():
                         help='get the version of the master')
     parser.add_argument('--wipe', dest='wipe', action='store_true',
                         help='wip the master eeprom')
-    parser.add_argument('--update', dest='update', action='store_true',
-                        help='update the master firmware')
-    parser.add_argument('--master-firmware-classic',
-                        help='path to the hexfile with the classic firmware')
-    parser.add_argument('--master-firmware-core',
-                        help='path to the hexfile with the core+ firmware')
-    parser.add_argument('--firmware-version',
-                        help='firmware version of the provided hexfile')
 
     args = parser.parse_args()
 
-    Logs.setup_logger(enable_update_logging=True)
+    Logs.setup_logger()
 
     config = ConfigParser()
     config.read(constants.get_config_file())
@@ -144,7 +136,7 @@ def main():
         print(port)
         return
 
-    if not any([args.sync, args.version, args.reset, args.hardreset, args.wipe, args.update]):
+    if not any([args.sync, args.version, args.reset, args.hardreset, args.wipe]):
         parser.print_help()
 
     setup_minimal_master_platform(port)
@@ -152,20 +144,6 @@ def main():
 
     if args.hardreset:
         master_cold_reset()
-        return
-    elif args.update:
-        if platform in Platform.CoreTypes:
-            firmware = args.master_firmware_core
-            if not firmware:
-                print('error: --master-firmware-core is required to update')
-                sys.exit(1)
-        else:
-            firmware = args.master_firmware_classic
-            if not firmware:
-                print('error: --master-firmware-classic is required to update')
-                sys.exit(1)
-        master_update(firmware=firmware,
-                      version=args.firmware_version)
         return
 
     communicator = get_communicator()

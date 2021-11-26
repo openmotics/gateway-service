@@ -28,7 +28,7 @@ from gateway.enums import HardwareType
 from gateway.exceptions import CommunicationFailure
 from gateway.models import EnergyModule, EnergyCT, Module
 from gateway.dto import ModuleDTO
-from gateway.enums import EnergyEnums
+from gateway.enums import EnergyEnums, ModuleType
 from ioc import INJECTED, Inject
 from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, NORMAL_MODE, ADDRESS_MODE
 from gateway.energy.energy_command import EnergyCommand
@@ -153,8 +153,8 @@ class EnergyCommunicator(object):
     def _log_data(action, data, error=False):
         # type: (str, Optional[bytearray], bool) -> None
         if data is not None:
-            logger_ = logger.debug if not error else logger.error
-            logger_("%.3f %s energy bus: %s", time.time(), action, Printable(data))
+            log = logger.debug if not error else logger.error
+            log("%.3f %s energy bus: %s", time.time(), action, Printable(data))
 
     def __write_to_serial(self, data):
         # type: (bytearray) -> None
@@ -289,14 +289,18 @@ class EnergyCommunicator(object):
                     continue
 
                 version = None
+                module_type = None
                 if want_an_address_8.check_header_partial(header):
                     version = EnergyEnums.Version.POWER_MODULE
+                    module_type = ModuleType.POWER
                 elif want_an_address_12.check_header_partial(header):
                     version = EnergyEnums.Version.ENERGY_MODULE
+                    module_type = ModuleType.ENERGY
                 elif want_an_address_p1c.check_header_partial(header):
                     version = EnergyEnums.Version.P1_CONCENTRATOR
+                    module_type = ModuleType.P1_CONCENTRATOR
 
-                if version is None:
+                if version is None or module_type is None:
                     logger.warning("Received unexpected message in address mode")
                 else:
                     (old_address, cid) = (header[:2][1], header[2:3])
@@ -307,6 +311,7 @@ class EnergyCommunicator(object):
                         logger.info('Registering new Energy Module with address {0}'.format(new_address))
                         module = Module(source=ModuleDTO.Source.GATEWAY,
                                         address=str(new_address),
+                                        module_type=module_type,
                                         hardware_type=HardwareType.PHYSICAL)
                         module.save()
                         energy_module = EnergyModule(number=new_address,

@@ -27,6 +27,34 @@ from ioc import INJECTED, Inject
 logger = logging.getLogger('openmotics')
 
 
+def cmd_feature_thermostats(args):
+    from platform_utils import System
+    System.import_libs()
+
+    from gateway.models import DataMigration, Feature
+    if args.enable and args.disable:
+      logger.error('--enable and --disable are mutually exclusive')
+    if args.enable or args.disable:
+        logger.info('Updating feature thermostats_gateway')
+        enabled = args.enable and not args.disable
+        feature, _ = Feature.get_or_create(name='thermostats_gateway')
+        feature.enabled = enabled
+        feature.save()
+    if args.migrate:
+        logger.info('Updating data migration for thermostats')
+        migration = DataMigration.get_or_none(name='thermostats')
+        if migration:
+            migration.migrated = False
+            migration.save()
+
+    logger.info('')
+    feature = Feature.get_or_none(name='thermostats_gateway')
+    logger.info('    feature:   thermostats_gateway enabled=%s', feature and feature.enabled)
+    migration = DataMigration.get_or_none(name='thermostats')
+    logger.info('    migration: thermostats migrated=%s', migration and migration.migrated)
+    logger.info('')
+
+
 def cmd_factory_reset(args):
     lock_file = constants.get_init_lockfile()
     if os.path.isfile(lock_file) and not args.force:
@@ -110,12 +138,66 @@ def cmd_top(args):
         time.sleep(10)
 
 
+def cmd_scan_energy_bus(args):
+    _ = args
+    from gateway.initialize import setup_minimal_energy_platform
+    from gateway.energy_module_controller import EnergyModuleController
+    setup_minimal_energy_platform()
+
+    @Inject
+    def f(energy_module_controller=INJECTED):  # type: (EnergyModuleController) -> None
+        logger.info('Scanning energy bus...')
+        for module_type, address, firmware_version, hardware_version in energy_module_controller.scan_bus():
+            logger.info('* {0} {1}: {2}{3}'.format(module_type, address, firmware_version, '' if hardware_version is None else ' {0}'.format(hardware_version)))
+        logger.info('Scan complete')
+    f()
+
+
+def cmd_vpn_heartbeat(args):
+    logging.getLogger('openmotics').setLevel(logging.DEBUG)
+    from ioc import Injectable
+    Injectable.value(message_client=None)
+
+    from vpn_service import HeartbeatService
+    service = HeartbeatService()
+
+    for _ in range(60):
+        try:
+            print(service.heartbeat())
+        except Exception:
+            pass
+        finally:
+            time.sleep(10)
+
+
+def cmd_vpn_rotate_client_certs(args):
+    logging.getLogger('openmotics').setLevel(logging.DEBUG)
+    from ioc import Injectable
+    Injectable.value(message_client=None)
+
+    from vpn_service import Cloud, TaskExecutor
+    executor = TaskExecutor(cloud=Cloud())
+    executor.configure_tasks()
+    executor.enqueue({'cloud_enabled': True, 'heartbeat_success': True, 'open_vpn': True, 'update_certs': True})
+    executor.execute_tasks()
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', action='version', version=gateway.__version__)
+parser.set_defaults(func=lambda args: parser.print_help())
 subparsers = parser.add_subparsers()
 
+feature_parser = subparsers.add_parser('feature')
+feature_parser.set_defaults(func=lambda args: feature_parser.print_help())
+feature_subparsers = feature_parser.add_subparsers()
+feature_thermostats_parser = feature_subparsers.add_parser('thermostats')
+feature_thermostats_parser.set_defaults(func=cmd_feature_thermostats)
+feature_thermostats_parser.add_argument('--enable', action='store_true')
+feature_thermostats_parser.add_argument('--disable', action='store_true')
+feature_thermostats_parser.add_argument('--migrate', action='store_true')
+
 operator_parser = subparsers.add_parser('operator')
+operator_parser.set_defaults(func=lambda args: operator_parser.print_help())
 operator_subparsers = operator_parser.add_subparsers()
 factory_reset_parser = operator_subparsers.add_parser('factory-reset')
 factory_reset_parser.set_defaults(func=cmd_factory_reset)
@@ -126,6 +208,16 @@ shell_parser.set_defaults(func=cmd_shell)
 top_parser = operator_subparsers.add_parser('top')
 top_parser.set_defaults(func=cmd_top)
 top_parser.add_argument('-p', '--pid', type=int)
+scan_energy_bus_parser = operator_subparsers.add_parser('scan-energy-bus')
+scan_energy_bus_parser.set_defaults(func=cmd_scan_energy_bus)
+
+vpn_parser = subparsers.add_parser('vpn')
+vpn_parser.set_defaults(func=lambda args: vpn_parser.print_help())
+vpn_subparsers = vpn_parser.add_subparsers()
+heartbeat_parser = vpn_subparsers.add_parser('heartbeat')
+heartbeat_parser.set_defaults(func=cmd_vpn_heartbeat)
+rotate_client_certs_parser = vpn_subparsers.add_parser('rotate-client-certs')
+rotate_client_certs_parser.set_defaults(func=cmd_vpn_rotate_client_certs)
 
 
 def main():

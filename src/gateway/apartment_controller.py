@@ -36,16 +36,16 @@ logger = logging.getLogger(__name__)
 @Singleton
 class ApartmentController(object):
     def __init__(self):
-        self.rebus_controller = None
+        self.rebus_controller = None  # type: Optional[RebusController]
 
     def set_rebus_controller(self, rebus_controller):
-        self.rebus_controller = rebus_controller  # type: RebusController
+        self.rebus_controller = rebus_controller
 
     @staticmethod
     @Inject
     def send_config_change_event(msg, error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
         # type: (str, Dict[str, Any], PubSub) -> None
-        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'Apartment', 'msg': msg}, error=error)
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'apartment', 'msg': msg}, error=error)
         pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
 
     @staticmethod
@@ -107,15 +107,15 @@ class ApartmentController(object):
             raise ItemDoesNotExistException("Cannot save apartment: mailbox ({}) does not exists".format(apartment_dto.mailbox_rebus_id))
 
     def save_apartment(self, apartment_dto):
-        # type: (ApartmentDTO) -> Optional[ApartmentDTO]
+        # type: (ApartmentDTO) -> ApartmentDTO
         self._check_rebus_ids(apartment_dto)
         apartment_orm = ApartmentMapper.dto_to_orm(apartment_dto)
         apartment_orm.save()
         ApartmentController.send_config_change_event('save')
-        return ApartmentController.load_apartment(apartment_orm.id)
+        return ApartmentMapper.orm_to_dto(apartment_orm)
 
     def update_apartment(self, apartment_dto):
-        # type: (ApartmentDTO) -> Optional[ApartmentDTO]
+        # type: (ApartmentDTO) -> ApartmentDTO
         self._check_rebus_ids(apartment_dto)
         if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
             raise RuntimeError('cannot update an apartment without the id being set')
@@ -130,9 +130,9 @@ class ApartmentController(object):
             apartment_orm = ApartmentMapper.dto_to_orm(loaded_apartment_dto)
             apartment_orm.save()
             ApartmentController.send_config_change_event('update')
+            return ApartmentMapper.orm_to_dto(apartment_orm)
         except Exception as e:
             raise RuntimeError('Could not update the user: {}'.format(e))
-        return ApartmentController.load_apartment(apartment_dto.id)
 
     def update_apartments(self, apartment_dtos):
         # type: (List[ApartmentDTO]) -> Optional[List[ApartmentDTO]]

@@ -30,8 +30,9 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 logger = logging.getLogger(__name__)
 
 if False:  # MYPY
-    from typing import Dict
+    from typing import Any, Dict, List
 
+import debug_ignore
 
 @Injectable.named('event_sender')
 @Singleton
@@ -86,13 +87,15 @@ class EventSender(object):
             logger.error('Error sending events to the cloud %s', ex)
 
     def _batch_send_events(self):
-        events = []
+        events = []  # type: List[Any]
         while len(events) < 25:
             try:
                 events.append(self._queue.pop())
             except IndexError:
                 break
         if len(events) > 0:
+            for event in events:
+                debug_ignore.debug("Sending event: {}".format(event))
             self._cloud_client.send_events(events)
             return True
         return False

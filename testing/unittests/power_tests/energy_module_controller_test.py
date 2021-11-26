@@ -22,8 +22,7 @@ import mock
 from datetime import datetime
 from peewee import SqliteDatabase
 from gateway.events import GatewayEvent
-from gateway.enums import EnergyEnums, HardwareType
-from gateway.hal.master_event import MasterEvent
+from gateway.enums import EnergyEnums, HardwareType, ModuleType
 from gateway.pubsub import PubSub
 from gateway.dto import ModuleDTO, EnergyModuleDTO, RealtimeEnergyDTO, TotalEnergyDTO
 from gateway.energy_module_controller import EnergyModuleController
@@ -53,7 +52,8 @@ class EnergyModuleControllerTest(unittest.TestCase):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub,
                             master_controller=None,
-                            maintenance_controller=None)
+                            maintenance_controller=None,
+                            energy_module_updater=None)
         self.energy_data = []  # type: list
         self.serial = RS485(SerialMock(self.energy_data))
         SetUpTestInjections(energy_serial=self.serial)
@@ -71,6 +71,9 @@ class EnergyModuleControllerTest(unittest.TestCase):
     def _setup_module(self, version=EnergyEnums.Version.ENERGY_MODULE, address=1, number=1):
         module = Module(address=address,
                         source=ModuleDTO.Source.GATEWAY,
+                        module_type={EnergyEnums.Version.POWER_MODULE: ModuleType.POWER,
+                                     EnergyEnums.Version.ENERGY_MODULE: ModuleType.ENERGY,
+                                     EnergyEnums.Version.P1_CONCENTRATOR: ModuleType.P1_CONCENTRATOR}[version],
                         hardware_type=HardwareType.PHYSICAL)
         module.save()
         energy_module = EnergyModule(version=version,

@@ -43,8 +43,9 @@ def migrate(migrator, database, fake=False, **kwargs):
         name = CharField(null=True)
         floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
 
-    migrator.remove_model(Floor)  # First the model, then the foreign key
-    migrator.remove_fields(Room, 'floor')
+    # TODO Actually remove this field, the following drops all room_ids on other models for some reason
+    # migrator.remove_fields(Room, 'floor')
+    migrator.remove_model(Floor)
 
 
 def rollback(migrator, database, fake=False, **kwargs):

@@ -109,6 +109,9 @@ class EnergyEnums(object):
                        Version.ENERGY_MODULE: 12,
                        Version.P1_CONCENTRATOR: 8}
     LARGEST_MODULE_TYPE = Version.ENERGY_MODULE  # Update if needed
+    VERSION_TO_STRING = {Version.POWER_MODULE: 'power',
+                         Version.ENERGY_MODULE: 'energy',
+                         Version.P1_CONCENTRATOR: 'p1_concentrator'}
 
 
 class HardwareType(object):
@@ -125,10 +128,13 @@ class ModuleType(object):
     SHUTTER = 'shutter'
     DIM_CONTROL = 'dim_control'
     CAN_CONTROL = 'can_control'
+    MICRO_CAN = 'ucan'
     OPEN_COLLECTOR = 'open_collector'
     ENERGY = 'energy'
     POWER = 'power'
     P1_CONCENTRATOR = 'p1_concentrator'
+    MASTER_CORE = 'master_core'
+    MASTER_CLASSIC = 'master_classic'
     UNKNOWN = 'unknown'
 
 
@@ -191,3 +197,16 @@ class Languages(BaseEnum):
     DE = 'de'
     NL = 'nl'
     FR = 'fr'
+
+
+class UpdateEnums(object):
+    class States(object):
+        ERROR = 'ERROR'
+        UPDATING = 'UPDATING'
+        SKIPPED = 'SKIPPED'
+        OK = 'OK'
+
+    class Modes(object):
+        FORCED = 'FORCED'
+        MANUAL = 'MANUAL'
+        AUTOMATIC = 'AUTOMATIC'

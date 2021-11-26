@@ -97,6 +97,7 @@ class ThermostatControllerMaster(ThermostatController):
                                      {'id': thermostat_id,
                                       'status': {'preset': status['preset'],
                                                  'state': status['state'].upper(),
+                                                 'mode': status['mode'].upper(),
                                                  'current_setpoint': status['current_setpoint'],
                                                  'actual_temperature': status['actual_temperature'],
                                                  'output_0': status['output_0'],
@@ -158,7 +159,7 @@ class ThermostatControllerMaster(ThermostatController):
                 setattr(ref_thermostat, 'auto_{0}'.format(day), schedule_dto)
             incorrect_timing = '42:30' in [schedule_dto.start_day_1, schedule_dto.end_day_1,
                                            schedule_dto.start_day_2, schedule_dto.end_day_2]
-            incorrect_temps = None in [schedule_dto.temp_day_1, schedule_dto.temp_day_2, schedule_dto.temp_night]
+            incorrect_temps = 0.0 in [schedule_dto.temp_day_1, schedule_dto.temp_day_2, schedule_dto.temp_night]
             if incorrect_temps or incorrect_timing:
                 schedule_dto.start_day_1 = ThermostatControllerMaster.DEFAULT_TIMINGS[0]
                 schedule_dto.end_day_1 = ThermostatControllerMaster.DEFAULT_TIMINGS[1]
@@ -464,9 +465,11 @@ class ThermostatControllerMaster(ThermostatController):
             logger.warning('Master thermostats are disabled: %s', master_enable)
             return
 
-        def get_automatic_setpoint(_mode):
+        def get_automatic_setpoint_preset(_mode):
             _automatic = bool(_mode & 1 << 3)
-            return _automatic, 0 if _automatic else (_mode & 0b00000111)
+            _setpoint = 0 if _automatic else (_mode & 0b00000111)
+            _preset = ThermostatControllerMaster._setpoint_to_preset(_setpoint)
+            return _automatic, _setpoint, _preset
 
         try:
             thermostat_info = self._master_controller.get_thermostats()
@@ -480,7 +483,7 @@ class ThermostatControllerMaster(ThermostatController):
         mode = thermostat_info['mode']
         thermostats_on = bool(mode & 1 << 7)
         cooling = bool(mode & 1 << 4)
-        automatic, setpoint = get_automatic_setpoint(thermostat_mode['mode0'])
+        automatic, setpoint, _ = get_automatic_setpoint_preset(thermostat_mode['mode0'])
 
         try:
             if cooling:
@@ -497,7 +500,7 @@ class ThermostatControllerMaster(ThermostatController):
             thermostat_dto = self._thermostats_config.get(thermostat_id)  # type: Optional[ThermostatDTO]
             if thermostat_dto and thermostat_dto.in_use:
                 t_mode = thermostat_mode['mode{0}'.format(thermostat_id)]
-                t_automatic, t_setpoint = get_automatic_setpoint(t_mode)
+                t_automatic, t_setpoint, t_preset = get_automatic_setpoint_preset(t_mode)
                 thermostat = {'id': thermostat_id,
                               'act': thermostat_info['tmp{0}'.format(thermostat_id)].get_temperature(),
                               'csetp': thermostat_info['setp{0}'.format(thermostat_id)].get_temperature(),
@@ -505,6 +508,7 @@ class ThermostatControllerMaster(ThermostatController):
                               'mode': t_mode,
                               'automatic': t_automatic,
                               'setpoint': t_setpoint,
+                              'preset': t_preset,
                               'name': thermostat_dto.name,
                               'sensor_nr': thermostat_dto.sensor,
                               'airco': 1 if aircos.status[thermostat_id] else 0}
@@ -557,3 +561,13 @@ class ThermostatControllerMaster(ThermostatController):
                                          cooling=master_status['cooling'],
                                          mode=master_status['mode'],
                                          statusses=statusses)]
+
+    @staticmethod
+    def _setpoint_to_preset(setpoint):
+        if setpoint == 3:
+            return 'AWAY'
+        if setpoint == 4:
+            return 'VACATION'
+        if setpoint == 5:
+            return 'PARTY'
+        return 'AUTO'
