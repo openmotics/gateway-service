@@ -18,15 +18,15 @@ PubSub tests
 
 from __future__ import absolute_import
 
+import time
 import unittest
 
 from mock import Mock, patch, call
 
 from gateway.events import GatewayEvent, EsafeEvent
 from gateway.pubsub import PubSub
+from gateway.hal.master_event import MasterEvent
 from ioc import SetTestMode, SetUpTestInjections
-
-from cloud.events import EventSender
 
 
 class PubSubTest(unittest.TestCase):
@@ -98,3 +98,58 @@ class PubSubTest(unittest.TestCase):
         self.pubsub._publish_all_events(blocking=False)
         self.sub_gateway_mock.assert_not_called()
         self.sub_esafe_mock.assert_called_once_with(event)
+
+    def test_pubsub_events_mixed(self):
+        event_data = {'data': 'some_data'}
+        master_event = MasterEvent(MasterEvent.Types.INPUT_CHANGE, event_data)
+        gw_event = GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, event_data)
+        esafe_event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, event_data)
+
+        def master_callback(event):
+            _ = event
+            pass
+        master_callback_mock = Mock(master_callback)
+
+        def gateway_callback(event):
+            _ = event
+            pass
+        gateway_callback_mock = Mock(gateway_callback)
+
+        def esafe_callback(event):
+            _ = event
+            pass
+        esafe_callback_mock = Mock(esafe_callback)
+
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.INPUT, master_callback_mock)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, gateway_callback_mock)
+        self.pubsub.subscribe_esafe_events(PubSub.EsafeTopics.LOCK, esafe_callback_mock)
+
+        self.pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+        self.pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gw_event)
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.LOCK, esafe_event)
+
+        self.pubsub._publish_all_events(blocking=False)
+
+        master_callback_mock.assert_called_once_with(master_event)
+        gateway_callback_mock.assert_called_once_with(gw_event)
+        esafe_callback_mock.assert_called_once_with(esafe_event)
+
+        master_callback_mock.reset_mock()
+        gateway_callback_mock.reset_mock()
+        esafe_callback_mock.reset_mock()
+
+        # Test the time constraint
+        self.pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+        self.pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gw_event)
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.LOCK, esafe_event)
+
+        t_start = time.time()
+        self.pubsub._publish_all_events(blocking=True)  # Set the wait for end of queue to be true
+        t_end = time.time()
+        t_delta = t_end - t_start
+        self.assertLess(t_delta, 0.5)  # assert that all the events are send in less than half a second
+
+
+        master_callback_mock.assert_called_once_with(master_event)
+        gateway_callback_mock.assert_called_once_with(gw_event)
+        esafe_callback_mock.assert_called_once_with(esafe_event)

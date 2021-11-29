@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 if False:  # MYPY
     from typing import Any, Dict, List
 
-import debug_ignore
 
 @Injectable.named('event_sender')
 @Singleton
@@ -94,8 +93,6 @@ class EventSender(object):
             except IndexError:
                 break
         if len(events) > 0:
-            for event in events:
-                debug_ignore.debug("Sending event: {}".format(event))
             self._cloud_client.send_events(events)
             return True
         return False
