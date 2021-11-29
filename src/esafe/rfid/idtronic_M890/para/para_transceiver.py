@@ -20,8 +20,6 @@ import serial
 from threading import Thread
 from esafe.rfid.idtronic_M890.para.para_packet import ParaPacket
 
-import debug_ignore
-
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +74,6 @@ class ParaSender(object):
                 if packet.is_complete():
                     if packet.crc_check():
                         logger.debug('received a para-packet: {}'.format(packet.get_oneliner()))
-                        debug_ignore.debug("Received para packet: {}".format(packet.get_oneliner()))
                         self.callback(packet)
                         packet = ParaPacket()
                     else:

@@ -29,7 +29,6 @@ from gateway.mappers import DeliveryMapper
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
-import debug_ignore
 
 if False:  # MyPy
     from typing import List, Optional, Dict, Any
@@ -69,7 +68,6 @@ class DeliveryController(object):
     @staticmethod
     def load_deliveries(user_id=None, delivery_type=None, history=False, before_id=None, limit=100):
         # type: (Optional[int], Optional[str], bool, int, int) -> List[DeliveryDTO]
-        debug_ignore.debug('Loading deliveries: {}'.format(locals()))
         deliveries = []
         query = Delivery.select()
         # filter on user id when needed
