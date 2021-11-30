@@ -29,7 +29,7 @@ pipeline {
             }
             steps {
                 sh '''
-                mypy --install-types --non-interactive src --junit-xml testing/gw-unit-reports/mypy-report.xml
+                mypy src --junit-xml testing/gw-unit-reports/mypy-report.xml
                 '''
             }
             post {
