@@ -64,7 +64,7 @@ class UpdateController(object):
 
     CERTIFICATES_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('certificates', '{0}')  # e.g. /x/versions/certificates/{0}
     CERTIFICATES_CURRENT = VERSIONS_BASE_TEMPLATE.format('certificates', 'current')  # e.g. /x/versions/certificates/current
-    CERTIFICATES_VPN = VERSIONS_BASE_TEMPLATE.format('certificates', 'vpn')  # e.g. /x/versions/certificates/vpn
+    CERTIFICATES_OPENVPN = VERSIONS_BASE_TEMPLATE.format('certificates', 'openvpn')  # e.g. /x/versions/certificates/openvpn
 
     SERVICE_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('service', '{0}')  # e.g. /x/versions/service/{0}
     SERVICE_CURRENT = VERSIONS_CURRENT_TEMPLATE.format('service')  # e.g. /x/versions/service/current
@@ -794,7 +794,7 @@ class UpdateController(object):
 
     @staticmethod
     def _move_openvpn_certificates(logger):  # type: (Logger) -> None
-        vpn_prefix = UpdateController.CERTIFICATES_VPN
+        vpn_prefix = UpdateController.CERTIFICATES_OPENVPN
         settings = {'ca': os.path.join(vpn_prefix, 'ca.crt'),
                     'cert': os.path.join(vpn_prefix, 'client.crt'),
                     'key': os.path.join(vpn_prefix, 'client.key')}
@@ -824,7 +824,7 @@ class UpdateController(object):
             shutil.copy(src=os.path.join(os.path.dirname(UpdateController.OPENVPN_CONFIG), file),
                         dst=os.path.join(unknown, file))
 
-        for link in (UpdateController.CERTIFICATES_CURRENT, UpdateController.CERTIFICATES_VPN):
+        for link in (UpdateController.CERTIFICATES_CURRENT, UpdateController.CERTIFICATES_OPENVPN):
             if os.path.exists(link):
                 os.unlink(link)
             os.symlink('unknown', link)

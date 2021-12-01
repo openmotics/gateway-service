@@ -222,7 +222,7 @@ class Gateway(object):
 class CertificateFiles(object):
     CURRENT = 'current'
     PREVIOUS = 'previous'
-    VPN = 'vpn'
+    OPENVPN = 'openvpn'
 
     FILES = {'ca': 'ca.crt',
              'certificate': 'client.crt',
@@ -231,7 +231,7 @@ class CertificateFiles(object):
     def __init__(self):
         self.current = self.cert_path(CertificateFiles.CURRENT)
         self.previous = self.cert_path(CertificateFiles.PREVIOUS)
-        self.vpn = self.cert_path(CertificateFiles.VPN)
+        self.openvpn = self.cert_path(CertificateFiles.OPENVPN)
 
     @staticmethod
     def cert_path(*args):
@@ -240,13 +240,13 @@ class CertificateFiles(object):
     @staticmethod
     def get_versions():
         versions = set(x.split(os.path.sep)[-1] for x in glob.glob(CertificateFiles.cert_path('*')))
-        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.VPN])
+        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.OPENVPN])
         return versions
 
     def activate_vpn(self, rollback=False):
         if rollback:
             try:
-                vpn_target = os.readlink(self.vpn).split(os.path.sep)[-1]
+                vpn_target = os.readlink(self.openvpn).split(os.path.sep)[-1]
                 logger.info('Marking certificates %s as failed', vpn_target)
                 marker = self.cert_path(vpn_target, '.failure')
                 if not os.path.exists(marker):
@@ -278,7 +278,7 @@ class CertificateFiles(object):
                 logger.info('Rolling back vpn certificates %s -> %s', vpn_target, target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
-                os.rename(temp_link, self.vpn)
+                os.rename(temp_link, self.openvpn)
                 return True
         else:
             try:
@@ -286,7 +286,7 @@ class CertificateFiles(object):
             except Exception:
                 target = None
             try:
-                vpn_target = os.readlink(self.vpn).split(os.path.sep)[-1]
+                vpn_target = os.readlink(self.openvpn).split(os.path.sep)[-1]
             except Exception:
                 vpn_target = None
 
@@ -294,13 +294,13 @@ class CertificateFiles(object):
                 logger.info('Activating vpn certificates %s', target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
-                os.rename(temp_link, self.vpn)
+                os.rename(temp_link, self.openvpn)
                 return True
         return False
 
 
     def setup_links(self):
-        if all(os.path.exists(x) for x in (self.current, self.vpn)):
+        if all(os.path.exists(x) for x in (self.current, self.openvpn)):
             return
 
         certificates = self.cert_path()
@@ -314,7 +314,7 @@ class CertificateFiles(object):
                 latest = version
                 break
 
-        for link in (self.current, self.vpn):
+        for link in (self.current, self.openvpn):
             if not os.path.exists(link):
                 if latest:
                     temp_link = tempfile.mktemp(dir=self.cert_path())
