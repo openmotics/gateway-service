@@ -922,7 +922,7 @@ class UpdateController(object):
             previous_version = None  # type: Optional[str]
             for version_path in glob.glob(base_template.format('*')):
                 version = version_path.strip('/').rsplit('/', 1)[-1]
-                if 'tgz' in version:
+                if 'tgz' in version or version.endswith('.failure'):
                     continue
                 if version == 'current':
                     current_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
