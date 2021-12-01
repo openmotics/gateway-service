@@ -630,7 +630,9 @@ class UpdateController(object):
 
                 # Copy `etc`
                 logger.info('Copy `etc` folder')
-                shutil.copytree(os.path.join(old_version_folder, 'etc'), os.path.join(new_version_folder, 'etc'))
+                shutil.copytree(os.path.join(old_version_folder, 'etc'),
+                                os.path.join(new_version_folder, 'etc'),
+                                symlinks=True)
 
                 # Restore plugins
                 logger.info('Copy plugins...')
