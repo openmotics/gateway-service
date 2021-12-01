@@ -9,6 +9,7 @@ RUN if command -v virtualenv; then\
   else\
     python3 -m venv venv;\
     venv/bin/pip install mypy lxml;\
+    venv/bin/pip install types-all; \
   fi
 
 COPY requirements.txt requirements-py3.txt /app/

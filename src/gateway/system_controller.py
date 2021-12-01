@@ -71,9 +71,10 @@ class SystemController(BaseController):
 
     def get_timezone(self):
         try:
-            path = os.path.realpath(constants.get_timezone_file())
+            path = os.readlink(constants.get_timezone_file())
             if not path.startswith('/usr/share/zoneinfo/'):
                 # Reset timezone to default setting
+                logger.error('Unexpected timezone path {0}, reset to UTC'.format(path))
                 self.set_timezone('UTC')
                 return 'UTC'
             if path.startswith('/usr/share/zoneinfo/posix'):
@@ -81,9 +82,11 @@ class SystemController(BaseController):
                 return path[26:]
             return path[20:]
         except Exception:
+            logger.exception('Could not parse current timezone, reset to UTC')
             return 'UTC'
 
     def get_python_timezone(self):
+        _ = self
         return time.tzname[0]
 
     # Backup and restore functions
