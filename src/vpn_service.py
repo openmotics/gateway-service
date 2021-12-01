@@ -222,7 +222,7 @@ class Gateway(object):
 class CertificateFiles(object):
     CURRENT = 'current'
     PREVIOUS = 'previous'
-    VPN = 'vpn'
+    OPENVPN = 'openvpn'
 
     FILES = {'ca': 'ca.crt',
              'certificate': 'client.crt',
@@ -231,7 +231,7 @@ class CertificateFiles(object):
     def __init__(self):
         self.current = self.cert_path(CertificateFiles.CURRENT)
         self.previous = self.cert_path(CertificateFiles.PREVIOUS)
-        self.vpn = self.cert_path(CertificateFiles.VPN)
+        self.openvpn = self.cert_path(CertificateFiles.OPENVPN)
 
     @staticmethod
     def cert_path(*args):
@@ -240,13 +240,13 @@ class CertificateFiles(object):
     @staticmethod
     def get_versions():
         versions = set(x.split(os.path.sep)[-1] for x in glob.glob(CertificateFiles.cert_path('*')))
-        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.VPN])
+        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.OPENVPN])
         return versions
 
     def activate_vpn(self, rollback=False):
         if rollback:
             try:
-                vpn_target = os.readlink(self.vpn).split(os.path.sep)[-1]
+                vpn_target = os.readlink(self.openvpn).split(os.path.sep)[-1]
                 logger.info('Marking certificates %s as failed', vpn_target)
                 marker = self.cert_path(vpn_target, '.failure')
                 if not os.path.exists(marker):
@@ -256,25 +256,29 @@ class CertificateFiles(object):
                 vpn_target = None
 
             versions = self.get_versions()
+            target = None
             try:
                 current_target = os.readlink(self.current).split(os.path.sep)[-1]
+                if os.path.exists(self.cert_path(current_target, '.failure')):
+                    current_target = None
+                else:
+                    target = current_target
             except Exception:
                 current_target = None
-            target = None
-            if os.path.exists(self.cert_path(current_target, '.failure')):
+
+            if target is None and current_target is None:
                 for version in sorted(versions, reverse=True):
                     if not os.path.exists(self.cert_path(version, '.failure')):
                         target = version
                         break
-            else:
-                target = current_target
+
             if target is None:
                 target = current_target
             if target != vpn_target:
                 logger.info('Rolling back vpn certificates %s -> %s', vpn_target, target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
-                os.rename(temp_link, self.vpn)
+                os.rename(temp_link, self.openvpn)
                 return True
         else:
             try:
@@ -282,7 +286,7 @@ class CertificateFiles(object):
             except Exception:
                 target = None
             try:
-                vpn_target = os.readlink(self.vpn).split(os.path.sep)[-1]
+                vpn_target = os.readlink(self.openvpn).split(os.path.sep)[-1]
             except Exception:
                 vpn_target = None
 
@@ -290,13 +294,13 @@ class CertificateFiles(object):
                 logger.info('Activating vpn certificates %s', target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
-                os.rename(temp_link, self.vpn)
+                os.rename(temp_link, self.openvpn)
                 return True
         return False
 
 
     def setup_links(self):
-        if all(os.path.exists(x) for x in (self.current, self.vpn)):
+        if all(os.path.exists(x) for x in (self.current, self.openvpn)):
             return
 
         certificates = self.cert_path()
@@ -310,7 +314,7 @@ class CertificateFiles(object):
                 latest = version
                 break
 
-        for link in (self.current, self.vpn):
+        for link in (self.current, self.openvpn):
             if not os.path.exists(link):
                 if latest:
                     temp_link = tempfile.mktemp(dir=self.cert_path())
@@ -753,35 +757,12 @@ class OpenVPNTask(object):
             logger.info('Closing vpn...')
             Util.stop_vpn()
             logger.info('Closing vpn... Done')
-        status = Util.check_vpn() and self._check_status()
+        status = Util.check_vpn() and Util.check_vpn_route()
         if self.open != status:
             logger.info('OpenVPN changed: open=%s', status)
             self.open = status
 
         yield (OMBusEvents.VPN_OPEN, status)
-
-    def _check_status(self):
-        """ Checks if the VPN tunnel is connected """
-        return True
-        try:
-            routes = subprocess.check_output('ip r | grep tun | grep via || true', shell=True).strip()
-            # example output:
-            # 10.0.0.0/24 via 10.37.0.5 dev tun0\n
-            # 10.37.0.1 via 10.37.0.5 dev tun0
-            result = False
-            if routes:
-                if not isinstance(routes, str):  # to ensure python 2 and 3 compatibility
-                    routes = routes.decode()
-
-                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
-                for vpn_server in vpn_servers:
-                    if Util.ping(vpn_server, verbose=False):
-                        result = True
-                        break
-            return result
-        except Exception as ex:
-            logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
-            return False
 
 
 class UpdateCertsTask(object):
@@ -880,6 +861,26 @@ class Util(object):
     def check_vpn():
         """ Check if openvpn is running """
         return subprocess.call(Util.check_cmd, shell=True) == 0
+
+    @staticmethod
+    def check_vpn_route():
+        """ Checks if the VPN tunnel is connected """
+        try:
+            routes = subprocess.check_output('ip r | grep tun | grep via || true', shell=True).decode().strip()
+            # example output:
+            # 10.0.0.0/24 via 10.37.0.5 dev tun0\n
+            # 10.37.0.1 via 10.37.0.5 dev tun0
+            result = False
+            if routes:
+                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
+                for vpn_server in vpn_servers:
+                    if Util.ping(vpn_server, verbose=False):
+                        result = True
+                        break
+            return result
+        except Exception as ex:
+            logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
+            return False
 
     @staticmethod
     def ping(target, verbose=True):
