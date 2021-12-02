@@ -29,6 +29,7 @@ from gateway.mappers import DeliveryMapper
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
+
 if False:  # MyPy
     from typing import List, Optional, Dict, Any
     from gateway.user_controller import UserController
