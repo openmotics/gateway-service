@@ -379,7 +379,7 @@ class DeliveryControllerTest(unittest.TestCase):
         self.assertEqual(2, len(result))
 
         result = self.controller.load_deliveries(history=True)
-        self.assertEqual(3, len(result))
+        self.assertEqual(1, len(result))
 
         result = self.controller.load_deliveries_filter(include_picked_up=True)
         self.assertEqual(3, len(result))
