@@ -367,55 +367,57 @@ class UpdateController(object):
                 os.unlink(UpdateController.SERVICE_PREVIOUS)
             os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
 
+            # Prepare new code for first startup
+            logger.info('Preparing for first startup')
+            UpdateController._execute(command=['python',
+                                               os.path.join(new_version_folder, 'python', 'openmotics_update.py'),
+                                               '--prepare-gateway-service-for-first-startup',
+                                               new_version],
+                                      logger=logger)
+
             # Symlink to new version
             logger.info('Symlink to new version')
             os.unlink(UpdateController.SERVICE_CURRENT)
             os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
 
-            # Prepare new code for first startup
-            logger.info('Preparing for first startup')
-            UpdateController._execute(command=['python',
-                                               os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
-                                               '--prepare-gateway-service-for-first-startup',
-                                               new_version],
-                                      logger=logger)
-        except Exception as ex:
-            logger.exception('Unexpected exception setting up new version: {0}'.format(ex))
-            raise
-        finally:
             # Startup
             logger.info('Starting services')
             System.run_service_action('start', 'openmotics')
             System.run_service_action('start', 'vpn_service')
 
-        # Health-check
-        logger.info('Checking health')
-        update_successful = UpdateController._check_gateway_service_health(logger=logger)
+            # Health-check
+            logger.info('Checking health')
+            update_successful = UpdateController._check_gateway_service_health(logger=logger)
 
-        if not update_successful:
-            logger.info('Update failed, restoring')
-            # Stop services again
-            System.run_service_action('stop', 'openmotics')
-            System.run_service_action('stop', 'vpn_service')
-            # Symlink rollback to old version
-            os.unlink(UpdateController.SERVICE_CURRENT)
-            os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+            # Rollback to old version
+            if not update_successful:
+                logger.info('Update failed, restoring')
+                System.run_service_action('stop', 'openmotics')
+                System.run_service_action('stop', 'vpn_service')
+                os.unlink(UpdateController.SERVICE_CURRENT)
+                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+                # Raise with actual reason
+                raise RuntimeError('Failed to start {0}'.format(new_version))
+
+            # Cleanup
+            UpdateController._clean_old_versions(base_template=UpdateController.SERVICE_BASE_TEMPLATE,
+                                                 logger=logger)
+
+            # Update markers
+            UpdateController._touch(success_marker)
+            logger.info('Update completed')
+        except Exception as ex:
+            logger.exception('Unexpected exception setting up new version: {0}'.format(ex))
+            if not os.path.exists(UpdateController.SERVICE_CURRENT):
+                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
             # Start services again
             System.run_service_action('start', 'openmotics')
             System.run_service_action('start', 'vpn_service')
-            # Raise with actual reason
-            raise RuntimeError('Failed to start {0}'.format(new_version))
+            raise
+        finally:
+            if os.path.exists(running_marker):
+                os.remove(running_marker)  # Cleanup running marker
 
-        # Cleanup
-        UpdateController._clean_old_versions(base_template=UpdateController.SERVICE_BASE_TEMPLATE,
-                                             logger=logger)
-
-        # Update markers
-        UpdateController._touch(success_marker)
-        if os.path.exists(running_marker):
-            os.remove(running_marker)
-
-        logger.info('Update completed')
 
     @staticmethod
     def update_gateway_service_prepare_for_first_startup(logger):
@@ -922,7 +924,7 @@ class UpdateController(object):
             previous_version = None  # type: Optional[str]
             for version_path in glob.glob(base_template.format('*')):
                 version = version_path.strip('/').rsplit('/', 1)[-1]
-                if 'tgz' in version:
+                if 'tgz' in version or version.endswith('.failure'):
                     continue
                 if version == 'current':
                     current_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]
