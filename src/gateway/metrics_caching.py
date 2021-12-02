@@ -53,10 +53,14 @@ class MetricsCacheController(object):
 
     def _execute_unlocked(self, *args, **kwargs):
         try:
-            return self._cursor.execute(*args, **kwargs)
+            # the reason for the type ignore:
+            # https://stackoverflow.com/questions/47493293/why-does-mypy-say-i-have-too-many-arguments
+            # https://github.com/python/mypy/issues/4290
+            # TL;DR: __init__ is defined after the execute function here, seems to be a bug in mypy...
+            return self._cursor.execute(*args, **kwargs)  # type: ignore
         except sqlite3.OperationalError:
             time.sleep(randint(1, 20) / 10.0)
-            return self._cursor.execute(*args, **kwargs)
+            return self._cursor.execute(*args, **kwargs)  # type: ignore
 
     def _check_tables(self):
         """

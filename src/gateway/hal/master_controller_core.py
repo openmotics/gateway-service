@@ -1313,6 +1313,8 @@ class MasterCoreController(MasterController):
 
         cycle = [False]  # type: List[Union[bool, float]]
         if power_on:
+            self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
+                                                      active=True)
             cycle += [2.0, True]
         Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, cycle)
         self._master_communicator.reset_communication_statistics()
@@ -1382,15 +1384,18 @@ class MasterCoreController(MasterController):
         # TODO: Include factory of CAN Controls
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         data_set = {page: bytearray([255] * page_length) for page in range(pages)}
-        # data_set[0][0] = 1  # Needed to validate Brain+ with no front panel attached
         self._restore(data_set)
 
     def _restore(self, data):  # type: (Dict[int, bytearray]) -> None
         amount_of_pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         current_page = amount_of_pages - 1
         while current_page >= 0:
-            page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
-            self._memory_file.write({page_address: data[current_page]})
+            if current_page == 0:
+                page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=128)
+                self._memory_file.write({page_address: data[current_page][:128]})
+            else:
+                page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
+                self._memory_file.write({page_address: data[current_page]})
             current_page -= 1
         self._memory_file.activate()
         self.cold_reset()  # Cold reset, enforcing a reload of all settings

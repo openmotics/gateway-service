@@ -118,11 +118,9 @@ class PubSub(object):
             master_topic = event_structure.topic  # type: MASTER_TOPIC  # type: ignore
             self._publish_master_event(master_topic, event_structure.event)
         elif isinstance(event_structure.event, GatewayEvent):
-            # elif event_structure.namespace == PubSub.EventNamespace.GATEWAY:
             gateway_topic = event_structure.topic  # type: GATEWAY_TOPIC  # type: ignore
             self._publish_gateway_event(gateway_topic, event_structure.event)
         elif isinstance(event_structure.event, EsafeEvent):
-            # elif event_structure.namespace == PubSub.EventNamespace.ESAFE:
             esafe_topic = event_structure.topic  # type: ESAFE_TOPIC  # type: ignore
             self._publish_esafe_event(esafe_topic, event_structure.event)
 

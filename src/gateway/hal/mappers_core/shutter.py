@@ -58,7 +58,7 @@ class ShutterMapper(object):
             # TODO: Currently denonify as byte, since high-level code most likely assumes this is a byte
             dto_value = getattr(shutter_dto, field)
             if dto_value is None:
-                new_data[field] = ShutterMapper.BYTE_MAX * 10
+                new_data[field] = ShutterMapper.WORD_MAX
             else:
                 new_data[field] = dto_value * 10
         groups = {}
