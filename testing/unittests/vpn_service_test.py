@@ -331,7 +331,7 @@ class VPNServiceTest(TestCase):
              mock.patch.object(Util, 'stop_vpn') as stop_vpn:
             # Attempt rollback
             context = {'cloud_enabled': True, 'heartbeat_success': True, 'connectivity_success': True, 'open_vpn': True}
-            task.connect_retries = 10
+            task.connect_retries = 50
             self.assertEqual(list(task.run(context)), [('VPN_OPEN', True)])
             activate.assert_called_with(rollback=True)
 

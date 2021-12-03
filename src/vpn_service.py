@@ -733,7 +733,7 @@ class OpenVPNTask(object):
                 # Only attempt rollbacks when cloud is accessible
                 if self.open:
                     self.connect_retries = 0
-                elif self.connect_retries < 5:
+                elif self.connect_retries < 32:
                     logger.info('Waiting for VPN connection...')
                     self.connect_retries += 1
                 else:
