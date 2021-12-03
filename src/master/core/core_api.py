@@ -20,7 +20,7 @@ from __future__ import absolute_import
 from master.core.core_command import CoreCommandSpec
 from master.core.fields import (ByteField, WordField, ByteArrayField, WordArrayField, LiteralBytesField,
                                 AddressField, CharField, PaddingField, VersionField, TemperatureArrayField,
-                                HumidityArrayField, RawByteArrayField, SerialNumberField, Field)
+                                HumidityArrayField, RawByteArrayField, SerialNumberField, Field, UInt32Field)
 
 
 class CoreAPI(object):
@@ -211,6 +211,14 @@ class CoreAPI(object):
         return CoreCommandSpec(instruction='SI',
                                request_fields=[ByteField('module_nr'), LiteralBytesField(instruction)],
                                response_fields=[ByteField('module_nr'), PaddingField(1), field])
+
+    @staticmethod
+    def pulse_counter_values():  # type: () -> CoreCommandSpec
+        """ Receives pulse counter values for a given module """
+        return CoreCommandSpec(instruction='PC',
+                               request_fields=[WordField('input_nr'), LiteralBytesField(1)],
+                               response_fields=[WordField('input_nr'), PaddingField(1)] +
+                                               [UInt32Field('counter_{0}'.format(i), crc16=True) for i in range(8)])
 
     # Memory (EEPROM/FRAM) actions
 

@@ -58,7 +58,9 @@ class PulseCounterControllerTest(unittest.TestCase):
 
     def test_pulse_counter_up_down(self):
         """ Test adding and removing pulse counters. """
-        SetUpTestInjections(master_controller=Mock(),
+        master_controller = Mock()
+        master_controller.get_amount_of_pulse_counters = lambda: 24
+        SetUpTestInjections(master_controller=master_controller,
                             maintenance_controller=Mock())
         controller = PulseCounterController()
 
@@ -135,6 +137,7 @@ class PulseCounterControllerTest(unittest.TestCase):
                 master_pulse_counters[dto.id] = dto
 
         master_controller_mock = Mock()
+        master_controller_mock.get_amount_of_pulse_counters = lambda: 24
         master_controller_mock.load_pulse_counter = lambda pulse_counter_id: master_pulse_counters[pulse_counter_id]
         master_controller_mock.save_pulse_counters = _save_pulse_counters
 

@@ -202,7 +202,7 @@ class MasterDummyController(MasterController):
         return []
 
     def get_pulse_counter_values(self):
-        # type: () -> Dict[int, int]
+        # type: () -> Dict[int, Optional[int]]
         return {}
 
     def load_group_actions(self):

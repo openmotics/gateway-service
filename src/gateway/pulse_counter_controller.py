@@ -25,6 +25,7 @@ from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
 from gateway.models import PulseCounter, Room
 from gateway.mappers import PulseCounterMapper
+from platform_utils import Platform
 
 if False:  # MYPY
     from typing import List, Tuple, Dict, Optional
@@ -51,15 +52,19 @@ class PulseCounterController(BaseController):
         logger.info('ORM sync (PulseCounter)')
 
         try:
+            ids = []
             for pulse_counter_dto in self._master_controller.load_pulse_counters():
                 pulse_counter_id = pulse_counter_dto.id
+                ids.append(pulse_counter_id)
                 pulse_counter = PulseCounter.get_or_none(number=pulse_counter_id)
                 if pulse_counter is None:
                     pulse_counter = PulseCounter(number=pulse_counter_id,
                                                  name='PulseCounter {0}'.format(pulse_counter_id),
                                                  source='master',
-                                                 persistent=False)
+                                                 persistent=pulse_counter_dto.persistent)
                     pulse_counter.save()
+            PulseCounter.delete().where((PulseCounter.source == 'master') &
+                                        (PulseCounter.number.not_in(ids))).execute()
             duration = time.time() - start
             logger.info('ORM sync (PulseCounter): completed after {0:.1f}s'.format(duration))
         except CommunicationTimedOutException as ex:
@@ -121,13 +126,12 @@ class PulseCounterController(BaseController):
         self._master_controller.save_pulse_counters(pulse_counters_to_save)
 
     def set_amount_of_pulse_counters(self, amount):  # type: (int) -> int
-        _ = self
         # This does not make a lot of sense in an ORM driven implementation, but is for legacy purposes.
         # The legacy implementation heavily depends on the number (legacy id) and the fact that there should be no
         # gaps between them. If there are gaps, legacy upstream code will most likely break.
         # TODO: Fix legacy implementation once the upstream can manage this better
 
-        amount_of_master_pulse_counters = PulseCounter.select().where(PulseCounter.source == 'master').count()
+        amount_of_master_pulse_counters = self._master_controller.get_amount_of_pulse_counters()
         if amount < amount_of_master_pulse_counters:
             raise ValueError('Amount should be >= {0}'.format(amount_of_master_pulse_counters))
 
@@ -149,8 +153,10 @@ class PulseCounterController(BaseController):
         return amount
 
     def get_amount_of_pulse_counters(self):  # type: () -> int
-        _ = self
-        return PulseCounter.select(fn.Max(PulseCounter.number)).scalar() + 1
+        amount_of_master_pulse_counters = self._master_controller.get_amount_of_pulse_counters()
+        amount_of_pulse_counters_in_orm = PulseCounter.select(fn.Max(PulseCounter.number)).scalar() + 1
+        return max(amount_of_pulse_counters_in_orm,
+                   amount_of_master_pulse_counters)
 
     def set_value(self, pulse_counter_id, value):  # type: (int, int) -> int
         pulse_counter = PulseCounter.get(number=pulse_counter_id)
