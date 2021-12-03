@@ -34,12 +34,15 @@ class InputMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (InputConfiguration) -> InputDTO
-        device_type_mapping = {'b': 'I'}  # 'b' is used for CAN-inputs
+        module_type = orm_object.module.device_type
+        if module_type == 'b':
+            module_type = 'I'  # Emulated inputs are returned as physical/real
+        if '.000.000.' in orm_object.module.address:
+            module_type = 'I'  # Internal inputs are returned as physical/real
         action, basic_actions = InputMapper.core_input_configuration_to_classic_actions(orm_object)
         return InputDTO(id=orm_object.id,
                         name=orm_object.name,
-                        module_type=device_type_mapping.get(orm_object.module.device_type,
-                                                            orm_object.module.device_type),
+                        module_type=module_type,
                         action=action,
                         basic_actions=basic_actions,
                         invert=not orm_object.input_config.normal_open,

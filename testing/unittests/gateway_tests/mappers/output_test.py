@@ -29,7 +29,9 @@ class OutputMapperTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.memory_map = {0: bytearray([0, 1])}
+        self.memory_map = {i: bytearray([255] * 256) for i in range(512)}
+        self.memory_map[0][0] = 0
+        self.memory_map[0][1] = 1
 
         def _read(addresses, read_through=False):
             _ = read_through
