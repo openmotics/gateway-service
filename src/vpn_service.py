@@ -660,7 +660,7 @@ class ConnectivityTask(object):
     def run(self, context):
         logger.debug('Running connectivity task...')
         timeout = time.time() - CHECK_CONNECTIVITY_TIMEOUT
-        if context['heartbeat_success']:
+        if context['cloud_enabled'] and context['heartbeat_success']:
             if self.last_heartbeat is None or self.last_heartbeat < timeout:
                 logger.info('Heartbeat recovered')
             self.last_heartbeat = time.time()
@@ -773,6 +773,8 @@ class UpdateCertsTask(object):
         logger.debug('Running update certs task...')
         changed = False
         # Requires cloud to be accessible
+        if not context['cloud_enabled']:
+            return
         if not context['heartbeat_success']:
             return
 
