@@ -883,7 +883,7 @@ class MasterCoreController(MasterController):
     @staticmethod
     def _generate_pulse_counter_dto(pulse_counter_id):
         return PulseCounterDTO(id=pulse_counter_id,
-                               name='PulseCounter {0}'.format(pulse_counter_id),
+                               name='PulseCounter Input {0}'.format(pulse_counter_id),
                                input_id=None,
                                persistent=True)
 
