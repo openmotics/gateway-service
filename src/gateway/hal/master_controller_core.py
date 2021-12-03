@@ -869,21 +869,55 @@ class MasterCoreController(MasterController):
 
     # PulseCounters
 
+    def _load_pulse_counter_module_ids(self):
+        ids = []
+        for module_id in self._enumerate_io_modules('input', amount_per_module=1):
+            input_module_info = InputModuleConfiguration(module_id)
+            if input_module_info.device_type == 'b':
+                continue  # Skip emulated modules since they don't keep counts
+            if input_module_info.device_type == 'i' and '.000.000.' not in input_module_info.address:
+                continue  # Skip virtual modules
+            ids.append(module_id)
+        return ids
+
+    @staticmethod
+    def _generate_pulse_counter_dto(pulse_counter_id):
+        return PulseCounterDTO(id=pulse_counter_id,
+                               name='PulseCounter Input {0}'.format(pulse_counter_id),
+                               input_id=None,
+                               persistent=True)
+
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
-        # TODO: Implement PulseCounters
-        raise DoesNotExist('Could not find a PulseCounter with id {0}'.format(pulse_counter_id))
+        _ = InputConfiguration(pulse_counter_id)
+        return MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id)
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
-        # TODO: Implement PulseCounters
-        return []
+        pulse_counters = []
+        for module_id in self._load_pulse_counter_module_ids():
+            for i in range(8):
+                pulse_counter_id = module_id * 8 + i
+                pulse_counters.append(MasterCoreController._generate_pulse_counter_dto(pulse_counter_id))
+        return pulse_counters
 
     def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
-        # TODO: Implement PulseCounters
+        # There are no real settings to pulse counters, so they cannot be saved
         return
 
-    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
-        # TODO: Implement PulseCounters
-        return {}
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
+        values = {i: None for i in range(self.get_amount_of_pulse_counters())}  # type: Dict[int, Optional[int]]
+        for module_id in self._load_pulse_counter_module_ids():
+            try:
+                counter_values = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
+                                                                      fields={'input_nr': module_id * 8})
+                for input_id in range(8):
+                    values[module_id * 8 + input_id] = counter_values['counter_{0}'.format(input_id)]
+            except Exception as ex:
+                logger.error('Could not request pulse counters for module {0}: {1}'.format(module_id, ex))
+        return values
+
+    def get_amount_of_pulse_counters(self):  # type: () -> int
+        _ = self
+        return 640
 
     # (Group)Actions
 

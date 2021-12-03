@@ -1752,9 +1752,13 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
-    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
         out_dict = self._master_communicator.do_command(master_api.pulse_list())
         return {i: out_dict['pv{0}'.format(i)] for i in range(24)}
+
+    def get_amount_of_pulse_counters(self):  # type: () -> int
+        _ = self
+        return 24
 
     # Validation bits
 

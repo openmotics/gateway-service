@@ -351,7 +351,10 @@ class MasterController(object):
     def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
         raise NotImplementedError()
 
-    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
+        raise NotImplementedError()
+
+    def get_amount_of_pulse_counters(self):  # type: () -> int
         raise NotImplementedError()
 
     # Virtual modules

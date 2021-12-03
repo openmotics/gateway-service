@@ -133,15 +133,39 @@ class WordField(Field):
 
 
 class UInt32Field(Field):
-    def __init__(self, name):
-        super(UInt32Field, self).__init__(name, 4)
+    def __init__(self, name, crc16=False):
+        self._crc16 = crc16
+        if self._crc16:
+            super(UInt32Field, self).__init__(name, 6, limits=(0, 2 ** (8 * 4) - 1))
+        else:
+            super(UInt32Field, self).__init__(name, 4)
 
     def encode(self, value):  # type: (int) -> bytearray
         self._check_limits(value)
-        return bytearray(struct.pack('>I', value))
+        encoded_data = bytearray(struct.pack('>I', value))
+        if self._crc16:
+            encoded_data += bytearray(struct.pack('>H', UInt32Field._calculate_crc16(encoded_data)))
+        return encoded_data
 
     def decode(self, data):  # type: (bytearray) -> int
-        return struct.unpack('>I', data)[0]
+        if self._crc16:
+            checksum = UInt32Field._calculate_crc16(data[:4])
+            expected_checksum = struct.unpack('>H', data[4:6])[0]
+            if checksum != expected_checksum:
+                raise ValueError('Checksum {0} did not match expected {1}'.format(checksum, expected_checksum))
+        return struct.unpack('>I', data[:4])[0]
+
+    @staticmethod
+    def _calculate_crc16(data):  # type: (bytearray) -> int
+        crc16 = 0xFFFF
+        for value in data:
+            crc16 ^= value
+            for i in range(8):
+                if crc16 & 0b1:
+                    crc16 = 0xA001 ^ (crc16 >> 1)
+                else:
+                    crc16 = crc16 >> 1
+        return crc16
 
 
 class _ArrayField(Field):
