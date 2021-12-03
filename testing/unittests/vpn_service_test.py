@@ -378,7 +378,7 @@ class VPNServiceTest(TestCase):
              mock.patch.object(cloud, 'issue_client_certs', return_value={'data': {}}) as issue, \
              mock.patch.object(task, 'new_version', return_value='foo'), \
              mock.patch.object(task, 'get_cert_files', return_value=files):
-            context = {'heartbeat_success': True, 'update_certs': False}
+            context = {'cloud_enabled': True, 'heartbeat_success': True, 'update_certs': False}
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])
             cloud.issue_client_certs.assert_not_called()
             context.update({'update_certs': True})
@@ -401,7 +401,7 @@ class VPNServiceTest(TestCase):
              mock.patch.object(cloud, 'issue_client_certs', return_value={'data': {}}) as issue, \
              mock.patch.object(task, 'new_version', return_value='foo'), \
              mock.patch.object(task, 'get_cert_files', return_value=files):
-            context = {'heartbeat_success': True, 'update_certs': True}
+            context = {'cloud_enabled': True, 'heartbeat_success': True, 'update_certs': True}
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])
             files.activate.assert_called_with('foo')
             files.rollback.assert_called()
@@ -418,7 +418,7 @@ class VPNServiceTest(TestCase):
              mock.patch.object(cloud, 'issue_client_certs', return_value={'data': {}}) as issue, \
              mock.patch.object(task, 'new_version', return_value='foo'), \
              mock.patch.object(task, 'get_cert_files', return_value=files):
-            context = {'heartbeat_success': True, 'update_certs': True}
+            context = {'cloud_enabled': True, 'heartbeat_success': True, 'update_certs': True}
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])
             files.activate.assert_not_called()
