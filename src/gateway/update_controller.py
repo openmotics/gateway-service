@@ -207,7 +207,6 @@ class UpdateController(object):
         return {'status': global_state_map[state],
                 'status_detail': states}
 
-
     def request_update(self, new_version, metadata=None):
         """
         Example metadata:
@@ -287,6 +286,9 @@ class UpdateController(object):
         logger.info('Stopping services')
         System.run_service_action('stop', 'openmotics')
         System.run_service_action('stop', 'vpn_service')
+
+        old_version_folder = ''
+        running_marker = ''
 
         try:
             # Migrate legacy folder structure, if needed
@@ -408,16 +410,15 @@ class UpdateController(object):
             logger.info('Update completed')
         except Exception as ex:
             logger.exception('Unexpected exception setting up new version: {0}'.format(ex))
-            if not os.path.exists(UpdateController.SERVICE_CURRENT):
+            if old_version_folder and not os.path.exists(UpdateController.SERVICE_CURRENT):
                 os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
             # Start services again
             System.run_service_action('start', 'openmotics')
             System.run_service_action('start', 'vpn_service')
             raise
         finally:
-            if os.path.exists(running_marker):
+            if running_marker and os.path.exists(running_marker):
                 os.remove(running_marker)  # Cleanup running marker
-
 
     @staticmethod
     def update_gateway_service_prepare_for_first_startup(logger):
@@ -822,9 +823,9 @@ class UpdateController(object):
             shutil.rmtree(unknown)
 
         os.makedirs(unknown)
-        for file in ('ca.crt', 'client.crt', 'client.key'):
-            shutil.copy(src=os.path.join(os.path.dirname(UpdateController.OPENVPN_CONFIG), file),
-                        dst=os.path.join(unknown, file))
+        for file_ in ('ca.crt', 'client.crt', 'client.key'):
+            shutil.copy(src=os.path.join(os.path.dirname(UpdateController.OPENVPN_CONFIG), file_),
+                        dst=os.path.join(unknown, file_))
 
         for link in (UpdateController.CERTIFICATES_CURRENT, UpdateController.CERTIFICATES_OPENVPN):
             if os.path.exists(link):
