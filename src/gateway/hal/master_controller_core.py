@@ -905,15 +905,16 @@ class MasterCoreController(MasterController):
 
     def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
         values = {i: None for i in range(self.get_amount_of_pulse_counters())}  # type: Dict[int, Optional[int]]
-        for module_id in self._load_pulse_counter_module_ids():
-            try:
-                counter_values = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
-                                                                      fields={'input_nr': module_id * 8})
-                for input_id in range(8):
-                    values[module_id * 8 + input_id] = counter_values['counter_{0}'.format(input_id)]
-            except Exception as ex:
-                logger.error('Could not request pulse counters for module {0}: {1}'.format(module_id, ex))
-        return values
+        return values  # TODO: Re-enable below code once the firmware issues are fixed
+        # for module_id in self._load_pulse_counter_module_ids():
+        #     try:
+        #         counter_values = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
+        #                                                               fields={'input_nr': module_id * 8})
+        #         for input_id in range(8):
+        #             values[module_id * 8 + input_id] = counter_values['counter_{0}'.format(input_id)]
+        #     except Exception as ex:
+        #         logger.error('Could not request pulse counters for module {0}: {1}'.format(module_id, ex))
+        # return values
 
     def get_amount_of_pulse_counters(self):  # type: () -> int
         _ = self
