@@ -174,10 +174,10 @@ class MemoryTypesTest(unittest.TestCase):
 
     def test_model_definition(self):
         self.memory[0] = bytearray([30, 31, 32])
-        self.memory[1] = bytearray([40, 0b00010101])  # ___xxxxx
-        self.memory[2] = bytearray([41, 0b00001011])  # __x_xxxx
-        self.memory[3] = bytearray([42, 0b01001000])  # _x__xxxx
-        self.memory[4] = bytearray([43, 0b00000000])  # x___xxxx
+        self.memory[1] = bytearray([40, 0b00010101])  # _x_xxxxx
+        self.memory[2] = bytearray([41, 0b00001011])  # x__xxxxx
+        self.memory[3] = bytearray([42, 0b00111000])  # __xxxxxx
+        self.memory[4] = bytearray([43, 0b00000000])  # _x_xxxxx
 
         class Parent(MemoryModelDefinition):
             info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, id))
@@ -186,7 +186,8 @@ class MemoryTypesTest(unittest.TestCase):
             class _ChildComposed(CompositeMemoryModelDefinition):
                 info = CompositeNumberField(start_bit=0, width=3, value_offset=2)
                 bit = CompositeBitField(bit=3)
-                moved = CompositeBitField(bit=lambda id: 4 + id - 1)
+                bit_inverted = CompositeBitField(bit=4, inverted=True)
+                moved = CompositeBitField(bit=lambda id: 5 + id % 3)
 
             parent = MemoryRelation(Parent, id_spec=lambda id: id // 2)
             info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 0))
@@ -195,10 +196,10 @@ class MemoryTypesTest(unittest.TestCase):
         parent_0 = {'id': 0, 'info': 30}
         parent_1 = {'id': 1, 'info': 31}
         parent_2 = {'id': 2, 'info': 32}
-        for entry in [[1, {'id': 1, 'info': 40, 'composed': {'bit': False, 'info': 3, 'moved': True}}, parent_0],
-                      [2, {'id': 2, 'info': 41, 'composed': {'bit': True, 'info': 1, 'moved': False}}, parent_1],
-                      [3, {'id': 3, 'info': 42, 'composed': {'bit': True, 'info': -2, 'moved': True}}, parent_1],
-                      [4, {'id': 4, 'info': 43, 'composed': {'bit': False, 'info': -2, 'moved': False}}, parent_2]]:
+        for entry in [[1, {'id': 1, 'info': 40, 'composed': {'bit': False, 'bit_inverted': False, 'info': 3, 'moved': False}}, parent_0],
+                      [2, {'id': 2, 'info': 41, 'composed': {'bit': True, 'bit_inverted': True, 'info': 1, 'moved': False}}, parent_1],
+                      [3, {'id': 3, 'info': 42, 'composed': {'bit': True, 'bit_inverted': False, 'info': -2, 'moved': True}}, parent_1],
+                      [4, {'id': 4, 'info': 43, 'composed': {'bit': False, 'bit_inverted': True, 'info': -2, 'moved': False}}, parent_2]]:
             child_id, child_data, parent_data = entry
             child = Child(child_id)
             self.assertEqual(child_data, child.serialize())
@@ -215,12 +216,14 @@ class MemoryTypesTest(unittest.TestCase):
         child = Child.deserialize({'id': 4,
                                    'info': 10,
                                    'composed': {'bit': True,
+                                                'bit_inverted': True,
                                                 'moved': True},
                                    'parent': {'id': 0,
                                               'info': 5}})
         self.assertEqual({'id': 4,
                           'info': 10,
                           'composed': {'bit': True,
+                                       'bit_inverted': True,
                                        'info': -2,
                                        'moved': True}}, child.serialize())
         self.assertEqual({'id': 0,
@@ -231,17 +234,19 @@ class MemoryTypesTest(unittest.TestCase):
         with self.assertRaises(AttributeError):
             child.parent = parent
         child.save()
-        self.assertEqual(bytearray([20, 0b10001000]), self.memory[4])  # x___xxxx
+        self.assertEqual(bytearray([20, 0b01001000]), self.memory[4])  # _x_xxxxx
         child.composed.bit = False
+        child.composed.bit_inverted = False
         child.composed.info = 4
         child.composed.moved = False
         self.assertEqual({'id': 4,
                           'info': 20,
                           'composed': {'bit': False,
+                                       'bit_inverted': False,
                                        'info': 4,
                                        'moved': False}}, child.serialize())
         child.save()
-        self.assertEqual(bytearray([20, 0b00000110]), self.memory[4])  # x___xxxx
+        self.assertEqual(bytearray([20, 0b00010110]), self.memory[4])  # _x_xxxxx
 
     def test_fk_relation(self):
         self.memory[0] = bytearray([10])
