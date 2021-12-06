@@ -67,17 +67,16 @@ class ValveDriver(object):
 
     def steer_output(self):  # type: () -> None
         with self._state_change_lock:
-            if self._current_percentage != self._desired_percentage:
-                output_nr = self._valve.output.number
-                logger.info('Valve {0} (output {1}) changing from {2}% to {3}%'.format(
-                    self._valve.id, output_nr, self._current_percentage, self._desired_percentage
-                ))
-                output_status = self._desired_percentage > 0
-                self._output_controller.set_output_status(output_id=self._valve.output.number,
-                                                          is_on=output_status,
-                                                          dimmer=self._desired_percentage)
-                self._current_percentage = self._desired_percentage
-                self._time_state_changed = time.time()
+            output_nr = self._valve.output.number
+            logger.info('Valve {0} (output {1}) changing from {2}% to {3}%'.format(
+                self._valve.id, output_nr, self._current_percentage, self._desired_percentage
+            ))
+            output_status = self._desired_percentage > 0
+            self._output_controller.set_output_status(output_id=self._valve.output.number,
+                                                      is_on=output_status,
+                                                      dimmer=self._desired_percentage)
+            self._current_percentage = self._desired_percentage
+            self._time_state_changed = time.time()
 
     def set(self, percentage):  # type: (float) -> None
         self._desired_percentage = int(percentage)
