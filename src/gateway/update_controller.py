@@ -287,8 +287,8 @@ class UpdateController(object):
         System.run_service_action('stop', 'openmotics')
         System.run_service_action('stop', 'vpn_service')
 
-        old_version_folder = None  # type: Optional[str]
-        running_marker = None  # type: Optional[str]
+        old_version_folder = ''
+        running_marker = ''
 
         try:
             # Migrate legacy folder structure, if needed
@@ -410,14 +410,14 @@ class UpdateController(object):
             logger.info('Update completed')
         except Exception as ex:
             logger.exception('Unexpected exception setting up new version: {0}'.format(ex))
-            if old_version_folder is not None and not os.path.exists(UpdateController.SERVICE_CURRENT):
+            if old_version_folder and not os.path.exists(UpdateController.SERVICE_CURRENT):
                 os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
             # Start services again
             System.run_service_action('start', 'openmotics')
             System.run_service_action('start', 'vpn_service')
             raise
         finally:
-            if running_marker is not None and os.path.exists(running_marker):
+            if running_marker and os.path.exists(running_marker):
                 os.remove(running_marker)  # Cleanup running marker
 
     @staticmethod
