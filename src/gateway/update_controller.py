@@ -90,8 +90,8 @@ class UpdateController(object):
                          'ucan': FirmwareInfo('MN', [ModuleType.MICRO_CAN]),
                          'master_classic': FirmwareInfo('GY', []),
                          'master_coreplus': FirmwareInfo('BN', []),
-                         'energy': FirmwareInfo('EY', []),
-                         'p1_concentrator': FirmwareInfo('PR', [])}  # type: Dict[str, FirmwareInfo]
+                         'energy': FirmwareInfo('EY', [ModuleType.ENERGY]),
+                         'p1_concentrator': FirmwareInfo('PR', [ModuleType.P1_CONCENTRATOR])}  # type: Dict[str, FirmwareInfo]
     MODULE_TYPE_MAP = {'temperature': {2: 'temperature'},
                        'input': {2: 'input', 3: 'input_gen3'},
                        'output': {2: 'output', 3: 'output_gen3'},
