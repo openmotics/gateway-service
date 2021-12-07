@@ -62,6 +62,10 @@ class UpdateController(object):
     VERSIONS_CURRENT_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('{0}', 'current')  # e.g. /x/versions/{0}/current
     VERSIONS_PREVIOUS_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('{0}', 'previous')  # e.g. /x/versions/{0}/previous
 
+    CERTIFICATES_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('certificates', '{0}')  # e.g. /x/versions/certificates/{0}
+    CERTIFICATES_CURRENT = VERSIONS_BASE_TEMPLATE.format('certificates', 'current')  # e.g. /x/versions/certificates/current
+    CERTIFICATES_OPENVPN = VERSIONS_BASE_TEMPLATE.format('certificates', 'openvpn')  # e.g. /x/versions/certificates/openvpn
+
     SERVICE_BASE_TEMPLATE = VERSIONS_BASE_TEMPLATE.format('service', '{0}')  # e.g. /x/versions/service/{0}
     SERVICE_CURRENT = VERSIONS_CURRENT_TEMPLATE.format('service')  # e.g. /x/versions/service/current
     SERVICE_PREVIOUS = VERSIONS_PREVIOUS_TEMPLATE.format('service')  # e.g. /x/versions/service/previous
@@ -86,8 +90,8 @@ class UpdateController(object):
                          'ucan': FirmwareInfo('MN', [ModuleType.MICRO_CAN]),
                          'master_classic': FirmwareInfo('GY', []),
                          'master_coreplus': FirmwareInfo('BN', []),
-                         'energy': FirmwareInfo('EY', []),
-                         'p1_concentrator': FirmwareInfo('PR', [])}  # type: Dict[str, FirmwareInfo]
+                         'energy': FirmwareInfo('EY', [ModuleType.ENERGY]),
+                         'p1_concentrator': FirmwareInfo('PR', [ModuleType.P1_CONCENTRATOR])}  # type: Dict[str, FirmwareInfo]
     MODULE_TYPE_MAP = {'temperature': {2: 'temperature'},
                        'input': {2: 'input', 3: 'input_gen3'},
                        'output': {2: 'output', 3: 'output_gen3'},
@@ -114,6 +118,11 @@ class UpdateController(object):
                                                    'input', 'output', 'dimmer', 'can',
                                                    'energy', 'p1_concentrator'],
                            Platform.Type.ESAFE: ['gateway_service']}
+
+    if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
+        OPENVPN_CONFIG = '/etc/openvpn/vpn.conf'
+    else:
+        OPENVPN_CONFIG = '/etc/openvpn/client/omcloud.conf'
 
     @Inject
     def __init__(self, gateway_uuid=INJECTED, module_controller=INJECTED, master_controller=INJECTED, energy_module_controller=INJECTED, cloud_url=INJECTED):
@@ -146,6 +155,57 @@ class UpdateController(object):
     def stop(self):
         if self._update_thread is not None:
             self._update_thread.stop()
+
+    def get_update_state(self):
+        states = []
+        state = 2
+        state_map = {0: UpdateEnums.States.ERROR,
+                     1: UpdateEnums.States.UPDATING,
+                     2: UpdateEnums.States.SKIPPED,
+                     3: UpdateEnums.States.OK}
+        global_state_map = {0: UpdateEnums.States.ERROR,
+                            1: UpdateEnums.States.UPDATING,
+                            2: UpdateEnums.States.OK,
+                            3: UpdateEnums.States.OK}
+        modules = {}  # type: Dict[str, List[Module]]
+        for module in Module.select().where(Module.hardware_type == HardwareType.PHYSICAL):
+            modules.setdefault(module.module_type, []).append(module)
+        firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
+        for firmware_type in firmware_types:
+            success, target_version, _ = UpdateController._get_target_version_info(firmware_type)
+            if target_version is None:
+                continue
+            if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
+                current_version = self._fetch_version(firmware_type=firmware_type, logger=global_logger)
+                if current_version == target_version:
+                    state_number = 3
+                else:
+                    state_number = 1
+                    if success is not None:
+                        state_number = 2 if success else 0
+                state = min(state, state_number)
+                states.append({'firmware_type': firmware_type,
+                               'state': state_map[state_number],
+                               'current_version': current_version,
+                               'target_version': target_version})
+            else:
+                for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
+                    for module in modules.get(module_type, []):
+                        if module.firmware_version == target_version:
+                            state_number = 3
+                        else:
+                            state_number = 1
+                            update_success = module.update_success
+                            if update_success is not None:
+                                state_number = 2 if update_success else 0
+                        state = min(state, state_number)
+                        states.append({'firmware_type': firmware_type,
+                                       'state': state_map[state_number],
+                                       'current_version': module.firmware_version,
+                                       'target_version': target_version,
+                                       'module_address': module.address})
+        return {'status': global_state_map[state],
+                'status_detail': states}
 
     def request_update(self, new_version, metadata=None):
         """
@@ -192,6 +252,186 @@ class UpdateController(object):
                             module.save()
             global_logger.info('Request for update firmware {0} to {1}'.format(firmware_type, version))
         Config.set_entry('firmware_target_versions', target_versions)
+
+    def update_module_firmware(self, module_type, target_version, mode, module_address, firmware_filename=None):
+        # type: (str, str, str, Optional[str], Optional[str]) -> Tuple[int, int]
+        if module_type not in UpdateController.MODULE_TYPE_MAP:
+            raise RuntimeError('Cannot update unknown module type {0}'.format(module_type))
+        # Load firmware type
+        parsed_version = tuple(int(part) for part in target_version.split('.'))
+        if module_type in ['master_classic', 'master_core']:
+            generation = 3 if parsed_version < (2, 0, 0) else 2  # Core = 1.x.x, classic = 3.x.x
+        elif module_type in ['energy', 'p1_concentrator']:
+            generation = 3  # Generation doesn't matter for these modules
+        else:
+            generation = 3 if parsed_version >= (6, 0, 0) else 2  # Gen3 = 6.x.x, gen2 = 3.x.x
+        if generation not in UpdateController.MODULE_TYPE_MAP[module_type]:
+            raise RuntimeError('Calculated generation {0} is not suppored on {1}'.format(generation, module_type))
+        firmware_type = UpdateController.MODULE_TYPE_MAP[module_type][generation]
+        platform = Platform.get_platform()
+        if firmware_type not in UpdateController.SUPPORTED_FIRMWARES.get(platform, []):
+            raise RuntimeError('Firmware {0} cannot be updated on platform {1}'.format(firmware_type, platform))
+        # Execute update
+        return self._update_module_firmware(firmware_type=firmware_type,
+                                            target_version=target_version,
+                                            mode=mode,
+                                            module_address=module_address,
+                                            metadata=None,
+                                            firmware_filename=firmware_filename)
+
+    @staticmethod
+    def update_gateway_service(new_version, logger):
+        # type: (str, Logger) -> None
+        """ Executed from within a separate process """
+        logger.info('Stopping services')
+        System.run_service_action('stop', 'openmotics')
+        System.run_service_action('stop', 'vpn_service')
+
+        old_version_folder = ''
+        running_marker = ''
+
+        try:
+            # Migrate legacy folder structure, if needed
+            if not os.path.exists(UpdateController.SERVICE_CURRENT):
+                old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(gateway.__version__)
+                os.makedirs(old_version_folder)
+                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+
+                for folder in ['python', 'etc', 'python-deps']:
+                    old_location = os.path.join(UpdateController.PREFIX, folder)
+                    new_location = os.path.join(UpdateController.SERVICE_CURRENT, folder)
+                    shutil.move(old_location, new_location)
+                    os.symlink(new_location, old_location)
+
+            old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
+            old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
+            new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
+
+            success_marker = os.path.join(new_version_folder, 'update.success')
+            running_marker = os.path.join(new_version_folder, 'update.running')
+
+            if os.path.exists(new_version_folder) and not os.path.exists(success_marker):
+                # Remove the existing `new_version_folder` if the contents could not be started
+                shutil.rmtree(new_version_folder)
+
+            if not os.path.exists(new_version_folder):
+                os.mkdir(new_version_folder)
+                UpdateController._touch(running_marker)
+
+                # Extract new version
+                logger.info('Extracting archive')
+                os.makedirs(os.path.join(new_version_folder, 'python'))
+                archive = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version))
+                UpdateController._extract_tgz(filename=archive,
+                                              output_dir=os.path.join(new_version_folder, 'python'),
+                                              logger=logger)
+
+                # Remove old archive
+                os.remove(archive)
+
+                # Copy `etc`
+                logger.info('Copy `etc` folder')
+                shutil.copytree(os.path.join(old_version_folder, 'etc'),
+                                os.path.join(new_version_folder, 'etc'),
+                                symlinks=True)
+
+                # Restore plugins
+                logger.info('Copy plugins...')
+                plugins = glob.glob('{0}{1}*{1}'.format(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), os.path.sep))
+                for plugin_path in plugins:
+                    plugin = plugin_path.strip('/').rsplit('/', 1)[-1]
+                    logger.info('Copy plugin {0}'.format(plugin))
+                    UpdateController._execute(command=['cp', '-R',
+                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
+                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')],
+                                              logger=logger)
+
+                # Install pip dependencies
+                logger.info('Installing pip dependencies')
+                os.makedirs(os.path.join(new_version_folder, 'python-deps'))
+                operating_system = System.get_operating_system()['ID']
+                if operating_system != System.OS.BUILDROOT:
+                    temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
+                    UpdateController._execute(
+                        command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
+                            temp_dir, new_version_folder, operating_system
+                        ),
+                        logger=logger,
+                        shell=True
+                    )
+                    os.rmdir(temp_dir)
+
+            UpdateController._touch(running_marker)  # Make sure the running marker exists
+
+            # Keep track of the old version, so it can be manually restored if something goes wrong
+            logger.info('Tracking previous version')
+            if os.path.exists(UpdateController.SERVICE_PREVIOUS):
+                os.unlink(UpdateController.SERVICE_PREVIOUS)
+            os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
+
+            # Prepare new code for first startup
+            logger.info('Preparing for first startup')
+            UpdateController._execute(command=['python',
+                                               os.path.join(new_version_folder, 'python', 'openmotics_update.py'),
+                                               '--prepare-gateway-service-for-first-startup',
+                                               new_version],
+                                      logger=logger)
+
+            # Symlink to new version
+            logger.info('Symlink to new version')
+            os.unlink(UpdateController.SERVICE_CURRENT)
+            os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
+
+            # Startup
+            logger.info('Starting services')
+            System.run_service_action('start', 'openmotics')
+            System.run_service_action('start', 'vpn_service')
+
+            # Health-check
+            logger.info('Checking health')
+            update_successful = UpdateController._check_gateway_service_health(logger=logger)
+
+            # Rollback to old version
+            if not update_successful:
+                logger.info('Update failed, restoring')
+                System.run_service_action('stop', 'openmotics')
+                System.run_service_action('stop', 'vpn_service')
+                os.unlink(UpdateController.SERVICE_CURRENT)
+                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+                # Raise with actual reason
+                raise RuntimeError('Failed to start {0}'.format(new_version))
+
+            # Cleanup
+            UpdateController._clean_old_versions(base_template=UpdateController.SERVICE_BASE_TEMPLATE,
+                                                 logger=logger)
+
+            # Update markers
+            UpdateController._touch(success_marker)
+            logger.info('Update completed')
+        except Exception as ex:
+            logger.exception('Unexpected exception setting up new version: {0}'.format(ex))
+            if old_version_folder and not os.path.exists(UpdateController.SERVICE_CURRENT):
+                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+            # Start services again
+            System.run_service_action('start', 'openmotics')
+            System.run_service_action('start', 'vpn_service')
+            raise
+        finally:
+            if running_marker and os.path.exists(running_marker):
+                os.remove(running_marker)  # Cleanup running marker
+
+    @staticmethod
+    def update_gateway_service_prepare_for_first_startup(logger):
+        # type: (Logger) -> None
+        """ Executed from within a separate process """
+        # This is currently empty, but might in the future be used for:
+        #  * Updating the supervisor service files
+        #  * Changing system settings mandatory for the services to startup
+        # This code will execute after the new version is in place and before the
+        # services are started. It runs the new code, has the new imports
+        # available, ...
+        UpdateController._move_openvpn_certificates(logger)
+        logger.info('Preparation for first startup completed')
 
     def _execute_pending_updates(self):
         if os.path.exists(UpdateController.SERVICE_CURRENT_UPDATE_RUNNING_MARKER):
@@ -280,32 +520,6 @@ class UpdateController(object):
                                              metadata=metadata)
             except Exception as ex:
                 component_logger.error('Could not update {0} to {1}: {2}'.format(firmware_type, target_version, ex))
-
-    def update_module_firmware(self, module_type, target_version, mode, module_address, firmware_filename=None):
-        # type: (str, str, str, Optional[str], Optional[str]) -> Tuple[int, int]
-        if module_type not in UpdateController.MODULE_TYPE_MAP:
-            raise RuntimeError('Cannot update unknown module type {0}'.format(module_type))
-        # Load firmware type
-        parsed_version = tuple(int(part) for part in target_version.split('.'))
-        if module_type in ['master_classic', 'master_core']:
-            generation = 3 if parsed_version < (2, 0, 0) else 2  # Core = 1.x.x, classic = 3.x.x
-        elif module_type in ['energy', 'p1_concentrator']:
-            generation = 3  # Generation doesn't matter for these modules
-        else:
-            generation = 3 if parsed_version >= (6, 0, 0) else 2  # Gen3 = 6.x.x, gen2 = 3.x.x
-        if generation not in UpdateController.MODULE_TYPE_MAP[module_type]:
-            raise RuntimeError('Calculated generation {0} is not suppored on {1}'.format(generation, module_type))
-        firmware_type = UpdateController.MODULE_TYPE_MAP[module_type][generation]
-        platform = Platform.get_platform()
-        if firmware_type not in UpdateController.SUPPORTED_FIRMWARES.get(platform, []):
-            raise RuntimeError('Firmware {0} cannot be updated on platform {1}'.format(firmware_type, platform))
-        # Execute update
-        return self._update_module_firmware(firmware_type=firmware_type,
-                                            target_version=target_version,
-                                            mode=mode,
-                                            module_address=module_address,
-                                            metadata=None,
-                                            firmware_filename=firmware_filename)
 
     def _update_module_firmware(self, firmware_type, target_version, mode, module_address, metadata, firmware_filename=None):
         # type: (str, str, str, Optional[str], Optional[Dict[str, Any]], Optional[str]) -> Tuple[int, int]
@@ -582,153 +796,55 @@ class UpdateController(object):
         logger.info('Update completed')
 
     @staticmethod
-    def update_gateway_service(new_version, logger):
-        # type: (str, Logger) -> None
-        """ Executed from within a separate process """
-        logger.info('Stopping services')
-        System.run_service_action('stop', 'openmotics')
-        System.run_service_action('stop', 'vpn_service')
+    def _move_openvpn_certificates(logger):  # type: (Logger) -> None
+        vpn_prefix = UpdateController.CERTIFICATES_OPENVPN
+        settings = {'ca': os.path.join(vpn_prefix, 'ca.crt'),
+                    'cert': os.path.join(vpn_prefix, 'client.crt'),
+                    'key': os.path.join(vpn_prefix, 'client.key')}
+        if System.get_operating_system().get('ID') != System.OS.ANGSTROM:
+            settings.update({'cipher': 'AES-256-CBC'})
+
+        changed = False
+        lines = []
+        with open(UpdateController.OPENVPN_CONFIG, 'r') as fd:
+            for line in (x.rstrip() for x in fd.readlines()):
+                prefix, _, value = line.partition(' ')
+                if prefix in settings and settings[prefix] != value:
+                    changed = True
+                    lines.append('{0} {1}'.format(prefix, settings[prefix]))
+                else:
+                    lines.append(line)
+        if not changed:
+            return
+
+        logger.info('Copying openvpn certificates...')
+        unknown = UpdateController.CERTIFICATES_BASE_TEMPLATE.format('unknown')
+        if os.path.exists(unknown):
+            shutil.rmtree(unknown)
+
+        os.makedirs(unknown)
+        for file_ in ('ca.crt', 'client.crt', 'client.key'):
+            shutil.copy(src=os.path.join(os.path.dirname(UpdateController.OPENVPN_CONFIG), file_),
+                        dst=os.path.join(unknown, file_))
+
+        for link in (UpdateController.CERTIFICATES_CURRENT, UpdateController.CERTIFICATES_OPENVPN):
+            if os.path.exists(link):
+                os.unlink(link)
+            os.symlink('unknown', link)
 
         try:
-            # Migrate legacy folder structure, if needed
-            if not os.path.exists(UpdateController.SERVICE_CURRENT):
-                old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(gateway.__version__)
-                os.makedirs(old_version_folder)
-                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
-
-                for folder in ['python', 'etc', 'python-deps']:
-                    old_location = os.path.join(UpdateController.PREFIX, folder)
-                    new_location = os.path.join(UpdateController.SERVICE_CURRENT, folder)
-                    shutil.move(old_location, new_location)
-                    os.symlink(new_location, old_location)
-
-            old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
-            old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
-            new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
-
-            success_marker = os.path.join(new_version_folder, 'update.success')
-            running_marker = os.path.join(new_version_folder, 'update.running')
-
-            if os.path.exists(new_version_folder) and not os.path.exists(success_marker):
-                # Remove the existing `new_version_folder` if the contents could not be started
-                shutil.rmtree(new_version_folder)
-
-            if not os.path.exists(new_version_folder):
-                os.mkdir(new_version_folder)
-                UpdateController._touch(running_marker)
-
-                # Extract new version
-                logger.info('Extracting archive')
-                os.makedirs(os.path.join(new_version_folder, 'python'))
-                archive = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version))
-                UpdateController._extract_tgz(filename=archive,
-                                              output_dir=os.path.join(new_version_folder, 'python'),
-                                              logger=logger)
-
-                # Remove old archive
-                os.remove(archive)
-
-                # Copy `etc`
-                logger.info('Copy `etc` folder')
-                shutil.copytree(os.path.join(old_version_folder, 'etc'),
-                                os.path.join(new_version_folder, 'etc'),
-                                symlinks=True)
-
-                # Restore plugins
-                logger.info('Copy plugins...')
-                plugins = glob.glob('{0}{1}*{1}'.format(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), os.path.sep))
-                for plugin_path in plugins:
-                    plugin = plugin_path.strip('/').rsplit('/', 1)[-1]
-                    logger.info('Copy plugin {0}'.format(plugin))
-                    UpdateController._execute(command=['cp', '-R',
-                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
-                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')],
-                                              logger=logger)
-
-                # Install pip dependencies
-                logger.info('Installing pip dependencies')
-                os.makedirs(os.path.join(new_version_folder, 'python-deps'))
-                operating_system = System.get_operating_system()['ID']
-                if operating_system != System.OS.BUILDROOT:
-                    temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
-                    UpdateController._execute(
-                        command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
-                            temp_dir, new_version_folder, operating_system
-                        ),
-                        logger=logger,
-                        shell=True
-                    )
-                    os.rmdir(temp_dir)
-
-            UpdateController._touch(running_marker)  # Make sure the running marker exists
-
-            # Keep track of the old version, so it can be manually restored if something goes wrong
-            logger.info('Tracking previous version')
-            if os.path.exists(UpdateController.SERVICE_PREVIOUS):
-                os.unlink(UpdateController.SERVICE_PREVIOUS)
-            os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
-
-            # Symlink to new version
-            logger.info('Symlink to new version')
-            os.unlink(UpdateController.SERVICE_CURRENT)
-            os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
-
-            # Prepare new code for first startup
-            logger.info('Preparing for first startup')
-            UpdateController._execute(command=['python',
-                                               os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
-                                               '--prepare-gateway-service-for-first-startup',
-                                               new_version],
+            logger.info('Updating openvpn config...')
+            UpdateController._execute(command=['mount', '-o', 'remount,rw', '/'],
                                       logger=logger)
-        except Exception as ex:
-            logger.exception('Unexpected exception setting up new version: {0}'.format(ex))
-            raise
+            if not os.path.exists(UpdateController.OPENVPN_CONFIG + '.BACKUP'):
+                shutil.copy(UpdateController.OPENVPN_CONFIG, UpdateController.OPENVPN_CONFIG + '.BACKUP')
+            temp_config = tempfile.mktemp(dir=os.path.dirname(UpdateController.OPENVPN_CONFIG))
+            with open(temp_config, 'w') as fd:
+                fd.write('\n'.join(lines))
+            os.rename(temp_config, UpdateController.OPENVPN_CONFIG)
         finally:
-            # Startup
-            logger.info('Starting services')
-            System.run_service_action('start', 'openmotics')
-            System.run_service_action('start', 'vpn_service')
-
-        # Health-check
-        logger.info('Checking health')
-        update_successful = UpdateController._check_gateway_service_health(logger=logger)
-
-        if not update_successful:
-            logger.info('Update failed, restoring')
-            # Stop services again
-            System.run_service_action('stop', 'openmotics')
-            System.run_service_action('stop', 'vpn_service')
-            # Symlink rollback to old version
-            os.unlink(UpdateController.SERVICE_CURRENT)
-            os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
-            # Start services again
-            System.run_service_action('start', 'openmotics')
-            System.run_service_action('start', 'vpn_service')
-            # Raise with actual reason
-            raise RuntimeError('Failed to start {0}'.format(new_version))
-
-        # Cleanup
-        UpdateController._clean_old_versions(base_template=UpdateController.SERVICE_BASE_TEMPLATE,
-                                             logger=logger)
-
-        # Update markers
-        UpdateController._touch(success_marker)
-        if os.path.exists(running_marker):
-            os.remove(running_marker)
-
-        logger.info('Update completed')
-
-    @staticmethod
-    def update_gateway_service_prepare_for_first_startup(logger):
-        # type: (Logger) -> None
-        """ Executed from within a separate process """
-        # This is currently empty, but might in the future be used for:
-        #  * Updating the supervisor service files
-        #  * Changing system settings mandatory for the services to startup
-        # This code will execute after the new version is in place and before the
-        # services are started. It runs the new code, has the new imports
-        # available, ...
-        logger.info('Preparation for first startup completed')
+            UpdateController._execute(command=['mount', '-o', 'remount,ro', '/'],
+                                      logger=logger)
 
     def _fetch_version(self, logger, firmware_type):  # type: (Logger, str) -> Optional[str]
         try:
@@ -746,57 +862,6 @@ class UpdateController(object):
         except Exception as ex:
             logger.warning('Could not load {0} version: {1}'.format(firmware_type, ex))
         return None
-
-    def get_update_state(self):
-        states = []
-        state = 2
-        state_map = {0: UpdateEnums.States.ERROR,
-                     1: UpdateEnums.States.UPDATING,
-                     2: UpdateEnums.States.SKIPPED,
-                     3: UpdateEnums.States.OK}
-        global_state_map = {0: UpdateEnums.States.ERROR,
-                            1: UpdateEnums.States.UPDATING,
-                            2: UpdateEnums.States.OK,
-                            3: UpdateEnums.States.OK}
-        modules = {}  # type: Dict[str, List[Module]]
-        for module in Module.select().where(Module.hardware_type == HardwareType.PHYSICAL):
-            modules.setdefault(module.module_type, []).append(module)
-        firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
-        for firmware_type in firmware_types:
-            success, target_version, _ = UpdateController._get_target_version_info(firmware_type)
-            if target_version is None:
-                continue
-            if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
-                current_version = self._fetch_version(firmware_type=firmware_type, logger=global_logger)
-                if current_version == target_version:
-                    state_number = 3
-                else:
-                    state_number = 1
-                    if success is not None:
-                        state_number = 2 if success else 0
-                state = min(state, state_number)
-                states.append({'firmware_type': firmware_type,
-                               'state': state_map[state_number],
-                               'current_version': current_version,
-                               'target_version': target_version})
-            else:
-                for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
-                    for module in modules.get(module_type, []):
-                        if module.firmware_version == target_version:
-                            state_number = 3
-                        else:
-                            state_number = 1
-                            update_success = module.update_success
-                            if update_success is not None:
-                                state_number = 2 if update_success else 0
-                        state = min(state, state_number)
-                        states.append({'firmware_type': firmware_type,
-                                       'state': state_map[state_number],
-                                       'current_version': module.firmware_version,
-                                       'target_version': target_version,
-                                       'module_address': module.address})
-        return {'status': global_state_map[state],
-                'status_detail': states}
 
     @staticmethod
     def _touch(filename):
@@ -860,7 +925,7 @@ class UpdateController(object):
             previous_version = None  # type: Optional[str]
             for version_path in glob.glob(base_template.format('*')):
                 version = version_path.strip('/').rsplit('/', 1)[-1]
-                if 'tgz' in version:
+                if 'tgz' in version or version.endswith('.failure'):
                     continue
                 if version == 'current':
                     current_version = os.readlink(base_template.format(version)).split(os.path.sep)[-1]

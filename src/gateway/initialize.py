@@ -120,12 +120,19 @@ def factory_reset(master_controller=INJECTED, can=False):
 
     logger.info('Rebooting master...')
     master_controller.cold_reset()
-    time.sleep(6)
+
+    logger.info('Waiting for the master...')
+    master_controller.start()
+    master_controller.get_firmware_version()  # Will wait for the master to be restarted
+    time.sleep(10)  # Wait a bit longer to make sure the master can handle a full eeprom wipe
 
     logger.info('Wiping master eeprom...')
-    master_controller.start()
-    master_controller.factory_reset(can=can)
-    master_controller.stop()
+    try:
+        master_controller.factory_reset(can=can)
+    except Exception:
+        logger.exception('Could not wipe master eeprom')
+    finally:
+        master_controller.stop()
 
     logger.info('Removing databases...')
     # Delete databases.

@@ -55,7 +55,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
 from master.core.memory_types import MemoryActivator, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.slave_updater import SlaveUpdater
-from master.core.system_value import Humidity, Temperature
+from master.core.system_value import Humidity, Temperature, Dimmer
 from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 from platform_utils import Hardware
@@ -547,14 +547,16 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        self._do_basic_action(BasicAction(action_type=0,
-                                          action=1 if state else 0,
-                                          device_nr=output_id))
-        if dimmer is not None:
+        if not state or dimmer is None:
             self._do_basic_action(BasicAction(action_type=0,
-                                              action=9,
+                                              action=1 if state else 0,
+                                              device_nr=output_id))
+        else:
+            dimmer_svt = Dimmer.dimmer_to_system_value(dimmer)  # Map 0-100 to 0-255
+            self._do_basic_action(BasicAction(action_type=0,
+                                              action=2,
                                               device_nr=output_id,
-                                              extra_parameter=int(2.55 * dimmer)))  # Map 0-100 to 0-255
+                                              extra_parameter=dimmer_svt))
         if timer is not None:
             self._do_basic_action(BasicAction(action_type=0,
                                               action=11,
@@ -606,7 +608,7 @@ class MasterCoreController(MasterController):
             output_status.append(OutputStatusDTO(id=i,
                                                  status=bool(data['status']),
                                                  ctimer=timer,
-                                                 dimmer=int(data['dimmer']),
+                                                 dimmer=Dimmer.system_value_to_dimmer(data['dimmer']),
                                                  locked=output.locking.locked))
         return output_status
 
@@ -867,21 +869,56 @@ class MasterCoreController(MasterController):
 
     # PulseCounters
 
+    def _load_pulse_counter_module_ids(self):
+        ids = []
+        for module_id in self._enumerate_io_modules('input', amount_per_module=1):
+            input_module_info = InputModuleConfiguration(module_id)
+            if input_module_info.device_type == 'b':
+                continue  # Skip emulated modules since they don't keep counts
+            if input_module_info.device_type == 'i' and '.000.000.' not in input_module_info.address:
+                continue  # Skip virtual modules
+            ids.append(module_id)
+        return ids
+
+    @staticmethod
+    def _generate_pulse_counter_dto(pulse_counter_id):
+        return PulseCounterDTO(id=pulse_counter_id,
+                               name='PulseCounter Input {0}'.format(pulse_counter_id),
+                               input_id=None,
+                               persistent=True)
+
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
-        # TODO: Implement PulseCounters
-        raise DoesNotExist('Could not find a PulseCounter with id {0}'.format(pulse_counter_id))
+        _ = InputConfiguration(pulse_counter_id)
+        return MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id)
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
-        # TODO: Implement PulseCounters
-        return []
+        pulse_counters = []
+        for module_id in self._load_pulse_counter_module_ids():
+            for i in range(8):
+                pulse_counter_id = module_id * 8 + i
+                pulse_counters.append(MasterCoreController._generate_pulse_counter_dto(pulse_counter_id))
+        return pulse_counters
 
     def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
-        # TODO: Implement PulseCounters
+        # There are no real settings to pulse counters, so they cannot be saved
         return
 
-    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
-        # TODO: Implement PulseCounters
-        return {}
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
+        values = {i: None for i in range(self.get_amount_of_pulse_counters())}  # type: Dict[int, Optional[int]]
+        return values  # TODO: Re-enable below code once the firmware issues are fixed
+        # for module_id in self._load_pulse_counter_module_ids():
+        #     try:
+        #         counter_values = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
+        #                                                               fields={'input_nr': module_id * 8})
+        #         for input_id in range(8):
+        #             values[module_id * 8 + input_id] = counter_values['counter_{0}'.format(input_id)]
+        #     except Exception as ex:
+        #         logger.error('Could not request pulse counters for module {0}: {1}'.format(module_id, ex))
+        # return values
+
+    def get_amount_of_pulse_counters(self):  # type: () -> int
+        _ = self
+        return 640
 
     # (Group)Actions
 
@@ -1311,6 +1348,8 @@ class MasterCoreController(MasterController):
 
         cycle = [False]  # type: List[Union[bool, float]]
         if power_on:
+            self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
+                                                      active=True)
             cycle += [2.0, True]
         Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, cycle)
         self._master_communicator.reset_communication_statistics()
@@ -1380,24 +1419,20 @@ class MasterCoreController(MasterController):
         # TODO: Include factory of CAN Controls
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         data_set = {page: bytearray([255] * page_length) for page in range(pages)}
-        # data_set[0][0] = 1  # Needed to validate Brain+ with no front panel attached
         self._restore(data_set)
 
     def _restore(self, data):  # type: (Dict[int, bytearray]) -> None
         amount_of_pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
-        page_retry = None
         current_page = amount_of_pages - 1
         while current_page >= 0:
-            try:
+            if current_page == 0:
+                page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=128)
+                self._memory_file.write({page_address: data[current_page][:128]})
+            else:
                 page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
                 self._memory_file.write({page_address: data[current_page]})
-                current_page -= 1
-            except CommunicationTimedOutException:
-                if page_retry == current_page:
-                    raise
-                page_retry = current_page
-                time.sleep(10)
-        time.sleep(5)  # Give the master some time to settle
+            current_page -= 1
+        self._memory_file.activate()
         self.cold_reset()  # Cold reset, enforcing a reload of all settings
 
     def error_list(self):

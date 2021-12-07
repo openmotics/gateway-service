@@ -828,15 +828,16 @@ class CompositeNumberField(CompositeField):
 
 
 class CompositeBitField(CompositeNumberField):
-    def __init__(self, bit):  # type (Union[int, Callable[[int], int]]) -> None
+    def __init__(self, bit, inverted=False):  # type (Union[int, Callable[[int], int]], bool) -> None
         super(CompositeBitField, self).__init__(bit, 1)
+        self._inverted = inverted
 
     def decompose(self, value, field_id):  # type: (int, Optional[int]) -> bool
         decomposed_value = super(CompositeBitField, self)._decompose(value, field_id)
-        return decomposed_value == 1
+        return decomposed_value == (0 if self._inverted else 1)
 
     def compose(self, current_composition, value, composition_width, field_id):  # type: (int, bool, int, Optional[int]) -> int
-        value_to_compose = 1 if value else 0
+        value_to_compose = 1 if (value and not self._inverted) or (not value and self._inverted) else 0
         return super(CompositeBitField, self)._compose(current_composition, value_to_compose, composition_width, field_id)
 
 

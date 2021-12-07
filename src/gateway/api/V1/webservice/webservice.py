@@ -96,7 +96,7 @@ def _openmotics_api_v1(f, *args, **kwargs):
         data = 'General Error occurred during api call: {}: {}'.format(type(ex).__name__, ex)
         logger.error(data)
         import traceback
-        print(traceback.print_exc())
+        traceback.print_exc()
 
     timings['process'] = ('Processing', time.time() - start)
     serialization_start = time.time()

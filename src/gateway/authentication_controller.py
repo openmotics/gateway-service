@@ -80,6 +80,7 @@ class AuthenticationController(object):
     def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None, login_method=LoginMethod.PASSWORD):
         # type: (UserDTO, bool, Optional[float], Optional[str], LoginMethod) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
+
         # Set the proper timeout value
         if timeout is not None:
             try:

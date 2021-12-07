@@ -516,9 +516,24 @@ class VarBytesFieldType(FieldType):
 class DimmerFieldType(FieldType):
     """
     The dimmer value is a byte in [0, 63], this is converted to an integer in [0, 100] to
-    provide a consistent interface with the set dimmer method. The transfer function is not
-    completely linear: [0, 54] maps to [0, 90] and [54, 63] maps to [92, 100].
+    provide a consistent interface with the set dimmer method.
     """
+
+    PERCENTAGE_TO_SVT = {0: 0, 1: 0, 2: 1, 3: 1, 4: 2, 5: 3, 6: 3, 7: 4, 8: 5, 9: 5,
+                         10: 6, 11: 6, 12: 7, 13: 8, 14: 8, 15: 9, 16: 1, 17: 10, 18: 11, 19: 11,
+                         20: 12, 21: 13, 22: 13, 23: 14, 24: 15, 25: 15, 26: 16, 27: 17, 28: 17, 29: 18,
+                         30: 18, 31: 19, 32: 20, 33: 20, 34: 21, 35: 22, 36: 22, 37: 23, 38: 23, 39: 24,
+                         40: 25, 41: 25, 42: 26, 43: 27, 44: 27, 45: 28, 46: 28, 47: 29, 48: 30, 49: 30,
+                         50: 31, 51: 32, 52: 32, 53: 33, 54: 34, 55: 34, 56: 35, 57: 35, 58: 36, 59: 37,
+                         60: 37, 61: 38, 62: 39, 63: 39, 64: 40, 65: 40, 66: 41, 67: 42, 68: 42, 69: 43,
+                         70: 44, 71: 44, 72: 45, 73: 45, 74: 46, 75: 47, 76: 47, 77: 48, 78: 49, 79: 49,
+                         80: 50, 81: 51, 82: 51, 83: 52, 84: 52, 85: 53, 86: 54, 87: 54, 88: 55, 89: 56,
+                         90: 56, 91: 57, 92: 57, 93: 58, 94: 59, 95: 59, 96: 60, 97: 61, 98: 61, 99: 62, 100: 63}
+    SVT_TO_PERCENTAGE = {}
+    for pct, svt in PERCENTAGE_TO_SVT.items():
+        if svt not in SVT_TO_PERCENTAGE:
+            SVT_TO_PERCENTAGE[svt] = pct
+
     def __init__(self):
         pass
 
@@ -526,18 +541,13 @@ class DimmerFieldType(FieldType):
     def encode(cls, field_value):
         # type: (int) -> bytearray
         """ Encode a dimmer value. """
-        if field_value <= 90:
-            return bytearray([int(math.ceil(field_value * 6.0 / 10.0))])
-        return bytearray([int(53 + field_value - 90)])
+        return bytearray([cls.PERCENTAGE_TO_SVT.get(field_value, 0)])
 
     @classmethod
     def decode(cls, byte_str):
         # type: (bytearray) -> int
         """ Decode a byte [0, 63] to an integer [0, 100]. """
-        dimmer_value = byte_str[0]
-        if dimmer_value <= 54:
-            return int(dimmer_value * 10.0 / 6.0)
-        return int(90 + dimmer_value - 53)
+        return cls.SVT_TO_PERCENTAGE.get(byte_str[0], 0)
 
     @classmethod
     def get_min_decode_bytes(cls):

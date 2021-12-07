@@ -21,12 +21,14 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
+from gateway.api.serializers import DeliverySerializer
 from gateway.dto import DeliveryDTO
 from gateway.events import EsafeEvent
 from gateway.models import Delivery, User
 from gateway.mappers import DeliveryMapper
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
+
 
 if False:  # MyPy
     from typing import List, Optional, Dict, Any
@@ -78,8 +80,7 @@ class DeliveryController(object):
         if delivery_type is not None:
             query = query.where(Delivery.type == delivery_type)
         # filter on picked up when needed
-        if history is False:
-            query = query.where(Delivery.timestamp_pickup.is_null(True))
+        query = query.where(Delivery.timestamp_pickup.is_null(not history))
 
         # add the from_id
         if before_id is not None:
@@ -147,16 +148,15 @@ class DeliveryController(object):
 
         delivery_orm = DeliveryMapper.dto_to_orm(delivery_dto)
         delivery_orm.save()
-        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
-            'id': delivery_orm.id,
-            'type': delivery_dto.type,
-            'action': 'DELIVERY',
-            'user_delivery_id': delivery_dto.user_id_delivery,
-            'user_pickup_id': delivery_dto.user_id_pickup,
-            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
-        })
-        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
-        return DeliveryMapper.orm_to_dto(delivery_orm)
+        delivery_dto_saved = DeliveryMapper.orm_to_dto(delivery_orm)
+        if delivery_dto_saved.timestamp_pickup is None:
+            event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+                'id': delivery_orm.id,
+                'action': 'DELIVERY',
+                'delivery': DeliverySerializer.serialize(delivery_dto_saved)
+            })
+            self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
+        return delivery_dto_saved
 
     @staticmethod
     def parcel_id_available(parcelbox_id, delivery_id=None):
@@ -189,23 +189,23 @@ class DeliveryController(object):
             raise RuntimeError('Cannot update the delivery with id: {}: Delivery has already been picked up'.format(delivery_id))
 
         delivery_dto.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
+
+        # first send the event to get the return_pickup_code if needed
+        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+            'id': delivery_id,
+            'action': 'PICKUP',
+            'delivery': DeliverySerializer.serialize(delivery_dto),
+        })
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
+
+        # if applicable, delete the courier user in case it is an return
+        # else, just save the delivery
         if delivery_dto.type == Delivery.DeliveryType.RETURN:
             pickup_user_dto = delivery_dto.user_pickup
-            delivery_dto.user_pickup = delivery_dto.user_delivery
             delivery_dto_saved = self.save_delivery(delivery_dto)
             self.user_controller.remove_user(pickup_user_dto)
         else:
             delivery_dto_saved = self.save_delivery(delivery_dto)
-
-        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
-            'id': delivery_dto_saved.id,
-            'type': delivery_dto.type,
-            'action': 'PICKUP',
-            'user_delivery_id': delivery_dto.user_id_delivery,
-            'user_pickup_id': delivery_dto.user_id_pickup,
-            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
-        })
-        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
 
         return delivery_dto_saved
 

@@ -55,6 +55,7 @@ from master.classic.eeprom_models import CoolingConfiguration, \
     PumpGroupConfiguration, RTD10CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
     StartupActionConfiguration, ThermostatConfiguration
+from master.classic.master_command import DimmerFieldType
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator
 from master.classic.master_heartbeat import MasterHeartbeat
@@ -318,6 +319,8 @@ class MasterClassicController(MasterController):
         # Publish status of all outputs. Since the event from the master contains
         # all outputs that are currently on, the output(s) that changed can't be
         # determined here.
+        # The dimmer received from the master is converted from 0-63 to 0-100 in
+        # the protocol decoders
         state = {k: (False, None) for k, v in self._output_config.items()}
         for output_id, dimmer in data['outputs']:
             state[output_id] = (True, dimmer)
@@ -466,7 +469,7 @@ class MasterClassicController(MasterController):
         if dimmer is not None:
             master_version = self.get_firmware_version()
             if master_version >= (3, 143, 79):
-                dimmer = int(0.63 * dimmer)
+                dimmer = DimmerFieldType.encode(dimmer)[0]
                 self._master_communicator.do_command(
                     master_api.write_dimmer(),
                     {'output_nr': output_id, 'dimmer_value': dimmer}
@@ -1749,9 +1752,13 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
-    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
         out_dict = self._master_communicator.do_command(master_api.pulse_list())
         return {i: out_dict['pv{0}'.format(i)] for i in range(24)}
+
+    def get_amount_of_pulse_counters(self):  # type: () -> int
+        _ = self
+        return 24
 
     # Validation bits
 

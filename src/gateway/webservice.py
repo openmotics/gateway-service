@@ -2207,12 +2207,16 @@ class WebInterface(object):
         :returns: 'version': String (a.b.c).
         :rtype: dict
         """
-        master_version = self._module_controller.get_master_version()
-        if master_version is not None:
-            master_version = ".".join([str(n) for n in master_version] if len(master_version) else None)
+        parsed_master_version = None  # type: Optional[str]
+        try:
+            master_version = self._module_controller.get_master_version()
+            if master_version is not None:
+                parsed_master_version = ".".join([str(n) for n in master_version] if len(master_version) else None)
+        except Exception as ex:
+            logger.error('Could not load master version: {0}'.format(ex))
         return {'version': gateway.__version__,
                 'gateway': gateway.__version__,
-                'master': master_version}
+                'master': parsed_master_version}
 
     # TODO: def get_versions(self):  # Something more generic that can return a general version overview (service, frontend, modules, os, ...)
 

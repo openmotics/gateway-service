@@ -90,6 +90,11 @@ class APIFieldsTest(unittest.TestCase):
                                             [256, bytearray([0, 0, 1, 0])],
                                             [4294967295, bytearray([255, 255, 255, 255])],
                                             [4294967296, ValueError]])
+        self._test_field(UInt32Field('x', crc16=True), [[-1, ValueError],
+                                                        [0, bytearray([0, 0, 0, 0, 36, 0])],
+                                                        [256, bytearray([0, 0, 1, 0, 180, 1])],
+                                                        [4294967295, bytearray([255, 255, 255, 255, 176, 1])],
+                                                        [4294967296, ValueError]])
 
     def test_bytearray_field(self):
         self._test_field(ByteArrayField('x', 3), [[[-1, 0, 0], ValueError],

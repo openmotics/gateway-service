@@ -189,7 +189,7 @@ class RfidController(object):
          - When a session is running, Returns the user_id Type: int
         """
         if self.rfid_context.rfid_state == RfidAddBadgeState:
-            return self.rfid_context.user.id
+            return self.rfid_context.user and self.rfid_context.user.id
         return None
 
 

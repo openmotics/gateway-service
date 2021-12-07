@@ -21,13 +21,13 @@ from six.moves.queue import Queue, Empty
 
 from gateway.daemon_thread import DaemonThread
 from gateway.enums import BaseEnum
+from gateway.events import GatewayEvent, EsafeEvent
+from gateway.hal.master_event import MasterEvent
 
 from ioc import Injectable, Singleton
 
 if False:  # MYPY
-    from typing import Callable, Dict, List, Literal, Tuple
-    from gateway.events import GatewayEvent, EsafeEvent
-    from gateway.hal.master_event import MasterEvent
+    from typing import Callable, Dict, List, Literal, Tuple, Union
     GATEWAY_TOPIC = Literal['config', 'state']
     MASTER_TOPIC = Literal['eeprom', 'module', 'power', 'output', 'input', 'shutter', 'sensor']
     ESAFE_TOPIC = Literal['delivery', 'lock', 'config', 'rfid']
@@ -35,18 +35,39 @@ if False:  # MYPY
 logger = logging.getLogger(__name__)
 
 
+class EventStructure(object):
+    def __init__(self, topic, event):
+        # type: (Union[MASTER_TOPIC, GATEWAY_TOPIC, ESAFE_TOPIC], Union[MasterEvent, GatewayEvent, EsafeEvent]) -> None
+        self.topic = topic
+        self.event = event
+
+    def __repr__(self):
+        return "<EventStructure: Topic: {}, Event: {}>".format(self.topic, self.event)
+
+    def __str__(self):
+        return self.__repr__()
+
+
 @Injectable.named('pubsub')
 @Singleton
 class PubSub(object):
+    """
+    This module will act as an event broker that will distribute events all across the gateway code where required.
 
-    class MasterTopics(object):
+    The pubsub module will require the following data to fully publish an event:
+     - Topic: The specific topic that is provided for the event in a particular namespace.
+     - Type: the type of event that is defined in the event itself.
+    The above list can is ordered in hierarchical order.
+    """
+
+    class MasterTopics(BaseEnum):
         EEPROM = 'eeprom'  # type: MASTER_TOPIC
         OUTPUT = 'output'  # type: MASTER_TOPIC
         INPUT = 'input'  # type: MASTER_TOPIC
         SHUTTER = 'shutter'  # type: MASTER_TOPIC
         SENSOR = 'sensor'  # type: MASTER_TOPIC
 
-    class GatewayTopics(object):
+    class GatewayTopics(BaseEnum):
         CONFIG = 'config'  # type: GATEWAY_TOPIC
         STATE = 'state'  # type: GATEWAY_TOPIC
 
@@ -61,9 +82,7 @@ class PubSub(object):
         self._gateway_topics = defaultdict(list)  # type: Dict[GATEWAY_TOPIC,List[Callable[[GatewayEvent],None]]]
         self._master_topics = defaultdict(list)  # type: Dict[MASTER_TOPIC,List[Callable[[MasterEvent],None]]]
         self._esafe_topics = defaultdict(list)  # type: Dict[ESAFE_TOPIC,List[Callable[[EsafeEvent],None]]]
-        self._master_events = Queue()  # type: Queue  # Queue[Tuple[str, MasterEvent]]
-        self._gateway_events = Queue()  # type: Queue  # Queue[Tuple[str, GatewayEvent]]
-        self._esafe_events = Queue()  # type: Queue  # Queue[Tuple[str, GatewayEvent]]
+        self._event_queue = Queue()  # type: Queue  # Queue[EventStructure]
         self._pub_thread = DaemonThread(name='pubsub', target=self._publisher_loop, interval=0.1, delay=0.2)
         self._is_running = False
 
@@ -75,40 +94,35 @@ class PubSub(object):
     def stop(self):
         # type: () -> None
         self._is_running = False
-        self._master_events.put(None)
-        self._gateway_events.put(None)
-        self._esafe_events.put(None)
+        self._event_queue.put(None)
         self._pub_thread.stop()
 
     def _publisher_loop(self):
+        """ This function will continuously loop over the function to publish all the events in the queue"""
         while self._is_running:
             self._publish_all_events()
 
     def _publish_all_events(self, blocking=True):
         while True:
             try:
-                event = self._master_events.get(block=blocking, timeout=0.25)
-                if event is None:
+                event_structure = self._event_queue.get(block=blocking, timeout=0.25)
+                if event_structure is None:
                     return
-                self._publish_master_event(*event)
+                self._publish_event(event_structure)
             except Empty:
                 break
-        while True:
-            try:
-                event = self._gateway_events.get(block=blocking, timeout=0.25)
-                if event is None:
-                    return
-                self._publish_gateway_event(*event)
-            except Empty:
-                break
-        while True:
-            try:
-                event = self._esafe_events.get(block=blocking, timeout=0.25)
-                if event is None:
-                    return
-                self._publish_esafe_event(*event)
-            except Empty:
-                break
+
+    def _publish_event(self, event_structure):
+        # type: (EventStructure) -> None
+        if isinstance(event_structure.event, MasterEvent):
+            master_topic = event_structure.topic  # type: MASTER_TOPIC  # type: ignore
+            self._publish_master_event(master_topic, event_structure.event)
+        elif isinstance(event_structure.event, GatewayEvent):
+            gateway_topic = event_structure.topic  # type: GATEWAY_TOPIC  # type: ignore
+            self._publish_gateway_event(gateway_topic, event_structure.event)
+        elif isinstance(event_structure.event, EsafeEvent):
+            esafe_topic = event_structure.topic  # type: ESAFE_TOPIC  # type: ignore
+            self._publish_esafe_event(esafe_topic, event_structure.event)
 
     def subscribe_master_events(self, topic, callback):
         # type: (MASTER_TOPIC, Callable[[MasterEvent],None]) -> None
@@ -116,7 +130,8 @@ class PubSub(object):
 
     def publish_master_event(self, topic, master_event):
         # type: (MASTER_TOPIC, MasterEvent) -> None
-        self._master_events.put((topic, master_event))
+        self._event_queue.put(EventStructure(topic, master_event))
+        # self._master_events.put((topic, master_event))
 
     def _publish_master_event(self, topic, master_event):
         # type: (MASTER_TOPIC, MasterEvent) -> None
@@ -137,7 +152,7 @@ class PubSub(object):
 
     def publish_gateway_event(self, topic, gateway_event):
         # type: (GATEWAY_TOPIC, GatewayEvent) -> None
-        self._gateway_events.put((topic, gateway_event))
+        self._event_queue.put(EventStructure(topic, gateway_event))
 
     def _publish_gateway_event(self, topic, gateway_event):
         # type: (GATEWAY_TOPIC, GatewayEvent) -> None
@@ -160,7 +175,7 @@ class PubSub(object):
 
     def publish_esafe_event(self, topic, esafe_event):
         # type: (ESAFE_TOPIC, EsafeEvent) -> None
-        self._esafe_events.put((topic, esafe_event))
+        self._event_queue.put(EventStructure(topic, esafe_event))
 
     def _publish_esafe_event(self, topic, esafe_event):
         # type: (ESAFE_TOPIC, EsafeEvent) -> None

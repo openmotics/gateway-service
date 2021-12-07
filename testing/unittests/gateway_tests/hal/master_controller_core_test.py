@@ -20,6 +20,7 @@ from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration, \
     InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
+from master.core.system_value import Dimmer
 from mocked_core_helper import MockedCore
 
 
@@ -54,12 +55,12 @@ class MasterCoreControllerTest(unittest.TestCase):
 
         events = []
         self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
-        self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([100, 2, 0xff, 0xfe])})
+        self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([128, 2, 0xff, 0xfe])})
         self.controller._handle_event({'type': 0, 'device_nr': 4, 'action': 2, 'data': bytearray([1, 0, 0, 0])})
         self.controller._handle_event({'type': 0, 'device_nr': 6, 'action': 2, 'data': bytearray([0, 0, 0, 0])})
         self.pubsub._publish_all_events(blocking=False)
-        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=0, status=False, dimmer=255, ctimer=0)}),
-                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=2, status=True, dimmer=100, ctimer=65534)}),
+        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=0, status=False, dimmer=100, ctimer=0)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=2, status=True, dimmer=50, ctimer=65534)}),
                           MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=4, locked=True)}),
                           MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=6, locked=False)})],
                          events)
@@ -82,28 +83,28 @@ class MasterCoreControllerTest(unittest.TestCase):
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy):
             events = []
-            self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
-            self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
+            self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [0, 0, 0, 0]})
+            self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [0, 0, 0, 0]})
             self.pubsub._publish_all_events(blocking=False)
             assert [] == events
 
             events = []
-            self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 1, 'data': [None, 0, 0, 0]})
+            self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 1, 'data': [0, 0, 0, 0]})
             self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
             events = []
-            self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 1, 'data': [None, 0, 0, 0]})
+            self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 1, 'data': [0, 0, 0, 0]})
             self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
             events = []
-            self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
+            self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [0, 0, 0, 0]})
             self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_down', 'location': {'room_id': 255}})] == events
 
             events = []
-            self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
+            self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [0, 0, 0, 0]})
             self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
@@ -189,7 +190,7 @@ class MasterCoreControllerTest(unittest.TestCase):
     def test_event_consumer(self):
         with mock.patch.object(gateway.hal.master_controller_core, 'BackgroundConsumer',
                                return_value=None) as new_consumer:
-            controller = MasterCoreController()
+            _ = MasterCoreController()
             expected_call = mock.call(CoreAPI.event_information(), 0, mock.ANY)
             self.assertIn(expected_call, new_consumer.call_args_list)
 
@@ -204,7 +205,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         subscriber = mock.Mock()
         with mock.patch.object(gateway.hal.master_controller_core, 'BackgroundConsumer',
                                side_effect=new_consumer) as new_consumer:
-            controller = MasterCoreController()
+            _ = MasterCoreController()
         self.pubsub.subscribe_master_events(PubSub.MasterTopics.INPUT, subscriber.callback)
 
         new_consumer.assert_called()
@@ -345,6 +346,25 @@ class MasterInputState(unittest.TestCase):
             devices = state.get_recent()
             self.assertIn(1, devices)
             self.assertNotIn(2, devices)
+
+    def test_dimmer_stability(self):
+        # Validates a stable conversion:
+        # +----------------------> Original percentage set by external user -> `percentage` in test below
+        # |    +-----------------> Original value converted to svt (precision loss) -> `svt` in test below
+        # |    |    +------------> Recovered percentage -> `recovered_percentage` in test below
+        # |    |    |    +-------> New svt based on recovered percentage (should be stable with first svt conversion) -> `new_svt`in test below
+        # |    |    |    |    +--> New percentage (should be stable with recovered percentage) -> `new_percentage` in test below
+        # 0 -> 0 -> 0 -> 0 -> 0
+        # 1 -> 0 -> 0 -> 0 -> 0
+        # 2 -> 1 -> 2 -> 1 -> 2
+        # 3 -> 1 -> 2 -> 1 -> 2
+        for percentage in range(0, 101):
+            svt = Dimmer.dimmer_to_system_value(percentage)
+            recovered_percentage = Dimmer.system_value_to_dimmer(svt)
+            new_svt = Dimmer.dimmer_to_system_value(recovered_percentage)
+            self.assertEqual(svt, new_svt)
+            new_percentage = Dimmer.system_value_to_dimmer(new_svt)
+            self.assertEqual(recovered_percentage, new_percentage)
 
 
 def get_core_output_dummy(i):

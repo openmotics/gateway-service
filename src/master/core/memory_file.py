@@ -184,11 +184,11 @@ class MemoryFile(object):
                             continue
                     # Write in chuncks
                     for i in range(0, len(data), MemoryFile.WRITE_CHUNK_SIZE):
-                        chunck = data[i:i + MemoryFile.WRITE_CHUNK_SIZE]
-                        logger.info('MEMORY.{0}: Write P{1} S{2} D[{3}]'.format(memory_type, page, start, ' '.join(str(b) for b in chunck)))
+                        chunk = data[i:i + MemoryFile.WRITE_CHUNK_SIZE]
+                        logger.info('MEMORY.{0}: Write P{1} S{2} D[{3}]'.format(memory_type, page, start + i, ' '.join(str(b) for b in chunk)))
                         self._core_communicator.do_command(
-                            command=CoreAPI.memory_write(len(chunck)),
-                            fields={'type': memory_type, 'page': page, 'start': start, 'data': chunck},
+                            command=CoreAPI.memory_write(len(chunk)),
+                            fields={'type': memory_type, 'page': page, 'start': start + i, 'data': chunk},
                             timeout=MemoryFile.WRITE_TIMEOUT
                         )
                         data_written = True

@@ -359,14 +359,15 @@ class System(object):
         # check if running in python 2 mode, otherwise packages should be included in the build (PyInstaller)
         if sys.version_info.major == 2:
             import site
-            path = '{0}/python-deps/lib/python2.7/site-packages'.format(constants.OPENMOTICS_PREFIX)
+            path = os.path.abspath(os.path.join(__file__, '../../python-deps/lib/python2.7/site-packages'))
             if os.path.exists(path):
                 site.addsitedir(path)
                 sys.path.remove(path)
                 sys.path.insert(0, path)
 
         if operating_system in [System.OS.ANGSTROM, System.OS.DEBIAN]:
-            os.environ['REQUESTS_CA_BUNDLE'] = '/opt/openmotics/python/libs/cacert.pem'
+            path = os.path.abspath(os.path.join(__file__, '../libs/cacert.pem'))
+            os.environ['REQUESTS_CA_BUNDLE'] = path
 
 
 class Platform(object):
