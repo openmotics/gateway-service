@@ -47,6 +47,7 @@ class CommunicationBlocker(object):
     RESTART = 'RESTART'
     UPDATE = 'UPDATE'
     VERSION_SCAN = 'VERSION_SCAN'
+    FACTORY_RESET = 'FACTORY_RESET'
 
 
 class CoreCommunicator(object):
@@ -63,14 +64,18 @@ class CoreCommunicator(object):
 
     BLOCKER_TIMEOUTS = {CommunicationBlocker.RESTART: 15.0,
                         CommunicationBlocker.UPDATE: 600.0,
-                        CommunicationBlocker.VERSION_SCAN: 5.0}
-    BLOCKER_ABORT = [CommunicationBlocker.UPDATE]
+                        CommunicationBlocker.VERSION_SCAN: 5.0,
+                        CommunicationBlocker.FACTORY_RESET: 600.0}
+    BLOCKER_ABORT = [CommunicationBlocker.UPDATE,
+                     CommunicationBlocker.FACTORY_RESET]
     BLOCKER_REASONS = {CommunicationBlocker.RESTART: 'Master restart',
                        CommunicationBlocker.UPDATE: 'Master update',
-                       CommunicationBlocker.VERSION_SCAN: 'Version scan'}
+                       CommunicationBlocker.VERSION_SCAN: 'Version scan',
+                       CommunicationBlocker.FACTORY_RESET: 'Factory reset'}
     BLOCKERS = [CommunicationBlocker.RESTART,
                 CommunicationBlocker.UPDATE,
-                CommunicationBlocker.VERSION_SCAN]
+                CommunicationBlocker.VERSION_SCAN,
+                CommunicationBlocker.FACTORY_RESET]
 
     @Inject
     def __init__(self, controller_serial=INJECTED):
@@ -264,6 +269,24 @@ class CoreCommunicator(object):
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
 
+    def wait_for_blockers(self, bypass_blockers=None, force_wait=False):  # type: (Optional[List], bool) -> None
+        for blocker in CoreCommunicator.BLOCKERS:
+            event = self._blockages[blocker]['event']
+            reason = CoreCommunicator.BLOCKER_REASONS[blocker]
+            if bypass_blockers is not None and blocker in bypass_blockers:
+                if not event.is_set():
+                    logger.info('{0} active, but bypass allowed'.format(reason))
+                continue
+            abort = blocker in CoreCommunicator.BLOCKER_ABORT
+            block_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[blocker]
+            if not event.is_set():
+                if abort and not force_wait:
+                    raise MasterUnavailable('{0} in progress'.format(reason))
+                logger.info('{0} active, holding call'.format(reason))
+            if not event.wait(timeout=block_timeout):
+                logger.warning('{0} holding window expired'.format(reason))
+                raise CommunicationTimedOutException()
+
     def do_command(self, command, fields, timeout=2, bypass_blockers=None):
         # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int], Optional[List]) -> Union[T_co, Dict[str, Any]]
         """
@@ -275,22 +298,7 @@ class CoreCommunicator(object):
         :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
         :param bypass_blockers: Indicate which blockers can be bypassed
         """
-        for blocker in CoreCommunicator.BLOCKERS:
-            event = self._blockages[blocker]['event']
-            reason = CoreCommunicator.BLOCKER_REASONS[blocker]
-            if bypass_blockers is not None and blocker in bypass_blockers:
-                if not event.is_set():
-                    logger.info('{0} active, but bypass allowed'.format(reason))
-                continue
-            abort = blocker in CoreCommunicator.BLOCKER_ABORT
-            block_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[blocker]
-            if not event.is_set():
-                if abort:
-                    raise MasterUnavailable('{0} in progress'.format(reason))
-                logger.info('{0} active, holding call'.format(reason))
-            if not event.wait(timeout=block_timeout):
-                logger.warning('{0} holding window expired'.format(reason))
-                raise CommunicationTimedOutException()
+        self.wait_for_blockers(bypass_blockers=bypass_blockers)
 
         cid = self._get_cid()
         consumer = None  # type: Optional[Consumer]
