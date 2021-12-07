@@ -559,18 +559,21 @@ class UpdateController(object):
                             (Module.hardware_type == HardwareType.PHYSICAL) &
                             (Module.module_type.in_(module_types)))
         address_suffix = None  # type: Optional[str]
+        single_address = None  # type: Optional[str]
         if module_address is not None:
-            filter_address = module_address
+            single_address = module_address
             if '@' in module_address:
-                filter_address, address_suffix = module_address.split('@')
-            where_expression &= (Module.address == filter_address)
+                single_address, address_suffix = module_address.split('@')
+            where_expression &= (Module.address == single_address)
         modules = Module.select().where(where_expression)  # type: List[Module]
 
         modules_to_update = UpdateController._filter_modules_to_update(all_modules=modules,
                                                                        target_version=target_version,
                                                                        mode=mode)
         if not modules_to_update:
-            return 0, 0
+            if module_address is None or mode != UpdateEnums.Modes.FORCED:
+                return 0, 0
+            modules_to_update = [Module(address=single_address)]
 
         # Fetch the firmware
         filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
@@ -598,16 +601,19 @@ class UpdateController(object):
                                                                           address=address,
                                                                           hex_filename=target_filename,
                                                                           version=target_version)
-                if new_version is not None:
-                    module.firmware_version = new_version
-                module.last_online_update = int(time.time())
-                module.update_success = True
+                if module.id is not None:
+                    if new_version is not None:
+                        module.firmware_version = new_version
+                    module.last_online_update = int(time.time())
+                    module.update_success = True
                 successes += 1
             except Exception as ex:
                 individual_logger.exception('Error when updating {0}: {1}'.format(firmware_type, ex))
-                module.update_success = False
+                if module.id is not None:
+                    module.update_success = False
                 failures += 1
-            module.save()
+            if module.id is not None:
+                module.save()
 
         # Cleanup
         base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
@@ -633,7 +639,9 @@ class UpdateController(object):
                                                                        target_version=target_version,
                                                                        mode=mode)
         if not modules_to_update:
-            return 0, 0
+            if module_address is None or mode != UpdateEnums.Modes.FORCED:
+                return 0, 0
+            modules_to_update = [Module(address=module_address)]
 
         # Fetch the firmware
         filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
@@ -659,16 +667,19 @@ class UpdateController(object):
                                                                            module_address=module_address,
                                                                            firmware_filename=target_filename,
                                                                            firmware_version=target_version)
-                if new_version is not None:
-                    module.firmware_version = new_version
-                module.last_online_update = int(time.time())
-                module.update_success = True
+                if module.id is not None:
+                    if new_version is not None:
+                        module.firmware_version = new_version
+                    module.last_online_update = int(time.time())
+                    module.update_success = True
                 successes += 1
             except Exception as ex:
                 individual_logger.exception('Error when updating {0}: {1}'.format(firmware_type, ex))
-                module.update_success = False
+                if module.id is not None:
+                    module.update_success = False
                 failures += 1
-            module.save()
+            if module.id is not None:
+                module.save()
 
         # Cleanup
         base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
