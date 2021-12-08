@@ -255,6 +255,7 @@ class UpdateController(object):
 
     @staticmethod
     def get_inconsistent_modules(module_type=None):
+        # type: (Optional[str]) -> Set[Tuple[Module, str]]
         inconsistent_modules = set()
         modules_by_type = {}  # type: Dict[str, List[Module]]
         modules = Module.select().where(Module.hardware_type == HardwareType.PHYSICAL)
