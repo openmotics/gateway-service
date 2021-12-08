@@ -70,7 +70,7 @@ class ValveDriver(object):
             # BE83: always set the output back to the desired state to override potential manual intervention
             current_status = self._output_controller.get_output_status(output_id=self._valve.output.number)
             desired_on = self._desired_percentage > 0
-            if current_status.status != desired_on or current_status.dimmer != self._desired_percentage:
+            if current_status and (current_status.status != desired_on or current_status.dimmer != self._desired_percentage):
                 self._output_controller.set_output_status(output_id=self._valve.output.number,
                                                           is_on=desired_on,
                                                           dimmer=self._desired_percentage)

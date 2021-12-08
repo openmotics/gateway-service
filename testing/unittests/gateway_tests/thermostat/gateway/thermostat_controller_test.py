@@ -465,6 +465,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
         self.output_controller.set_output_status.reset_mock()
+        self.output_controller.get_output_status.return_value = OutputStatusDTO(id=4, status=True)
         self.controller.set_thermostat_group(thermostat_group_id=0, state='on', mode='cooling')
         self.controller.set_per_thermostat_mode(thermostat_id=1, automatic=False, setpoint=4)
         self.pubsub._publish_all_events(blocking=False)
@@ -479,6 +480,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=False, dimmer=0)
 
         self.output_controller.set_output_status.reset_mock()
+        self.output_controller.get_output_status.return_value = OutputStatusDTO(id=4, status=False)
         self.controller.set_thermostat_group(thermostat_group_id=0, state='on', mode='heating')
         expected.statusses[0].setpoint_temperature = 16.0
         expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
