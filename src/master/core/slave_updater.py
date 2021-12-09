@@ -74,6 +74,8 @@ class SlaveUpdater(object):
                                                          command=SlaveAPI.get_firmware_version(),
                                                          fields={},
                                                          tries=5)
+                if response is None:
+                    raise CommunicationTimedOutException()
                 current_version = response['version'], response['hardware_version']
             except CommunicationTimedOutException:
                 logger.info('Could not request current firmware version after 5 tries')
@@ -180,6 +182,8 @@ class SlaveUpdater(object):
                                                              command=SlaveAPI.get_firmware_version(),
                                                              fields={},
                                                              tries=5)
+                    if response is None:
+                        raise CommunicationTimedOutException()
                     new_version = response['version'], response['hardware_version']
                 except CommunicationTimedOutException:
                     logger.error('Could not request new firmware version')
