@@ -18,6 +18,7 @@ Module to communicate with the Slave bus.
 
 from __future__ import absolute_import
 import logging
+import time
 from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master.core.core_api import CoreAPI
@@ -89,7 +90,31 @@ class SlaveCommunicator(object):
         _ = exc_type, exc_val, exc_tb
         self.exit_transparent_mode()
 
-    def do_command(self, address, command, fields, timeout=2):
+    def do_command(self, address, command, fields, timeout=2, tries=3):
+        # type: (str, SlaveCommandSpec, Dict[str, Any], Optional[int], int) -> Optional[Dict[str, Any]]
+        """
+        Tries to send a slave command over the Communicator and block until an answer is received.
+        Since communication to the slaves seems to be quite unreliable for now, there is a build-in retry
+        mechanism.
+        """
+        tries_counter = tries
+        while True:
+            try:
+                response = self._do_command(address=address,
+                                            command=command,
+                                            fields=fields,
+                                            timeout=timeout)
+                if tries_counter != tries:
+                    logger.warning('Needed {0} tries to execute {1}'.format(tries - tries_counter + 1, command))
+                return response
+            except CommunicationTimedOutException:
+                tries_counter -= 1
+                if tries_counter == 0:
+                    logger.warning('Could not execute {0} in {1} tries'.format(command, tries))
+                    raise
+                time.sleep(tries - tries_counter)  # Gradually longer waits
+
+    def _do_command(self, address, command, fields, timeout=2):
         # type: (str, SlaveCommandSpec, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
         """
         Send an slave command over the Communicator and block until an answer is received.

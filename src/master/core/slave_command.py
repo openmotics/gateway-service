@@ -135,3 +135,6 @@ class SlaveCommandSpec(object):
             result += (entry * 256 * times)
             times += 1
         return result
+
+    def __str__(self):
+        return 'SlaveCommand(\'{0}\')'.format(self.instruction.instruction)
