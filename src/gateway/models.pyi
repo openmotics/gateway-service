@@ -367,8 +367,10 @@ class Thermostat(BaseModel):
 
     def _valves(self, mode: str) -> List[Valve]: ...
 
+    @property
     def heating_schedules(self) -> List[DaySchedule]: ...
 
+    @property
     def cooling_schedules(self) -> List[DaySchedule]: ...
 
 
