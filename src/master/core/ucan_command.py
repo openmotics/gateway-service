@@ -183,6 +183,13 @@ class UCANCommandSpec(object):
     def extract_hash(self, payload):
         return Toolbox.hash(payload[0:self.header_length])
 
+    def __str__(self):
+        return 'UCANCommand({0}, {1})'.format(
+            self.sid,
+            '' if self.instructions is None else [list(instruction.instruction)
+                                                  for instruction in self.instructions]
+        )
+
 
 class UCANPalletCommandSpec(UCANCommandSpec):
     """
@@ -274,3 +281,6 @@ class UCANPalletCommandSpec(UCANCommandSpec):
                     remainder = (remainder << 1)
                     remainder &= 0xFFFFFFFF
         return remainder
+
+    def __str__(self):
+        return 'UCANPalletCommand({0}, {1})'.format(self.sid, self._pallet_type)
