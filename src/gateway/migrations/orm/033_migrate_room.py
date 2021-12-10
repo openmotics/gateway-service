@@ -137,7 +137,11 @@ def migrate(migrator, database, fake=False, **kwargs):
             entry.room_number = entry.room.number
             entry.save()
 
-    migrator.remove_fields(Room, 'floor_id')
+    has_floor_id = migrator.database \
+                           .execute_sql('select count(*) from pragma_table_info(\'room\') where name = \'floor_id\';') \
+                           .fetchone()[0] == 1
+    if has_floor_id:
+        migrator.remove_fields(Room, 'floor_id')
 
 
 def rollback(migrator, database, fake=False, **kwargs):
