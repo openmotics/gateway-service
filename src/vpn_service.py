@@ -243,6 +243,11 @@ class CertificateFiles(object):
         versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.OPENVPN])
         return versions
 
+    @staticmethod
+    def remove_if_pure_directory(path):
+        if not os.path.islink(path) and os.path.isdir(path):
+            shutil.rmtree(path)
+
     def activate_vpn(self, rollback=False):
         if rollback:
             try:
@@ -278,9 +283,10 @@ class CertificateFiles(object):
                 logger.info('Rolling back vpn certificates %s -> %s', vpn_target, target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
+                CertificateFiles.remove_if_pure_directory(self.cert_path(self.openvpn))
                 os.rename(temp_link, self.openvpn)
                 return True
-        else:
+        else:  # Rollback == False
             try:
                 target = os.readlink(self.current).split(os.path.sep)[-1]
             except Exception:
@@ -294,6 +300,7 @@ class CertificateFiles(object):
                 logger.info('Activating vpn certificates %s', target)
                 temp_link = tempfile.mktemp(dir=self.cert_path())
                 os.symlink(target, temp_link)
+                CertificateFiles.remove_if_pure_directory(self.cert_path(self.openvpn))
                 os.rename(temp_link, self.openvpn)
                 return True
         return False
@@ -358,16 +365,24 @@ class CertificateFiles(object):
         except Exception:
             previous_target = None
         os.symlink(target, temp_link)
+        CertificateFiles.remove_if_pure_directory(self.cert_path(self.current))
         os.rename(temp_link, self.current)
         if previous_target:
             os.symlink(previous_target, temp_link)
             os.rename(temp_link, self.previous)
 
     def rollback(self):
-        previous_target = os.readlink(self.previous).split(os.path.sep)[-1]
+        try:
+            previous_target = os.readlink(self.previous).split(os.path.sep)[-1]
+        except Exception as ex:
+            logger.error("Could not rollback certificates, previous target is not available")
+            raise
         logger.info('Rolling back certificates %s', previous_target)
         temp_link = tempfile.mktemp(dir=self.cert_path())
         os.symlink(previous_target, temp_link)
+        # Remove the directory if it was one when renaming the symlink
+        # In some cases, the certificates are in a folder located instead of
+        CertificateFiles.remove_if_pure_directory(self.cert_path(self.current))
         os.rename(temp_link, self.current)
         os.unlink(self.previous)
 
@@ -805,7 +820,10 @@ class UpdateCertsTask(object):
                         self._cloud.authenticate(raise_exception=True)
                         changed = True
                 except Exception:
-                    files.rollback()
+                    try:
+                        files.rollback()
+                    except Exception:
+                        logger.error("Failed to rollback certificates")
                     self._cloud.authenticate(raise_exception=True)
 
                 logger.info('Rotating client certificates... done')

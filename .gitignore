@@ -27,6 +27,8 @@ etc**
 static/
 **.db
 **.db_BACKUP
+versions**
+versions/
 
 # Terms
 src/terms/
