@@ -218,25 +218,44 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = Thermostat.get(number=thermostat_number)
 
         preset = thermostat.get_preset(preset_type)
+        if preset.type == Preset.Types.AUTO:
+            # Restore setpoint from auto schedule.
+            now = datetime.now()
+            items = [(ThermostatGroup.Modes.HEATING, 'heating_setpoint', thermostat.heating_schedules),
+                     (ThermostatGroup.Modes.COOLING, 'cooling_setpoint', thermostat.cooling_schedules)]
+            for mode, field, day_schedules in items:
+                try:
+                    if not day_schedules:
+                        for i in range(7):
+                            schedule = DaySchedule(index=i, thermostat=thermostat, mode=mode)
+                            schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
+                            day_schedules.append(schedule)
+                    _, setpoint = self._auto_setpoint_at(day_schedules, now)
+                    setattr(preset, field, setpoint)
+                except StopIteration:
+                    logger.warning('could not determine %s setpoint from schedule', mode)
+            preset.save()
+            self.tick_thermostat(thermostat=thermostat)
+
         if thermostat.active_preset == preset:
             return False
+
         thermostat.active_preset = preset
         thermostat.save()
-
         if not postpone_tick:
             self.tick_thermostat(thermostat=thermostat)
         return True
 
     def _auto_setpoint_at(self, schedules, at):
-        # type: (List[DaySchedule], datetime) -> Optional[Tuple[datetime, float]]
+        # type: (List[DaySchedule], datetime) -> Tuple[datetime, float]
         """
         Calculate the auto scheduled setpoint at a timestamp.
         """
+        thermostat_id = next((s.thermostat_id for s in schedules), '?')
         transitions = list(sorted(self._calculate_transitions(schedules, at), reverse=True))
-        logger.debug('transitions:')
-        for item in transitions:
-            logger.debug('{} {}'.format(*item))
-        return next(((t, v) for t, v in transitions if t <= at), None)
+        for t, setpoint in transitions:
+            logger.debug('Thermostat %s: %s %s', thermostat_id, t, setpoint)
+        return next((t, v) for t, v in transitions if t <= at)
 
     def _calculate_transitions(self, schedules, at):
         # type: (List[DaySchedule], datetime) -> Iterable[Tuple[datetime, float]]

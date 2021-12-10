@@ -419,6 +419,15 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint_temperature = 15.0
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
+        now = datetime.now()
+        DaySchedule.create(thermostat_id=1, mode='heating', index=now.weekday(), content='{"0":19.0}')
+        # Restore auto scheduled setpoints
+        self.controller.set_thermostat(1, preset='auto')
+        expected.statusses[0].setpoint_temperature = 19.0
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
+
+        return
+
         self.controller.set_per_thermostat_mode(thermostat_id=1,
                                                 automatic=False,
                                                 setpoint=3)
