@@ -30,7 +30,7 @@ import shutil
 import subprocess
 from collections import namedtuple
 from six.moves.urllib.parse import urlparse, urlunparse
-from ioc import INJECTED, Inject, Injectable
+from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from gateway.dto import ModuleDTO
 from gateway.daemon_thread import DaemonThread
@@ -52,6 +52,7 @@ FirmwareInfo = namedtuple('FirmwareInfo', 'code  module_types')
 
 
 @Injectable.named('update_controller')
+@Singleton
 class UpdateController(object):
 
     UPDATE_DELAY = 120
@@ -133,6 +134,7 @@ class UpdateController(object):
         self._master_controller = master_controller
         self._energy_module_controller = energy_module_controller
         self._cloud_url = cloud_url
+        self._pending_updates = True
 
         if not os.path.exists(UpdateController.VERSIONS_FOLDER):
             global_logger.info('Creating {0}'.format(UpdateController.VERSIONS_FOLDER))
@@ -252,6 +254,7 @@ class UpdateController(object):
                             module.save()
             global_logger.info('Request for update firmware {0} to {1}'.format(firmware_type, version))
         Config.set_entry('firmware_target_versions', target_versions)
+        self._pending_updates = True
 
     @staticmethod
     def get_inconsistent_modules(module_type=None):
@@ -465,7 +468,9 @@ class UpdateController(object):
 
         success, target_version, _ = UpdateController._get_target_version_info('gateway_service')
         gateway_service_current_version = self._fetch_version(firmware_type='gateway_service', logger=global_logger)
-        gateway_service_up_to_date = success and target_version == gateway_service_current_version
+        gateway_service_up_to_date = target_version is None or (success and target_version == gateway_service_current_version)
+
+        had_work = False
 
         firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
         for firmware_type in firmware_types:
@@ -477,6 +482,7 @@ class UpdateController(object):
 
             component_logger = Logs.get_update_logger(name=firmware_type)
             if firmware_type == 'gateway_service':
+                had_work = True
                 try:
                     component_logger.info('Updating gateway_service to {0}'.format(target_version))
                     # Validate whether an update is needed
@@ -523,9 +529,9 @@ class UpdateController(object):
 
             if firmware_type == 'gateway_frontend':
                 try:
-                    self._update_gateway_frontend(new_version=target_version,
-                                                  metadata=metadata,
-                                                  logger=component_logger)
+                    had_work |= self._update_gateway_frontend(new_version=target_version,
+                                                              metadata=metadata,
+                                                              logger=component_logger)
                     success = True
                 except Exception as ex:
                     component_logger.error('Could not update gateway_frontend to {0}: {1}'.format(target_version, ex))
@@ -535,13 +541,18 @@ class UpdateController(object):
 
             # Hex firmwares
             try:
-                self._update_module_firmware(firmware_type=firmware_type,
-                                             target_version=target_version,
-                                             mode=UpdateEnums.Modes.AUTOMATIC,
-                                             module_address=None,
-                                             metadata=metadata)
+                successes, failures = self._update_module_firmware(firmware_type=firmware_type,
+                                                                   target_version=target_version,
+                                                                   mode=UpdateEnums.Modes.AUTOMATIC,
+                                                                   module_address=None,
+                                                                   metadata=metadata)
+                had_work |= successes > 0 or failures > 0
             except Exception as ex:
                 component_logger.error('Could not update {0} to {1}: {2}'.format(firmware_type, target_version, ex))
+
+        if not had_work and self._pending_updates:
+            global_logger.info('No pending updates')
+            self._pending_updates = False
 
     def _update_module_firmware(self, firmware_type, target_version, mode, module_address, metadata, firmware_filename=None):
         # type: (str, str, str, Optional[str], Optional[Dict[str, Any]], Optional[str]) -> Tuple[int, int]
@@ -772,7 +783,7 @@ class UpdateController(object):
             return 0, 1
 
     def _update_gateway_frontend(self, new_version, metadata, logger):
-        # type: (str, Optional[Dict[str, Any]], Logger) -> None
+        # type: (str, Optional[Dict[str, Any]], Logger) -> bool
         logger.info('Updating gateway_frontend to {0}'.format(new_version))
 
         # Migrate legacy folder structure, if needed
@@ -793,7 +804,7 @@ class UpdateController(object):
         if old_version == new_version:
             # Already up-to-date
             logger.info('Firmware for gateway_frontend up-to-date')
-            return
+            return False
 
         new_version_folder = UpdateController.FRONTEND_BASE_TEMPLATE.format(new_version)
         if not os.path.exists(new_version_folder):
@@ -827,6 +838,7 @@ class UpdateController(object):
                                              logger=logger)
 
         logger.info('Update completed')
+        return True
 
     @staticmethod
     def _move_openvpn_certificates(logger):  # type: (Logger) -> None

@@ -18,6 +18,7 @@ Module to communicate with the uCANs.
 
 from __future__ import absolute_import
 import logging
+import time
 from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master.core.core_api import CoreAPI
@@ -64,10 +65,20 @@ class UCANCommunicator(object):
         :return: Boolean, indicating whether the uCAN is in bootloader or not
         """
         try:
-            self.do_command(cc_address, UCANAPI.ping(SID.NORMAL_COMMAND), ucan_address, {'data': 1})
+            self.do_command(cc_address=cc_address,
+                            command=UCANAPI.ping(SID.NORMAL_COMMAND),
+                            identity=ucan_address,
+                            fields={'data': 1},
+                            tries=2,
+                            warn=False)
             return False
         except CommunicationTimedOutException:
-            self.do_command(cc_address, UCANAPI.ping(SID.BOOTLOADER_COMMAND), ucan_address, {'data': 1})
+            self.do_command(cc_address=cc_address,
+                            command=UCANAPI.ping(SID.BOOTLOADER_COMMAND),
+                            identity=ucan_address,
+                            fields={'data': 1},
+                            tries=2,
+                            warn=False)
             return True
 
     def register_consumer(self, consumer):  # type: (Union[Consumer, PalletConsumer]) -> None
@@ -80,19 +91,38 @@ class UCANCommunicator(object):
         if consumer in consumers:
             consumers.remove(consumer)
 
-    def do_command(self, cc_address, command, identity, fields, timeout=2, tx_timeout=2):
+    def do_command(self, cc_address, command, identity, fields, timeout=2, tx_timeout=2, tries=3, warn=True):
+        # type: (str, UCANCommandSpec, str, Dict[str, Any], Optional[int], Optional[int], int, bool) -> Optional[Dict[str, Any]]
+        """
+        Tries to send a uCAN command over the Communicator and block until an answer is received.
+        Since communication to the uCANs seems to be unreliable every now and then, there is a build-in retry
+        mechanism for now.
+        """
+        tries_counter = tries
+        while True:
+            try:
+                response = self._do_command(cc_address=cc_address,
+                                            command=command,
+                                            identity=identity,
+                                            fields=fields,
+                                            timeout=timeout,
+                                            tx_timeout=tx_timeout)
+                if tries_counter != tries and warn:
+                    logger.warning('Needed {0} tries to execute {1}'.format(tries - tries_counter + 1, command))
+                return response
+            except CommunicationTimedOutException:
+                tries_counter -= 1
+                if tries_counter == 0:
+                    if warn:
+                        logger.warning('Could not execute {0} in {1} tries'.format(command, tries))
+                    raise
+                time.sleep(tries - tries_counter)  # Gradually longer waits
+
+    def _do_command(self, cc_address, command, identity, fields, timeout=2, tx_timeout=2):
         # type: (str, UCANCommandSpec, str, Dict[str, Any], Optional[int], Optional[int]) -> Optional[Dict[str, Any]]
         """
         Send a uCAN command over the Communicator and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
-
-        :param cc_address: An address of the CC connected to the uCAN
-        :param command: specification of the command to execute
-        :param identity: The identity
-        :param fields: A dictionary with the command input field values
-        :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
-        :param tx_timeout: timeout for the TX message(s) before a CommunicationTimedOutException is raised
-        :returns: dict containing the output fields of the command
         """
         if self._cc_pallet_mode.get(cc_address, False) is True:
             raise BootloadingException('CC {0} is currently bootloading'.format(cc_address))
