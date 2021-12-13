@@ -323,8 +323,10 @@ class ThermostatControllerGateway(ThermostatController):
                 else:
                     setpoint_temperature = active_preset.heating_setpoint
 
+                actual_temperature = thermostat_pid.current_temperature if thermostat_pid is not None else None
+
                 thermostat_statusses.append(ThermostatStatusDTO(id=thermostat.number,
-                                                                actual_temperature=get_temperature_from_sensor(thermostat.sensor),
+                                                                actual_temperature=actual_temperature,
                                                                 setpoint_temperature=setpoint_temperature,
                                                                 outside_temperature=outside_temperature,
                                                                 mode=0,  # TODO: Need to be fixed
