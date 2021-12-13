@@ -61,6 +61,7 @@ class ThermostatControllerGateway(ThermostatController):
         self._scheduling_controller = scheduling_controller
         self._pubsub = pubsub
         self._running = False
+        self._sync_auto_setpoints = True
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
         self._update_pumps_thread = None  # type: Optional[DaemonThread]
         self._sync_thread = None  # type: Optional[DaemonThread]
@@ -123,6 +124,13 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
         self._sync_scheduler()
+        self._sync_auto_presets()
+        # Ensure changes for auto presets are published
+        for thermostat in list(Thermostat.select()):
+            thermostat_pid = self.thermostat_pids.get(thermostat.number)
+            if thermostat_pid:
+                thermostat_pid.update_thermostat(thermostat)
+                thermostat_pid.tick()
 
     def _update_pumps(self):  # type: () -> None
         try:
@@ -135,6 +143,29 @@ class ThermostatControllerGateway(ThermostatController):
             self.refresh_config_from_db()
         except Exception:
             logger.exception('Could not get thermostat config.')
+
+    def _sync_auto_presets(self):  # type: () -> None
+        if not self._sync_auto_setpoints:
+            return
+        logger.info('Syncing auto setpoints from schedule')
+        self._sync_auto_setpoints = False
+        for preset in list(Preset.select().where(Preset.type == Preset.Types.AUTO)):
+            # Restore setpoint from auto schedule.
+            now = datetime.now()
+            items = [(ThermostatGroup.Modes.HEATING, 'heating_setpoint', preset.thermostat.heating_schedules),
+                     (ThermostatGroup.Modes.COOLING, 'cooling_setpoint', preset.thermostat.cooling_schedules)]
+            for mode, field, day_schedules in items:
+                try:
+                    if not day_schedules:
+                        for i in range(7):
+                            schedule = DaySchedule(index=i, thermostat=preset.thermostat, mode=mode)
+                            schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
+                            day_schedules.append(schedule)
+                    _, setpoint = self._auto_setpoint_at(day_schedules, now)
+                    setattr(preset, field, setpoint)
+                except StopIteration:
+                    logger.warning('could not determine %s setpoint from schedule', mode)
+            preset.save()
 
     def _sync_scheduler(self):  # type: () -> None
         schedule_mapping = {x.external_id: x for x in self._scheduling_controller.load_schedules(source=Schedule.Sources.THERMOSTATS)}

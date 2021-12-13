@@ -390,6 +390,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                  valve=valve,
                                  mode=ThermostatGroup.Modes.HEATING,
                                  priority=0)
+        self.controller._sync_auto_setpoints = False
         self.controller.refresh_config_from_db()
 
         mode_output = Output.create(number=5)
