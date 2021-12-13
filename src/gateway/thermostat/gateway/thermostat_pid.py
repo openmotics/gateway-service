@@ -129,10 +129,27 @@ class ThermostatPid(object):
                      self.get_active_valves_percentage(), self._current_steering_power or 0,
                      room_number, self._state, self._mode)
 
+    def _get_current_temperature_value(self):
+        # in the future we might combine multiple sensors, for now we only support one sensor per thermostat
+        if self._thermostat.sensor is not None:
+            status = self._sensor_controller.get_sensor_status(self._thermostat.sensor.id)
+            if status is not None and status.value is not None:
+                return status.value
+        raise ValueError('Could not get sensor value')
+
     def tick(self):  # type: () -> bool
         if self.enabled != self._current_enabled:
             logger.info('Thermostat {0}: {1}abled in {2} mode'.format(self._thermostat.number, 'En' if self.enabled else 'Dis', self._mode))
             self._current_enabled = self.enabled
+
+        # Always try to get the latest value for the PID loop
+        try:
+            self._current_temperature = self._get_current_temperature_value()
+        except ValueError:
+            # Keep using old temperature reading and count the errors
+            logger.warning('Thermostat {0}: Could not read current temperature, use last value of {1}'
+                           .format(self._thermostat.number, self._current_temperature))
+            self._errors += 1
 
         if not self.enabled:
             self.steer(0)
@@ -146,18 +163,6 @@ class ThermostatPid(object):
             self._current_setpoint = self._pid.setpoint
 
         try:
-            current_temperature = None  # type: Optional[float]
-            if self._thermostat.sensor is not None:
-                status = self._sensor_controller.get_sensor_status(self._thermostat.sensor.id)
-                current_temperature = None if status is None else status.value
-            if current_temperature is not None:
-                self._current_temperature = current_temperature
-            else:
-                # Keep using old temperature reading and count the errors
-                logger.warning('Thermostat {0}: Could not read current temperature, use last value of {1}'
-                               .format(self._thermostat.number, self._current_temperature))
-                self._errors += 1
-
             if self._current_temperature is not None:
                 output_power = self._pid(self._current_temperature)
             else:
