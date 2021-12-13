@@ -109,6 +109,12 @@ class SensorController(BaseController):
                 .execute()
             if count > 0:
                 logger.info('Removed {} unreferenced sensor(s)'.format(count))
+
+            for status_dto in self._status.values():
+                event_data = {'id': status_dto.id,
+                              'value': status_dto.value}
+                gateway_event = GatewayEvent(GatewayEvent.Types.SENSOR_CHANGE, event_data)
+                self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
         else:
             super(SensorController, self)._sync_orm_structure(structure)
 
