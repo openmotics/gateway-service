@@ -324,7 +324,7 @@ class ThermostatControllerGateway(ThermostatController):
                     setpoint_temperature = active_preset.heating_setpoint
 
                 thermostat_statusses.append(ThermostatStatusDTO(id=thermostat.number,
-                                                                actual_temperature=get_temperature_from_sensor(thermostat.sensor),
+                                                                actual_temperature=thermostat_pid.current_temperature,
                                                                 setpoint_temperature=setpoint_temperature,
                                                                 outside_temperature=outside_temperature,
                                                                 mode=0,  # TODO: Need to be fixed

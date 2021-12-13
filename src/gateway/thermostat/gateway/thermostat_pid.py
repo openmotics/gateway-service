@@ -78,6 +78,10 @@ class ThermostatPid(object):
     def valve_ids(self):  # type: () -> List[int]
         return self._heating_valve_ids + self._cooling_valve_ids
 
+    @property
+    def current_temperature(self):  # type: () -> Optional[float]
+        return self._current_temperature
+
     def update_thermostat(self, thermostat):  # type: (Thermostat) -> None
         with self._thermostat_change_lock:
             # cache these values to avoid DB lookups on every tick
