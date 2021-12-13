@@ -51,7 +51,7 @@ from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
 from gateway.energy.energy_communicator import InAddressModeException
-from gateway.enums import ModuleType, ShutterEnums, UpdateEnums, UserEnums, HardwareType
+from gateway.enums import ModuleType, ShutterEnums, UpdateEnums, UserEnums
 from gateway.events import BaseEvent
 from gateway.exceptions import CommunicationFailure, \
     FeatureUnavailableException, InMaintenanceModeException, \
@@ -2236,18 +2236,6 @@ class WebInterface(object):
     def update(self, version, metadata=None):
         """ Request to update to a given version """
         self._update_controller.request_update(version, metadata)
-        return {}
-
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def sync_inconsistent_modules(self, module_type=None):
-        """ Request a firmware update on all modules that are not on the target version"""
-        for (module, target_version) in UpdateController.get_inconsistent_modules(module_type=module_type):
-            logger.info('Updating inconsistent module %s (%s) to %s',
-                        module.address,
-                        module.module_type,
-                        target_version)
-            module.update_success = None  # Allow the update to be re-tried
-            module.save()
         return {}
 
     @openmotics_api(auth=True)

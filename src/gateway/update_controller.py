@@ -256,28 +256,6 @@ class UpdateController(object):
         Config.set_entry('firmware_target_versions', target_versions)
         self._pending_updates = True
 
-    @staticmethod
-    def get_inconsistent_modules(module_type=None):
-        # type: (Optional[str]) -> Set[Tuple[Module, str]]
-        inconsistent_modules = set()
-        modules_by_type = {}  # type: Dict[str, List[Module]]
-        modules = Module.select().where(Module.hardware_type == HardwareType.PHYSICAL)
-        if module_type is not None:
-            modules = modules.where(Module.module_type == module_type)
-        for module in modules:
-            modules_by_type.setdefault(module.module_type, []).append(module)
-        firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
-        for firmware_type in firmware_types:
-            success, target_version, _ = UpdateController._get_target_version_info(firmware_type)
-            if target_version is None:
-                continue
-            if firmware_type in UpdateController.FIRMWARE_INFO_MAP:
-                for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
-                    for module in modules_by_type.get(module_type, []):
-                        if module.firmware_version != target_version:
-                            inconsistent_modules.add((module, target_version))
-        return inconsistent_modules
-
     def update_module_firmware(self, module_type, target_version, mode, module_address, firmware_filename=None):
         # type: (str, str, str, Optional[str], Optional[str]) -> Tuple[int, int]
         if module_type not in UpdateController.MODULE_TYPE_MAP:
