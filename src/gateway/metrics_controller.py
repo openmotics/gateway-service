@@ -494,6 +494,7 @@ class MetricsController(object):
             # Get metric definition
             definition = self.definitions.get(metric['source'], {}).get(metric['type'])
             if definition is None:
+                log('No metric definitions for source {0} and type {1}'.format(metric['source'], metric['type']))
                 continue
             # Validate metric based on definition
             if len(metric['tags']) == 0:
