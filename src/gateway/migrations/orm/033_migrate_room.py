@@ -33,11 +33,17 @@ def migrate(migrator, database, fake=False, **kwargs):
             database = SqliteDatabase(constants.get_gateway_database_file(),
                                       pragmas={'foreign_keys': 1})
 
+    pragma_database = SqliteDatabase(constants.get_gateway_database_file(),
+                                     pragmas={'foreign_keys': 1})
+    has_floor_id = pragma_database.execute_sql('select count(*) from pragma_table_info(\'room\') where name = \'floor_id\';') \
+                                  .fetchone()[0] == 1
+
     class Room(BaseModel):
         id = AutoField()
         number = IntegerField(unique=True)
         name = CharField(null=True)
-        floor_id = IntegerField()  # This field is a leftover from an in correct migration
+        if has_floor_id:
+            floor_id = IntegerField()  # This field is a leftover from an in correct migration
 
     class Output(BaseModel):
         id = AutoField()
@@ -137,9 +143,6 @@ def migrate(migrator, database, fake=False, **kwargs):
             entry.room_number = entry.room.number
             entry.save()
 
-    has_floor_id = migrator.database \
-                           .execute_sql('select count(*) from pragma_table_info(\'room\') where name = \'floor_id\';') \
-                           .fetchone()[0] == 1
     if has_floor_id:
         migrator.remove_fields(Room, 'floor_id')
 
