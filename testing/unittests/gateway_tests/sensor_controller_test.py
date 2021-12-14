@@ -77,7 +77,7 @@ class SensorControllerTest(unittest.TestCase):
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 21.0}) in events
-        assert len(events) == 1
+        assert len(events) == 2
         events.pop()
 
         master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'TEMPERATURE', 'value': 22.5})
@@ -85,7 +85,7 @@ class SensorControllerTest(unittest.TestCase):
         self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 22.5}) in events
-        assert len(events) == 1
+        assert len(events) == 2
         events.pop()
 
         master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'TEMPERATURE', 'value': None})
@@ -93,7 +93,7 @@ class SensorControllerTest(unittest.TestCase):
         self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': None}) in events
-        assert len(events) == 1
+        assert len(events) == 2
 
     def test_sync(self):
         events = []
@@ -367,7 +367,7 @@ class SensorControllerTest(unittest.TestCase):
         sensor = Sensor.get(Sensor.physical_quantity == 'temperature')
         assert values[sensor.id].value == 21.0
         assert GatewayEvent('SENSOR_CHANGE', {'id': sensor.id, 'value': 21.0}) in events
-        assert len(events) == 3
+        assert len(events) == 6
 
     def test_set_sensor_status(self):
         sensor = Sensor.create(id=512, source='plugin', external_id='0', physical_quantity='brightness', name='')
