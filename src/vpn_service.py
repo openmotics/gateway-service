@@ -176,7 +176,7 @@ class Cloud(object):
             data.update({k: v for k, v in response.items()})
             return data
         except Exception:
-            logger.exception('Exception occured during call home')
+            logger.exception('Exception occurred during call home')
             return {'success': False}
 
 
@@ -842,8 +842,9 @@ class UpdateCertsTask(object):
 
     @staticmethod
     def verify_client_certificates(path):
-        subprocess.check_output(['openssl', 'rsa', '-check', '-noout', '-in', os.path.join(path, 'client.key')])
-        subprocess.check_output(['openssl', 'verify', '-CAfile', os.path.join(path, 'ca.crt'), os.path.join(path, 'client.crt')])
+        if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
+            subprocess.check_output(['openssl', 'rsa', '-check', '-noout', '-in', os.path.join(path, 'client.key')])
+            subprocess.check_output(['openssl', 'verify', '-CAfile', os.path.join(path, 'ca.crt'), os.path.join(path, 'client.crt')])
 
 
 class Util(object):
