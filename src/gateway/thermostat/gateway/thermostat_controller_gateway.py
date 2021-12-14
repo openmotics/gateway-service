@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+from datetime import datetime, timedelta
 
 from gateway.daemon_thread import DaemonThread
 from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, ScheduleDTO, \
@@ -23,9 +24,9 @@ from gateway.enums import ThermostatMode, ThermostatState
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
 from gateway.mappers import ThermostatMapper
-from gateway.models import Output, OutputToThermostatGroup, Preset, Pump, \
-    PumpToValve, Schedule, Sensor, Thermostat, ThermostatGroup, Valve, \
-    ValveToThermostat
+from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
+    Preset, Pump, PumpToValve, Schedule, Sensor, Thermostat, ThermostatGroup, \
+    Valve, ValveToThermostat
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.pump_valve_controller import \
@@ -35,7 +36,7 @@ from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Dict, List, Optional
+    from typing import Dict, Iterable, List, Optional, Tuple
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
 
@@ -60,6 +61,7 @@ class ThermostatControllerGateway(ThermostatController):
         self._scheduling_controller = scheduling_controller
         self._pubsub = pubsub
         self._running = False
+        self._sync_auto_setpoints = True
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
         self._update_pumps_thread = None  # type: Optional[DaemonThread]
         self._sync_thread = None  # type: Optional[DaemonThread]
@@ -122,6 +124,13 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
         self._sync_scheduler()
+        self._sync_auto_presets()
+        # Ensure changes for auto presets are published
+        for thermostat in list(Thermostat.select()):
+            thermostat_pid = self.thermostat_pids.get(thermostat.number)
+            if thermostat_pid:
+                thermostat_pid.update_thermostat(thermostat)
+                thermostat_pid.tick()
 
     def _update_pumps(self):  # type: () -> None
         try:
@@ -135,34 +144,55 @@ class ThermostatControllerGateway(ThermostatController):
         except Exception:
             logger.exception('Could not get thermostat config.')
 
+    def _sync_auto_presets(self):  # type: () -> None
+        if not self._sync_auto_setpoints:
+            return
+        logger.info('Syncing auto setpoints from schedule')
+        self._sync_auto_setpoints = False
+        for preset in list(Preset.select().where(Preset.type == Preset.Types.AUTO)):
+            # Restore setpoint from auto schedule.
+            now = datetime.now()
+            items = [(ThermostatGroup.Modes.HEATING, 'heating_setpoint', preset.thermostat.heating_schedules),
+                     (ThermostatGroup.Modes.COOLING, 'cooling_setpoint', preset.thermostat.cooling_schedules)]
+            for mode, field, day_schedules in items:
+                try:
+                    if not day_schedules:
+                        for i in range(7):
+                            schedule = DaySchedule(index=i, thermostat=preset.thermostat, mode=mode)
+                            schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
+                            day_schedules.append(schedule)
+                    _, setpoint = self._auto_setpoint_at(day_schedules, now)
+                    setattr(preset, field, setpoint)
+                except StopIteration:
+                    logger.warning('could not determine %s setpoint from schedule', mode)
+            preset.save()
+
     def _sync_scheduler(self):  # type: () -> None
         schedule_mapping = {x.external_id: x for x in self._scheduling_controller.load_schedules(source=Schedule.Sources.THERMOSTATS)}
         thermostat_schedules = []
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
-            day_schedules = thermostat_pid.thermostat.day_schedules
-            for schedule in day_schedules:
-                for i, (seconds_of_day, new_setpoint) in enumerate(schedule.schedule_data.items()):
-                    day_of_week = schedule.index
-                    m, _ = divmod(int(seconds_of_day), 60)
-                    h, m = divmod(m, 60)
-                    mode = 'H' if schedule.mode == ThermostatMode.HEATING else 'C'
-                    temperature_field = 'heating_temperature' if schedule.mode == ThermostatMode.HEATING else 'cooling_temperature'
-                    external_id = '{}.{}'.format(schedule.id, i)
-                    if external_id in schedule_mapping:
-                        thermostat_schedule = schedule_mapping.pop(external_id)
-                    else:
-                        thermostat_schedule = ScheduleDTO(None, name='',
-                                                          source=Schedule.Sources.THERMOSTATS,
-                                                          external_id=external_id,
-                                                          action='LOCAL_API',
-                                                          start=thermostat_pid.thermostat.start)
-                    thermostat_schedule.name = '{}{} day {} {:02}:{:02}'.format(mode, thermostat_number, day_of_week, h, m)
-                    thermostat_schedule.repeat = '{:02} {:02} {} {} {}'.format(m, h, '*', '*', day_of_week)
-                    thermostat_schedule.arguments = {'name': 'set_setpoint_from_scheduler',
-                                                     'parameters': {'thermostat': thermostat_number,
-                                                                    temperature_field: new_setpoint}}
+            now = datetime.now()
+            items = [('H', 'heating_temperature', thermostat_pid.thermostat.heating_schedules),
+                     ('C', 'cooling_temperature', thermostat_pid.thermostat.cooling_schedules)]
+            for mode, temperature_field, day_schedules in items:
+                for schedule in day_schedules:
+                    for i, (t, setpoint) in enumerate(self._calculate_transitions([schedule], now)):
+                        external_id = '{}.{}'.format(schedule.id, i)
+                        if external_id in schedule_mapping:
+                            thermostat_schedule = schedule_mapping.pop(external_id)
+                        else:
+                            thermostat_schedule = ScheduleDTO(None, name='',
+                                                              source=Schedule.Sources.THERMOSTATS,
+                                                              external_id=external_id,
+                                                              action='LOCAL_API',
+                                                              start=thermostat_pid.thermostat.start)
+                        thermostat_schedule.name = '{}{} day {} {:02}:{:02}'.format(mode, thermostat_number, t.weekday(), t.hour, t.minute)
+                        thermostat_schedule.repeat = '{:02} {:02} {} {} {}'.format(t.minute, t.hour, '*', '*', t.weekday())
+                        thermostat_schedule.arguments = {'name': 'set_setpoint_from_scheduler',
+                                                         'parameters': {'thermostat': thermostat_number,
+                                                                        temperature_field: setpoint}}
+                        thermostat_schedules.append(thermostat_schedule)
 
-                    thermostat_schedules.append(thermostat_schedule)
         if thermostat_schedules:
             self._scheduling_controller.save_schedules(thermostat_schedules)
         if schedule_mapping:
@@ -219,14 +249,66 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = Thermostat.get(number=thermostat_number)
 
         preset = thermostat.get_preset(preset_type)
+        if preset.type == Preset.Types.AUTO:
+            # Restore setpoint from auto schedule.
+            now = datetime.now()
+            items = [(ThermostatGroup.Modes.HEATING, 'heating_setpoint', thermostat.heating_schedules),
+                     (ThermostatGroup.Modes.COOLING, 'cooling_setpoint', thermostat.cooling_schedules)]
+            for mode, field, day_schedules in items:
+                try:
+                    if not day_schedules:
+                        for i in range(7):
+                            schedule = DaySchedule(index=i, thermostat=thermostat, mode=mode)
+                            schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
+                            day_schedules.append(schedule)
+                    _, setpoint = self._auto_setpoint_at(day_schedules, now)
+                    setattr(preset, field, setpoint)
+                except StopIteration:
+                    logger.warning('could not determine %s setpoint from schedule', mode)
+            preset.save()
+            self.tick_thermostat(thermostat=thermostat)
+
         if thermostat.active_preset == preset:
             return False
+
         thermostat.active_preset = preset
         thermostat.save()
-
         if not postpone_tick:
             self.tick_thermostat(thermostat=thermostat)
         return True
+
+    def _auto_setpoint_at(self, schedules, at):
+        # type: (List[DaySchedule], datetime) -> Tuple[datetime, float]
+        """
+        Calculate the auto scheduled setpoint at a timestamp.
+        """
+        thermostat_id = next((s.thermostat_id for s in schedules), '?')
+        transitions = list(sorted(self._calculate_transitions(schedules, at), reverse=True))
+        for t, setpoint in transitions:
+            logger.debug('Thermostat %s: %s %s', thermostat_id, t, setpoint)
+        return next((t, v) for t, v in transitions if t <= at)
+
+    def _calculate_transitions(self, schedules, at):
+        # type: (List[DaySchedule], datetime) -> Iterable[Tuple[datetime, float]]
+        """
+        Calculate the setpoint transitions relative to a timestamp based on the
+        given day schedules.
+        """
+        index = at.weekday()
+        start_of_day = datetime(at.year, at.month, at.day)
+
+        data = {}
+        for schedule in schedules:
+            offset = max(schedule.index, index) - min(schedule.index, index)
+            # Shift last day schedule when at start of the week.
+            if index == 0 and schedule.index == 6:
+                offset -= 7
+            if schedule.index < index:
+                offset = -offset
+            d = start_of_day + timedelta(days=offset)
+            data.update({d + timedelta(seconds=int(k)): v
+                         for k, v in schedule.schedule_data.items()})
+        return data.items()
 
     def set_current_state(self, state, thermostat_number=None, thermostat=None, postpone_tick=False):
         # type: (str, Optional[int], Optional[Thermostat], bool) -> bool
@@ -257,15 +339,17 @@ class ThermostatControllerGateway(ThermostatController):
         # type: (int, Optional[float], Optional[float], ThermostatControllerGateway) -> None
         logger.info('Setting setpoint from scheduler for thermostat {}: H{} C{}'.format(thermostat_number, heating_temperature, cooling_temperature))
         thermostat = Thermostat.get(number=thermostat_number)
-        active_preset = thermostat.active_preset
 
-        # Only update when not in preset mode like away, party, ...
-        if active_preset.type == Preset.Types.AUTO:
-            thermostat_controller.set_current_setpoint(thermostat_number=thermostat_number,
-                                                       heating_temperature=heating_temperature,
-                                                       cooling_temperature=cooling_temperature)
-        else:
-            logger.info('Thermostat is currently in preset mode, skipping update setpoint from scheduler.')
+        changed = False
+        preset = thermostat.get_preset(Preset.Types.AUTO)
+        if heating_temperature:
+            preset.heating_setpoint = heating_temperature
+            changed = True
+        if cooling_temperature:
+            preset.cooling_setpoint = cooling_temperature
+            changed = True
+        if changed:
+            preset.save()
 
     def get_thermostat_group_status(self):  # type: () -> List[ThermostatGroupStatusDTO]
         def get_output_level(output_number):

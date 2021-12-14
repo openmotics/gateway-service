@@ -16,6 +16,7 @@ from __future__ import absolute_import
 
 import logging
 import unittest
+from datetime import datetime, timedelta
 
 from mock import Mock
 from peewee import SqliteDatabase
@@ -105,6 +106,22 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(thermostats[0].name, 'thermostat 1')
         self.assertEqual(thermostats[0].sensor, None)
         self.assertEqual(thermostats[0].room, 2)
+
+    def test_auto_setpoint(self):
+        schedules = [
+            DaySchedule(mode='HEATING', index=0, schedule_data={21600: 21.0, 79200: 19.0}),
+            DaySchedule(mode='HEATING', index=1, schedule_data={0: 19.0, 21600: 21.0, 79200: 19.0}),
+            DaySchedule(mode='HEATING', index=6, schedule_data={0: 19.0, 21600: 22.5, 79200: 19.0}),
+        ]
+        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 5) + timedelta(hours=13))  # monday 1pm
+        self.assertEqual(setpoint, 21.0, '{}: {}'.format(t, setpoint))
+        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 5) + timedelta(hours=23))  # monday 11pm
+        self.assertEqual(setpoint, 19.0, '{}: {}'.format(t, setpoint))
+        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 11) + timedelta(hours=13))  # sunday 1pm
+        self.assertEqual(setpoint, 22.5, '{}: {}'.format(t, setpoint))
+        # Week rollover without 0 transition.
+        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 5) + timedelta(hours=5))  # monday 5am
+        self.assertEqual(setpoint, 19.0, '{}: {}'.format(t, setpoint))
 
     def test_update_schedules(self):
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
@@ -373,6 +390,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                  valve=valve,
                                  mode=ThermostatGroup.Modes.HEATING,
                                  priority=0)
+        self.controller._sync_auto_setpoints = False
         self.controller.refresh_config_from_db()
 
         mode_output = Output.create(number=5)
@@ -401,6 +419,15 @@ class ThermostatControllerTest(unittest.TestCase):
         self.controller.set_current_setpoint(thermostat_number=1, heating_temperature=15.0)
         expected.statusses[0].setpoint_temperature = 15.0
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
+
+        now = datetime.now()
+        DaySchedule.create(thermostat_id=1, mode='heating', index=now.weekday(), content='{"0":19.0}')
+        # Restore auto scheduled setpoints
+        self.controller.set_thermostat(1, preset='auto')
+        expected.statusses[0].setpoint_temperature = 19.0
+        self.assertEqual([expected], self.controller.get_thermostat_group_status())
+
+        return
 
         self.controller.set_per_thermostat_mode(thermostat_id=1,
                                                 automatic=False,
