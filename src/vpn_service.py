@@ -375,7 +375,7 @@ class CertificateFiles(object):
         try:
             previous_target = os.readlink(self.previous).split(os.path.sep)[-1]
         except Exception as ex:
-            logger.error("Could not rollback certificates, previous target is not available")
+            logger.error("Could not rollback certificates, previous target is not available: {}".format(ex))
             raise
         logger.info('Rolling back certificates %s', previous_target)
         temp_link = tempfile.mktemp(dir=self.cert_path())
@@ -820,10 +820,7 @@ class UpdateCertsTask(object):
                         self._cloud.authenticate(raise_exception=True)
                         changed = True
                 except Exception:
-                    try:
-                        files.rollback()
-                    except Exception:
-                        logger.error("Failed to rollback certificates")
+                    files.rollback()
                     self._cloud.authenticate(raise_exception=True)
 
                 logger.info('Rotating client certificates... done')
