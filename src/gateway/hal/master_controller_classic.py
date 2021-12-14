@@ -1193,6 +1193,12 @@ class MasterClassicController(MasterController):
             MasterClassicController._set_master_power(True)
         self._master_communicator.reset_communication_statistics()
 
+    def load_can_bus_termination(self):  # type: () -> bool
+        raise UnsupportedException()
+
+    def save_can_bus_termination(self, enabled):  # type: (bool) -> None
+        raise UnsupportedException()
+
     @communication_enabled
     def raw_action(self, action, size, data=None):
         # type: (str, int, Optional[bytearray]) -> Dict[str,Any]

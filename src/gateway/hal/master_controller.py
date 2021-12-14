@@ -424,6 +424,14 @@ class MasterController(object):
         # type: (bool) -> None
         raise NotImplementedError()
 
+    def load_can_bus_termination(self):
+        # type: () -> bool
+        raise NotImplementedError()
+
+    def save_can_bus_termination(self, enabled):
+        # type: (bool) -> None
+        raise NotImplementedError()
+
     def sync_time(self):
         # type: () -> None
         raise NotImplementedError()
