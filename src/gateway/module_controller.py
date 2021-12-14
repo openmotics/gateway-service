@@ -237,3 +237,9 @@ class ModuleController(BaseController):
     def get_configuration_dirty_flag(self):
         # type: () -> bool
         return self._master_controller.get_configuration_dirty_flag()
+
+    def load_can_bus_termination(self):  # type: () -> bool
+        return self._master_controller.load_can_bus_termination()
+
+    def save_can_bus_termination(self, enabled):  # type: (bool) -> None
+        self._master_controller.save_can_bus_termination(enabled=enabled)

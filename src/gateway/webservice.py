@@ -2471,6 +2471,15 @@ class WebInterface(object):
                         definitions[_source][_metric_type] = definition
         return {'definitions': definitions}
 
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def get_can_bus_termination(self):  # type: () -> Dict[str, Any]
+        return {'enabled': self._module_controller.load_can_bus_termination()}
+
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(enabled=bool))
+    def set_can_bus_termination(self, enabled):  # type: (bool) -> Dict[str, Any]
+        self._module_controller.save_can_bus_termination(enabled=enabled)
+        return {}
+
     @openmotics_api(check=types(confirm=bool, can=bool), auth=True, plugin_exposed=False)
     def factory_reset(self, username, password, confirm=False, can=True):
         user_dto = UserDTO(username=username)

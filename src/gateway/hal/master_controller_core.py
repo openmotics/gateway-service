@@ -1452,6 +1452,17 @@ class MasterCoreController(MasterController):
         self._master_communicator.wait_for_blockers(force_wait=True)
         self.cold_reset()
 
+    def load_can_bus_termination(self):  # type: () -> bool
+        _ = self
+        global_configuration = GlobalConfiguration()
+        return global_configuration.can_bus_termination
+
+    def save_can_bus_termination(self, enabled):  # type: (bool) -> None
+        _ = self
+        global_configuration = GlobalConfiguration()
+        global_configuration.can_bus_termination = enabled
+        global_configuration.save()
+
     def error_list(self):
         return []  # TODO: Implement
 
