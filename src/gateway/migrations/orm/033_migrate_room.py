@@ -20,6 +20,7 @@ from peewee import (
 )
 from peewee_migrate import Migrator
 import constants
+from platform_utils import System
 
 if False:  # MYPY
     from typing import Dict, Any, Type, List
@@ -35,8 +36,12 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     pragma_database = SqliteDatabase(constants.get_gateway_database_file(),
                                      pragmas={'foreign_keys': 1})
-    has_floor_id = pragma_database.execute_sql('select count(*) from pragma_table_info(\'room\') where name = \'floor_id\';') \
-                                  .fetchone()[0] == 1
+    if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
+        has_floor_id = any(field_info for field_info in pragma_database.execute_sql('PRAGMA main.table_info(\'room\');')
+                           if field_info[1] == 'floor_id')
+    else:
+        has_floor_id = pragma_database.execute_sql('select count(*) from pragma_table_info(\'room\') where name = \'floor_id\';') \
+                                      .fetchone()[0] == 1
 
     class Room(BaseModel):
         id = AutoField()
