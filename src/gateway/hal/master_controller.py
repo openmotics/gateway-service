@@ -61,6 +61,9 @@ class MasterController(object):
     def get_communication_statistics(self):
         return self._master_communicator.get_communication_statistics()
 
+    def reset_communication_statistics(self):
+        self._master_communicator.reset_communication_statistics()
+
     def get_communicator_health(self):
         # type: () -> HEALTH
         raise NotImplementedError()
