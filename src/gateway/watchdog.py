@@ -55,6 +55,7 @@ class Watchdog(object):
         self._master_controller = master_controller
         self._energy_communicator = energy_communicator
         self._watchdog_thread = None  # type: Optional[DaemonThread]
+        self._skipped_checks = False
         self.start_time = 0.0
 
     def start(self):
@@ -75,7 +76,13 @@ class Watchdog(object):
     def _watch(self):
         # type: () -> None
         if self._update_controller.firmware_updates_in_progress:
+            self._skipped_checks = True
+            logger.info('Skipping healthcheck; update in progress')
             return
+        if self._skipped_checks:
+            logger.info('Resumed healthcheck')
+            self._skipped_checks = False
+
         self._controller_health('master', self._master_controller, self._master_controller.cold_reset)
         if self._energy_communicator:
             self._controller_health('energy', self._energy_communicator, self._master_controller.power_cycle_bus)
