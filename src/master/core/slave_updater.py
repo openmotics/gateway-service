@@ -63,6 +63,7 @@ class SlaveUpdater(object):
         """ Flashes the content from an Intel HEX file to a slave module """
         with slave_communicator:
             logger.info('Updating slave')
+            start_time = time.time()
 
             if not os.path.exists(hex_filename):
                 raise RuntimeError('The given path does not point to an existing file')
@@ -193,7 +194,7 @@ class SlaveUpdater(object):
             else:
                 logger.info('Skip loading new version as address will have been changed by the application')
 
-            logger.info('Update completed')
+            logger.info('Update completed. Took {0:.1f}s'.format(time.time() - start_time))
             return firmware_version
 
     @staticmethod

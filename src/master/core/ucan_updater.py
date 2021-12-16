@@ -20,6 +20,7 @@ from __future__ import absolute_import
 import logging
 import os
 import struct
+import time
 from intelhex import IntelHex
 from master.core.ucan_api import UCANAPI
 from master.core.ucan_command import UCANPalletCommandSpec, SID
@@ -64,6 +65,7 @@ class UCANUpdater(object):
             ucan_address, cc_address,
             'v{0}'.format(version) if version is not None else 'unknown version')
         )
+        start_time = time.time()
 
         if not os.path.exists(hex_filename):
             raise RuntimeError('The given path does not point to an existing file')
@@ -235,5 +237,5 @@ class UCANUpdater(object):
         else:
             logger.info('Skip loading new version as address will have been changed by the application')
 
-        logger.info('Update completed')
+        logger.info('Update completed. Took {0:.1f}s'.format(time.time() - start_time))
         return current_version
