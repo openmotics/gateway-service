@@ -28,7 +28,7 @@ import gateway
 import hashlib
 import shutil
 import subprocess
-from threading import RLock
+from threading import Lock
 from collections import namedtuple
 from six.moves.urllib.parse import urlparse, urlunparse
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -135,7 +135,7 @@ class UpdateController(object):
         self._master_controller = master_controller
         self._energy_module_controller = energy_module_controller
         self._cloud_url = cloud_url
-        self._update_lock = RLock()
+        self._update_lock = Lock()
         self._pending_updates = True
         self._updates_blocked = False
         self._firmware_updates_in_progress = False
