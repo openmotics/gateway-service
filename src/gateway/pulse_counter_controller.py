@@ -20,15 +20,14 @@ import logging
 import time
 from peewee import fn, DoesNotExist, JOIN
 from ioc import Injectable, Inject, INJECTED, Singleton
-from serial_utils import CommunicationTimedOutException
+from serial_utils import CommunicationFailure
 from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
 from gateway.models import PulseCounter, Room
 from gateway.mappers import PulseCounterMapper
-from platform_utils import Platform
 
 if False:  # MYPY
-    from typing import List, Tuple, Dict, Optional
+    from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ class PulseCounterController(BaseController):
                                         (PulseCounter.number.not_in(ids))).execute()
             duration = time.time() - start
             logger.info('ORM sync (PulseCounter): completed after {0:.1f}s'.format(duration))
-        except CommunicationTimedOutException as ex:
+        except CommunicationFailure as ex:
             logger.error('ORM sync (PulseCounter): Failed: {0}'.format(ex))
         except Exception:
             logger.exception('ORM sync (PulseCounter): Failed')

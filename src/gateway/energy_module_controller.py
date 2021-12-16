@@ -142,6 +142,9 @@ class EnergyModuleController(BaseController):
                     'calls_timedout': []}
         return self._energy_communicator.get_communication_statistics()
 
+    def reset_communication_statistics(self):  # type: () -> None
+        self._energy_communicator.reset_communication_statistics()
+
     def last_success(self):
         if self._energy_communicator is None:
             return 0

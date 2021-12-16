@@ -34,6 +34,7 @@ if False:  # MYPY
     from typing import Callable, Literal, Optional, Union, Dict, Any
     from gateway.hal.master_controller import MasterController
     from gateway.energy.energy_communicator import EnergyCommunicator
+    from gateway.update_controller import UpdateController
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
@@ -48,11 +49,13 @@ class Watchdog(object):
     """
 
     @Inject
-    def __init__(self, energy_communicator=INJECTED, master_controller=INJECTED):
-        # type: (Optional[EnergyCommunicator], MasterController) -> None
+    def __init__(self, update_controller=INJECTED, energy_communicator=INJECTED, master_controller=INJECTED):
+        # type: (UpdateController, Optional[EnergyCommunicator], MasterController) -> None
+        self._update_controller = update_controller
         self._master_controller = master_controller
         self._energy_communicator = energy_communicator
         self._watchdog_thread = None  # type: Optional[DaemonThread]
+        self._skipped_checks = False
         self.start_time = 0.0
 
     def start(self):
@@ -72,6 +75,14 @@ class Watchdog(object):
 
     def _watch(self):
         # type: () -> None
+        if self._update_controller.firmware_updates_in_progress:
+            self._skipped_checks = True
+            logger.info('Skipping healthcheck; update in progress')
+            return
+        if self._skipped_checks:
+            logger.info('Resumed healthcheck')
+            self._skipped_checks = False
+
         self._controller_health('master', self._master_controller, self._master_controller.cold_reset)
         if self._energy_communicator:
             self._controller_health('energy', self._energy_communicator, self._master_controller.power_cycle_bus)
@@ -84,14 +95,16 @@ class Watchdog(object):
             # Cleanup legacy
             Config.remove_entry('communication_recovery')
         elif status != CommunicationStatus.UNSTABLE:
-            reset_action = self._get_reset_action(name, controller)
+            reset_action = Watchdog._get_reset_action(name, controller)
             if reset_action is not None:
                 device_reset()
                 if reset_action == 'service':
+                    self._update_controller.block_updates()
                     time.sleep(15)
                     os._exit(1)
 
-    def _get_reset_action(self, name, controller):
+    @staticmethod
+    def _get_reset_action(name, controller):
         # type: (str, Union[MasterController,EnergyCommunicator]) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
         recovery_data = Config.get_entry(recovery_data_key, None)  # type: Optional[Dict[str, Any]]

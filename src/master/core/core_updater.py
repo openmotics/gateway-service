@@ -46,7 +46,7 @@ class CoreUpdater(object):
     This is a class holding tools to execute Core updates
     """
 
-    BOOTLOADER_SERIAL_READ_TIMEOUT = 3
+    BOOTLOADER_SERIAL_READ_TIMEOUT = 5
     POST_BOOTLOAD_DELAY = 2.0
     APPLICATION_STARTUP_TIMEOUT = 30.0
     POWER_CYCLE_DELAY = 2.0
@@ -75,6 +75,7 @@ class CoreUpdater(object):
         """ Flashes the content from an Intel HEX file to the Core """
         component_logger = Logs.get_update_logger('master_coreplus')
         component_logger.info('Updating Core')
+        start_time = time.time()
 
         if self._master_communicator is not None and not self._master_communicator.is_running():
             self._master_communicator.start()
@@ -107,13 +108,22 @@ class CoreUpdater(object):
             component_logger.info('Bootloader {0} active'.format(bootloader_version))
         else:
             component_logger.info('Bootloader not active, switching to bootloader')
-            Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
-            self._wait_for(entry='DS30HexLoader',
-                           logger=component_logger)
-            bootloader_version = self._in_bootloader(logger=component_logger)
-            if bootloader_version is None:
-                raise RuntimeError('Could not enter bootloader')
-            component_logger.info('Bootloader {0} active'.format(bootloader_version))
+            tries = 3
+            while True:
+                try:
+                    Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
+                    self._wait_for(entry='DS30HexLoader',
+                                   logger=component_logger)
+                    bootloader_version = self._in_bootloader(logger=component_logger)
+                    if bootloader_version is None:
+                        raise RuntimeError('Could not enter bootloader')
+                    component_logger.info('Bootloader {0} active'.format(bootloader_version))
+                    break
+                except Exception:
+                    tries -= 1
+                    if tries == 0:
+                        raise
+                    component_logger.warning('Could not enter bootloader, trying again')
 
         component_logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
         component_logger.info('Flashing...')
@@ -169,7 +179,7 @@ class CoreUpdater(object):
                 version
             ))
 
-        component_logger.info('Update completed')
+        component_logger.info('Update completed. Took {0:.1f}s'.format(time.time() - start_time))
 
     def _wait_for(self, entry, logger):  # type: (str, Logger) -> None
         output = ''
