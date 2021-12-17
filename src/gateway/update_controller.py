@@ -57,6 +57,7 @@ FirmwareInfo = namedtuple('FirmwareInfo', 'code  module_types')
 class UpdateController(object):
 
     UPDATE_DELAY = 120
+    BACKGROUND_UPDATE_SCAN = False
 
     PREFIX = constants.OPENMOTICS_PREFIX  # e.g. /x
     VERSIONS_FOLDER = os.path.join(PREFIX, 'versions')  # e.g. /x/versions
@@ -462,6 +463,8 @@ class UpdateController(object):
         if self._updates_blocked:
             global_logger.info('Updates currently blocked')
             return
+        if not (self._pending_updates or UpdateController.BACKGROUND_UPDATE_SCAN):
+            return
 
         with self._update_lock:
             success, target_version, _ = UpdateController._get_target_version_info('gateway_service')
@@ -487,6 +490,7 @@ class UpdateController(object):
                         if target_version == gateway_service_current_version:
                             component_logger.info('Firmware for gateway_service up-to-date')
                             UpdateController._register_version_success(firmware_type=firmware_type, success=True)
+                            gateway_service_up_to_date = True
                             continue  # Already up-to-date
                         # Check whether `current` isn't already pointing to the target version (would indicate a version mismatch)
                         target_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(target_version)
