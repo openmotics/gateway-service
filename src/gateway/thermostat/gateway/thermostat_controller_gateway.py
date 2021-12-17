@@ -123,6 +123,9 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
+        # FIXME: remove invalid pumps, database should cascade instead.
+        Pump.delete().where(Pump.output.is_null()) \
+            .execute()
         self._sync_scheduler()
         self._sync_auto_presets()
         # Ensure changes for auto presets are published
@@ -659,7 +662,7 @@ class ThermostatControllerGateway(ThermostatController):
             .execute()
 
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
-        pump = Pump.get(number=pump_group_id)
+        pump = Pump.get(number=pump_group_id) # type: Pump
         return PumpGroupDTO(id=pump_group_id,
                             pump_output_id=pump.output.number,
                             valve_output_ids=[valve.output.number for valve in pump.heating_valves])

@@ -367,7 +367,7 @@ class Pump(BaseModel):
     def cooling_valves(self):  # type: () -> List[Valve]
         return self._valves(mode=ThermostatGroup.Modes.COOLING)
 
-    def _valves(self, mode):
+    def _valves(self, mode):  # type: (str) -> List[Valve]
         return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
                                         .distinct()
                                         .join_from(Valve, ValveToThermostat)
