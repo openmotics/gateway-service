@@ -1032,7 +1032,8 @@ class UpdateController(object):
                 try:
                     response = requests.get(url,
                                             verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM,
-                                            stream=True)
+                                            stream=True,
+                                            timeout=30)
                     shutil.copyfileobj(response.raw, handle)
                     downloaded = True
                     break
