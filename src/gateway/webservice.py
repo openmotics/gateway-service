@@ -701,6 +701,9 @@ class WebInterface(object):
         if master_version >= (3, 143, 88):
             features.append('input_states')
 
+        if Platform.get_platform() in Platform.CoreTypes:
+            features.append('can_bus_termination_toggle')
+
         feature = Feature.get_or_none(name=Feature.THERMOSTATS_GATEWAY)
         if feature and feature.enabled:
             features.extend([Feature.THERMOSTATS_GATEWAY, 'thermostat_groups'])
