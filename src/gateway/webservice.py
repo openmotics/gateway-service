@@ -59,7 +59,6 @@ from gateway.exceptions import CommunicationFailure, \
     WrongInputParametersException
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.models import Config, Database, Feature, Schedule, User, Module
-from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
@@ -707,6 +706,7 @@ class WebInterface(object):
             if master_version >= (3, 143, 88):
                 features.add('input_states')
 
+        from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
         if isinstance(self._thermostat_controller, ThermostatControllerGateway):
             features.add('thermostats_gateway')
             features.add('thermostat_groups')
