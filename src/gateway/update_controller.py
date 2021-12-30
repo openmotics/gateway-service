@@ -505,12 +505,11 @@ class UpdateController(object):
                             raise RuntimeError('Update failure reported: {0}'.format(failure_content))
                         # Download archive if needed
                         filename = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(target_version))
-                        if not os.path.exists(filename):
-                            self._load_firmware(firmware_type=firmware_type,
-                                                version=target_version,
-                                                logger=component_logger,
-                                                target_filename=filename,
-                                                metadata=metadata)
+                        self._load_firmware(firmware_type=firmware_type,
+                                            version=target_version,
+                                            logger=component_logger,
+                                            target_filename=filename,
+                                            metadata=metadata)
                         # Start actual update
                         component_logger.info('Detaching gateway_service update process')
                         UpdateController._execute(command=['python',
