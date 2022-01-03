@@ -27,7 +27,7 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
 
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Set
     from master.core.basic_action import BasicAction
 
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -54,6 +54,9 @@ class MasterController(object):
     ##############
     # Public API #
     ##############
+
+    def get_features(self):  # type: () -> Set[str]
+        raise NotImplementedError()
 
     def get_command_histograms(self):
         return self._master_communicator.get_command_histograms()

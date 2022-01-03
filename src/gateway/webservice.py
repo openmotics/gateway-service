@@ -679,7 +679,7 @@ class WebInterface(object):
         """
         Returns all available features this Gateway supports. This allows to make flexible clients
         """
-        features = [
+        features = {
             'metrics',  # Advanced metrics (including metrics over websockets)
             'dirty_flag',  # A dirty flag that can be used to trigger syncs on power & master
             'scheduling',  # Gateway backed scheduling
@@ -691,27 +691,18 @@ class WebInterface(object):
             'ventilation',  # Native ventilation
             'modules_information',  # Clean module information
             'dynamic_updates',  # Dynamic updates
-        ]
-
-        master_version = self._module_controller.get_master_version()
-        if master_version >= (3, 143, 77):
-            features.append('default_timer_disabled')
-        if master_version >= (3, 143, 79):
-            features.append('100_steps_dimmer')
-        if master_version >= (3, 143, 88):
-            features.append('input_states')
-
-        if Platform.get_platform() in Platform.CoreTypes:
-            features.append('can_bus_termination_toggle')
-
-        feature = Feature.get_or_none(name=Feature.THERMOSTATS_GATEWAY)
-        if feature and feature.enabled:
-            features.extend([Feature.THERMOSTATS_GATEWAY, 'thermostat_groups'])
+            # TODO: remove
+            'default_timer_disabled',
+            '100_steps_dimmer',
+            'input_states'
+        }
+        features |= self._module_controller.master_get_features()
+        features |= self._thermostat_controller.get_features()
 
         if self._rebus_controller is not None:
-            features.append('esafe')
+            features.add('esafe')
 
-        return {'features': features}
+        return {'features': list(features)}
 
     @openmotics_api(auth=True)
     def get_platform_details(self):  # type: () -> Dict[str, str]

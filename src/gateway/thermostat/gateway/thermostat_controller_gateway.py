@@ -36,7 +36,7 @@ from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Dict, Iterable, List, Optional, Tuple
+    from typing import Dict, Iterable, List, Optional, Tuple, Set
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
 
@@ -67,6 +67,11 @@ class ThermostatControllerGateway(ThermostatController):
         self._sync_thread = None  # type: Optional[DaemonThread]
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
+
+    def get_features(self):
+        # type: () -> Set[str]
+        return {'thermostats_gateway',
+                'thermostat_groups'}
 
     def start(self):  # type: () -> None
         logger.info('Starting gateway thermostatcontroller...')

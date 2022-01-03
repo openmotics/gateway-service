@@ -18,7 +18,7 @@ if False:  # MYPY
         ThermostatGroupStatusDTO, ThermostatGroupDTO, PumpGroupDTO, \
         RTD10DTO, GlobalRTD10DTO
     from gateway.output_controller import OutputController
-    from typing import List, Tuple, Optional
+    from typing import List, Tuple, Optional, Set
 
 
 class ThermostatController(object):
@@ -27,6 +27,9 @@ class ThermostatController(object):
     def __init__(self, output_controller):
         # type: (OutputController) -> None
         self._output_controller = output_controller
+
+    def get_features(self):  # type: () -> Set[str]
+        raise NotImplementedError()
 
     def start(self):  # type: () -> None
         raise NotImplementedError()

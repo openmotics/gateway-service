@@ -35,7 +35,7 @@ from master.classic.master_communicator import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, List, Dict, Optional, Tuple
+    from typing import Any, List, Dict, Optional, Tuple, Set
     from gateway.dto import OutputStatusDTO
     from gateway.hal.master_controller_classic import MasterClassicController
     from gateway.output_controller import OutputController
@@ -73,6 +73,10 @@ class ThermostatControllerMaster(ThermostatController):
         self._enabled = True
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
+
+    def get_features(self):
+        # type: () -> Set[str]
+        return set()
 
     def start(self):
         # type: () -> None

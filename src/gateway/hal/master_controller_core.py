@@ -62,7 +62,7 @@ from platform_utils import Hardware
 from logs import Logs
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
+    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
     from master.core.core_updater import CoreUpdater
     T_co = TypeVar('T_co', bound=None, covariant=True)
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -124,6 +124,9 @@ class MasterCoreController(MasterController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.module_added(), 0, self._handle_new_module)
         )
+
+    def get_features(self):  # type: () -> Set[str]
+        return {'can_bus_termination_toggle'}
 
     #################
     # Private stuff #
@@ -497,7 +500,7 @@ class MasterCoreController(MasterController):
     def get_firmware_version(self):
         version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                        fields={})['version']
-        return tuple(version.split('.'))
+        return tuple([int(x) for x in version.split('.')])
 
     def sync_time(self):
         # type: () -> None
