@@ -45,6 +45,7 @@ class Event(object):
         UCAN = 'UCAN'
         EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
         MODULE_NOT_RESPONDING = 'MODULE_NOT_RESPONDING'
+        FACTORY_RESET = 'FACTORY_RESET'
         UNKNOWN = 'UNKNOWN'
 
     class IOEventTypes(object):
@@ -119,6 +120,18 @@ class Event(object):
         MASTER = 'MASTER'
         UNKNOWN = 'UNKNOWN'
 
+    class FactoryResetPhase(object):
+        PREPARE = 'PREPARE'
+        STARTED = 'STARTED'
+        ERASE_CAN_CONFIG_DONE = 'ERASE_CAN_CONFIG_DONE'
+        ERASE_EEPROM_START = 'ERASE_EEPROM_START'
+        ERASE_EEPROM_DONE = 'ERASE_EEPROM_DONE'
+        ERASE_FRAM_START = 'ERASE_FRAM_START'
+        ERASE_FRAM_DONE = 'ERASE_FRAM_DONE'
+        ERASE_RS485_MODULES_DONE = 'ERASE_RS485_MODULES_DONE'
+        COMPLETED = 'COMPLETED'
+        UNKNOWN = 'UNKNOWN'
+
     class Bus(object):
         RS485 = 'RS485'
         CAN = 'CAN'
@@ -171,6 +184,7 @@ class Event(object):
                 22: Types.EXECUTED_BA,
                 23: Types.MODULE_NOT_RESPONDING,
                 24: Types.MODULE_NOT_RESPONDING,
+                200: Types.FACTORY_RESET,
                 245: Types.MODULE_DISCOVERY,
                 246: Types.SLAVE_SEARCH,
                 247: Types.GENERIC_DATA,
@@ -282,6 +296,17 @@ class Event(object):
                         'address': ucan_address_helper.decode(bytearray([device_nr & 0xFF]) + data[0:2])}
             return {'bus': Event.Bus.RS485,
                     'address': address_helper.decode(bytearray([device_nr & 0xFF]) + data[0:3])}
+        if self.type == Event.Types.FACTORY_RESET:
+            phase = device_nr & 0xFF
+            return {'phase': {0: Event.FactoryResetPhase.PREPARE,
+                              1: Event.FactoryResetPhase.STARTED,
+                              2: Event.FactoryResetPhase.ERASE_CAN_CONFIG_DONE,
+                              3: Event.FactoryResetPhase.ERASE_EEPROM_START,
+                              4: Event.FactoryResetPhase.ERASE_EEPROM_DONE,
+                              5: Event.FactoryResetPhase.ERASE_FRAM_START,
+                              6: Event.FactoryResetPhase.ERASE_FRAM_DONE,
+                              7: Event.FactoryResetPhase.ERASE_RS485_MODULES_DONE,
+                              8: Event.FactoryResetPhase.COMPLETED}.get(phase, Event.FactoryResetPhase.UNKNOWN)}
         if self.type == Event.Types.MODULE_DISCOVERY:
             types_map = {5: (Event.DiscoveryTypes.EXISTING, ModuleType.OUTPUT),
                          6: (Event.DiscoveryTypes.EXISTING, ModuleType.INPUT),

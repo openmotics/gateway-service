@@ -20,6 +20,7 @@ from __future__ import absolute_import
 import logging
 import os
 import struct
+import time
 from intelhex import IntelHex
 from master.core.ucan_api import UCANAPI
 from master.core.ucan_command import UCANPalletCommandSpec, SID
@@ -64,6 +65,7 @@ class UCANUpdater(object):
             ucan_address, cc_address,
             'v{0}'.format(version) if version is not None else 'unknown version')
         )
+        start_time = time.time()
 
         if not os.path.exists(hex_filename):
             raise RuntimeError('The given path does not point to an existing file')
@@ -164,24 +166,19 @@ class UCANUpdater(object):
 
             if payload != empty_payload:
                 # Since the uCAN flash area is erased, skip empty blocks
-                tries = 0
-                while True:
-                    tries += 1
-                    try:
-                        result = ucan_communicator.do_command(cc_address=cc_address,
-                                                              command=UCANAPI.write_flash(len(payload)),
-                                                              identity=ucan_address,
-                                                              fields={'start_address': little_start_address,
-                                                                      'data': payload},
-                                                              timeout=UCANUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
-                        if result is None or not result['success']:
-                            raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
-                        break
-                    except CommunicationTimedOutException as ex:
-                        logger.warning('Flashing... Address 0x{0:04X} failed: {1}'.format(start_address, ex))
-                        if tries >= 6:
-                            # After about 6 tries (~1 minute) we consider it to be failed
-                            raise
+                try:
+                    result = ucan_communicator.do_command(cc_address=cc_address,
+                                                          command=UCANAPI.write_flash(len(payload)),
+                                                          identity=ucan_address,
+                                                          fields={'start_address': little_start_address,
+                                                                  'data': payload},
+                                                          timeout=UCANUpdater.WRITE_FLASH_BLOCK_TIMEOUT,
+                                                          tries=6)
+                    if result is None or not result['success']:
+                        raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
+                except CommunicationTimedOutException as ex:
+                    logger.warning('Flashing... Address 0x{0:04X} failed: {1}'.format(start_address, ex))
+                    raise
 
             total_payload += payload
 
@@ -240,5 +237,5 @@ class UCANUpdater(object):
         else:
             logger.info('Skip loading new version as address will have been changed by the application')
 
-        logger.info('Update completed')
+        logger.info('Update completed. Took {0:.1f}s'.format(time.time() - start_time))
         return current_version

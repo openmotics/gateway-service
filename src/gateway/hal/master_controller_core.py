@@ -62,7 +62,7 @@ from platform_utils import Hardware
 from logs import Logs
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
+    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
     from master.core.core_updater import CoreUpdater
     T_co = TypeVar('T_co', bound=None, covariant=True)
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -124,6 +124,9 @@ class MasterCoreController(MasterController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.module_added(), 0, self._handle_new_module)
         )
+
+    def get_features(self):  # type: () -> Set[str]
+        return {'can_bus_termination_toggle'}
 
     #################
     # Private stuff #
@@ -202,6 +205,14 @@ class MasterCoreController(MasterController):
             elif core_event.type == MasterCoreEvent.Types.SYSTEM:
                 if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
+                                                              active=False)
+            elif core_event.type == MasterCoreEvent.Types.FACTORY_RESET:
+                phase = core_event.data.get('phase')
+                if phase == MasterCoreEvent.FactoryResetPhase.STARTED:
+                    self._master_communicator.report_blockage(blocker=CommunicationBlocker.FACTORY_RESET,
+                                                              active=True)
+                elif phase == MasterCoreEvent.FactoryResetPhase.COMPLETED:
+                    self._master_communicator.report_blockage(blocker=CommunicationBlocker.FACTORY_RESET,
                                                               active=False)
             elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
                 # TODO: Add partial EEPROM invalidation to speed things up
@@ -307,15 +318,16 @@ class MasterCoreController(MasterController):
             # This is an expected situation
             raise DaemonThreadWait()
 
-    def _do_basic_action(self, basic_action, timeout=2):
-        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
+    def _do_basic_action(self, basic_action, timeout=2, bypass_blockers=None):
+        # type: (BasicAction, Optional[int], Optional[List]) -> Optional[Dict[str, Any]]
         logger.info('BA: Executing {0}'.format(basic_action))
         return self._master_communicator.do_command(command=CoreAPI.basic_action(),
                                                     fields={'type': basic_action.action_type,
                                                             'action': basic_action.action,
                                                             'device_nr': basic_action.device_nr,
                                                             'extra_parameter': basic_action.extra_parameter},
-                                                    timeout=timeout)
+                                                    timeout=timeout,
+                                                    bypass_blockers=bypass_blockers)
 
     def _set_master_state(self, online):
         if online != self._master_online:
@@ -488,7 +500,7 @@ class MasterCoreController(MasterController):
     def get_firmware_version(self):
         version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                        fields={})['version']
-        return tuple(version.split('.'))
+        return tuple([int(x) for x in version.split('.')])
 
     def sync_time(self):
         # type: () -> None
@@ -1406,34 +1418,53 @@ class MasterCoreController(MasterController):
         return ''.join(str(chr(entry)) for entry in data)
 
     def restore(self, data):
-        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
-        data_structure = {}  # type: Dict[int, bytearray]
-        for page in range(pages):
-            page_data = bytearray([ord(entry) for entry in data[page * page_length:(page + 1) * page_length]])
-            if len(page_data) < page_length:
-                page_data += bytearray([255] * (page_length - len(page_data)))
-            data_structure[page] = page_data
-        self._restore(data_structure)
-
-    def factory_reset(self, can=False):
-        # TODO: Include factory of CAN Controls
-        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
-        data_set = {page: bytearray([255] * page_length) for page in range(pages)}
-        self._restore(data_set)
-
-    def _restore(self, data):  # type: (Dict[int, bytearray]) -> None
         amount_of_pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         current_page = amount_of_pages - 1
         while current_page >= 0:
+            # Build page data
+            page_data = bytearray([ord(entry) for entry in data[current_page * page_length:(current_page + 1) * page_length]])
+            if len(page_data) < page_length:
+                page_data += bytearray([255] * (page_length - len(page_data)))
+            # Write page data
             if current_page == 0:
                 page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=128)
-                self._memory_file.write({page_address: data[current_page][:128]})
+                self._memory_file.write({page_address: page_data[:128]})
             else:
                 page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
-                self._memory_file.write({page_address: data[current_page]})
+                self._memory_file.write({page_address: page_data})
             current_page -= 1
         self._memory_file.activate()
         self.cold_reset()  # Cold reset, enforcing a reload of all settings
+
+    def factory_reset(self, can=False):
+        _ = can  # Only full factory reset supported
+        # Activate a communication blocker
+        self._master_communicator.report_blockage(blocker=CommunicationBlocker.FACTORY_RESET,
+                                                  active=True)
+        # Prepare factory reset
+        self._do_basic_action(BasicAction(action_type=254,
+                                          action=2),
+                              bypass_blockers=[CommunicationBlocker.FACTORY_RESET])
+        # Start factory reset
+        self._do_basic_action(BasicAction(action_type=254,
+                                          action=3,
+                                          device_nr=1769,
+                                          extra_parameter=28883),
+                              bypass_blockers=[CommunicationBlocker.FACTORY_RESET])
+        # Wait for the factory reset to finish
+        self._master_communicator.wait_for_blockers(force_wait=True)
+        self.cold_reset()
+
+    def load_can_bus_termination(self):  # type: () -> bool
+        _ = self
+        global_configuration = GlobalConfiguration()
+        return global_configuration.can_bus_termination
+
+    def save_can_bus_termination(self, enabled):  # type: (bool) -> None
+        _ = self
+        global_configuration = GlobalConfiguration()
+        global_configuration.can_bus_termination = enabled
+        global_configuration.save()
 
     def error_list(self):
         return []  # TODO: Implement

@@ -284,7 +284,7 @@ class OutputToThermostatGroup(BaseModel):
 class Pump(BaseModel):
     id: MixedPrimaryKeyField
     name: MixedCharField
-    output: Optional[OutputForeignKeyField]
+    output: Output
 
     @property
     def valves(self) -> List[Valve]: ...
@@ -294,8 +294,6 @@ class Pump(BaseModel):
 
     @property
     def cooling_valves(self) -> List[Valve]: ...
-
-    def _valves(self, mode: str) -> List[Valve]: ...
 
 
 class PumpForeignKeyField(Pump, ForeignKeyField): ...
@@ -367,8 +365,10 @@ class Thermostat(BaseModel):
 
     def _valves(self, mode: str) -> List[Valve]: ...
 
+    @property
     def heating_schedules(self) -> List[DaySchedule]: ...
 
+    @property
     def cooling_schedules(self) -> List[DaySchedule]: ...
 
 

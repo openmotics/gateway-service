@@ -27,7 +27,7 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
 
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Set
     from master.core.basic_action import BasicAction
 
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -55,11 +55,17 @@ class MasterController(object):
     # Public API #
     ##############
 
+    def get_features(self):  # type: () -> Set[str]
+        raise NotImplementedError()
+
     def get_command_histograms(self):
         return self._master_communicator.get_command_histograms()
 
     def get_communication_statistics(self):
         return self._master_communicator.get_communication_statistics()
+
+    def reset_communication_statistics(self):
+        self._master_communicator.reset_communication_statistics()
 
     def get_communicator_health(self):
         # type: () -> HEALTH
@@ -421,6 +427,14 @@ class MasterController(object):
         raise NotImplementedError()
 
     def factory_reset(self, can):
+        # type: (bool) -> None
+        raise NotImplementedError()
+
+    def load_can_bus_termination(self):
+        # type: () -> bool
+        raise NotImplementedError()
+
+    def save_can_bus_termination(self, enabled):
         # type: (bool) -> None
         raise NotImplementedError()
 

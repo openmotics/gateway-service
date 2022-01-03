@@ -65,7 +65,7 @@ from serial_utils import CommunicationTimedOutException
 from logs import Logs
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Set
     from serial import Serial
 
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -123,6 +123,9 @@ class MasterClassicController(MasterController):
             BackgroundConsumer(master_api.module_initialize(), 0, self._process_module_initialize_message)
         )
         self._module_log_lock = Lock()
+
+    def get_features(self):  # type: () -> Set[str]
+        return set()
 
     #################
     # Private stuff #
@@ -1192,6 +1195,12 @@ class MasterClassicController(MasterController):
             time.sleep(5)
             MasterClassicController._set_master_power(True)
         self._master_communicator.reset_communication_statistics()
+
+    def load_can_bus_termination(self):  # type: () -> bool
+        raise UnsupportedException()
+
+    def save_can_bus_termination(self, enabled):  # type: (bool) -> None
+        raise UnsupportedException()
 
     @communication_enabled
     def raw_action(self, action, size, data=None):

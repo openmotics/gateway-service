@@ -27,7 +27,7 @@ from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Set
     from plugins.base import PluginController
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,9 @@ class MasterDummyController(MasterController):
         # type: () -> None
         super(MasterDummyController, self).__init__(MasterCommunicator())
         self._eeprom_controller = DummyEepromObject()
+
+    def get_features(self):  # type: () -> Set[str]
+        return set()
 
     def get_master_online(self):  # type: () -> bool
         return True

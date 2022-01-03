@@ -27,6 +27,7 @@ from threading import Lock
 import ujson as json
 
 from gateway.daemon_thread import BaseThread
+from gateway.exceptions import CommunicationFailure
 from bus.om_bus_events import OMBusEvents
 
 if False:  # MYPY
@@ -72,6 +73,8 @@ class MessageClient(object):
             for callback in self.callbacks:
                 try:
                     callback(event_type, payload)
+                except CommunicationFailure as ex:
+                    logger.error('Communication failure while executing callback: {0}'.format(ex))
                 except Exception:
                     logger.exception('Error executing callback')
         except KeyError:
