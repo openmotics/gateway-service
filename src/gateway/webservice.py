@@ -692,24 +692,8 @@ class WebInterface(object):
             'modules_information',  # Clean module information
             'dynamic_updates',  # Dynamic updates
         }
-
-        if Platform.get_platform() in Platform.CoreTypes:
-            features.add('can_bus_termination_toggle')
-
-        if Platform.get_platform() in Platform.ClassicTypes:
-            # TODO: cleanup
-            master_version = self._module_controller.get_master_version()
-            if master_version >= (3, 143, 77):
-                features.add('default_timer_disabled')
-            if master_version >= (3, 143, 79):
-                features.add('100_steps_dimmer')
-            if master_version >= (3, 143, 88):
-                features.add('input_states')
-
-        from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
-        if isinstance(self._thermostat_controller, ThermostatControllerGateway):
-            features.add('thermostats_gateway')
-            features.add('thermostat_groups')
+        features |= self._module_controller.master_get_features()
+        features |= self._thermostat_controller.get_features()
 
         if self._rebus_controller is not None:
             features.add('esafe')

@@ -28,7 +28,7 @@ from gateway.models import Module, Sensor
 from gateway.mappers.module import ModuleMapper
 
 if False:  # MYPY
-    from typing import Dict, List, Optional, Any
+    from typing import Dict, List, Optional, Any, Set
     from gateway.hal.master_controller import MasterController
     from gateway.energy_module_controller import EnergyModuleController
 
@@ -233,6 +233,9 @@ class ModuleController(BaseController):
 
     def master_clear_error_list(self):
         return self._master_controller.clear_error_list()
+
+    def master_get_features(self):  # type: () -> Set[str]
+        return self.master_controller.get_features()
 
     def get_configuration_dirty_flag(self):
         # type: () -> bool

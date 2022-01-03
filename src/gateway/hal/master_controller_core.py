@@ -125,6 +125,9 @@ class MasterCoreController(MasterController):
             BackgroundConsumer(CoreAPI.module_added(), 0, self._handle_new_module)
         )
 
+    def get_features(self):  # type: () -> Set[str]
+        return {'can_bus_termination_toggle'}
+
     #################
     # Private stuff #
     #################

@@ -72,6 +72,9 @@ class MasterDummyController(MasterController):
         super(MasterDummyController, self).__init__(MasterCommunicator())
         self._eeprom_controller = DummyEepromObject()
 
+    def get_features(self):  # type: () -> Set[str]
+        return set()
+
     def get_master_online(self):  # type: () -> bool
         return True
 

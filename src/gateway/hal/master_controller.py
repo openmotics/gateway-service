@@ -55,6 +55,9 @@ class MasterController(object):
     # Public API #
     ##############
 
+    def get_features(self):  # type: () -> Set[str]
+        raise NotImplementedError()
+
     def get_command_histograms(self):
         return self._master_communicator.get_command_histograms()
 
