@@ -235,7 +235,7 @@ class ModuleController(BaseController):
         return self._master_controller.clear_error_list()
 
     def master_get_features(self):  # type: () -> Set[str]
-        return self.master_controller.get_features()
+        return self._master_controller.get_features()
 
     def get_configuration_dirty_flag(self):
         # type: () -> bool

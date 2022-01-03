@@ -27,7 +27,7 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
 
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Set
     from master.core.basic_action import BasicAction
 
     HEALTH = Literal['success', 'unstable', 'failure']

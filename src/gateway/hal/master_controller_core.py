@@ -62,7 +62,7 @@ from platform_utils import Hardware
 from logs import Logs
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
+    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
     from master.core.core_updater import CoreUpdater
     T_co = TypeVar('T_co', bound=None, covariant=True)
     HEALTH = Literal['success', 'unstable', 'failure']
