@@ -125,15 +125,7 @@ class MasterClassicController(MasterController):
         self._module_log_lock = Lock()
 
     def get_features(self):  # type: () -> Set[str]
-        features = set()
-        if self._master_version is not None:
-            if self._master_version >= (3, 143, 77):
-                features.add('default_timer_disabled')
-            if self._master_version >= (3, 143, 79):
-                features.add('100_steps_dimmer')
-            if self._master_version >= (3, 143, 88):
-                features.add('input_states')
-        return features
+        return set()
 
     #################
     # Private stuff #

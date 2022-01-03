@@ -500,7 +500,7 @@ class MasterCoreController(MasterController):
     def get_firmware_version(self):
         version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                        fields={})['version']
-        return tuple(version.split('.'))
+        return tuple([int(x) for x in version.split('.')])
 
     def sync_time(self):
         # type: () -> None

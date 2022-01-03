@@ -691,6 +691,10 @@ class WebInterface(object):
             'ventilation',  # Native ventilation
             'modules_information',  # Clean module information
             'dynamic_updates',  # Dynamic updates
+            # TODO: remove
+            'default_timer_disabled',
+            '100_steps_dimmer',
+            'input_states'
         }
         features |= self._module_controller.master_get_features()
         features |= self._thermostat_controller.get_features()
