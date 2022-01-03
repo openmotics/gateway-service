@@ -505,12 +505,11 @@ class UpdateController(object):
                             raise RuntimeError('Update failure reported: {0}'.format(failure_content))
                         # Download archive if needed
                         filename = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(target_version))
-                        if not os.path.exists(filename):
-                            self._load_firmware(firmware_type=firmware_type,
-                                                version=target_version,
-                                                logger=component_logger,
-                                                target_filename=filename,
-                                                metadata=metadata)
+                        self._load_firmware(firmware_type=firmware_type,
+                                            version=target_version,
+                                            logger=component_logger,
+                                            target_filename=filename,
+                                            metadata=metadata)
                         # Start actual update
                         component_logger.info('Detaching gateway_service update process')
                         UpdateController._execute(command=['python',
@@ -1069,6 +1068,7 @@ class UpdateController(object):
         if os.path.exists(target_filename):
             actual_checksum = UpdateController._calculate_checksum(filename=target_filename)
             if actual_checksum == checksum:
+                logger.info('Using firmware from cache: {0} (checksum: {1})'.format(target_filename, checksum))
                 return  # File exists and is valid, no need to redownload
         if not urls:
             raise ValueError('Could not find any download url in firmware metadata for {0} {1}'.format(firmware_type, version))
@@ -1083,6 +1083,7 @@ class UpdateController(object):
         with open(target_filename, 'w') as handle:
             for url in urls:
                 try:
+                    logger.info('Downloading firmware {0} from {1} ...'.format(target_filename, url))
                     response = requests.get(url,
                                             verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM,
                                             stream=True,
@@ -1091,9 +1092,9 @@ class UpdateController(object):
                     downloaded = True
                     break
                 except Exception as ex:
-                    logger.error('Could not download firmware from {0}: {1}'.format(url, ex))
+                    logger.error('Could not download firmware {0} from {1}: {2}'.format(target_filename, url, ex))
         if not downloaded:
-            raise RuntimeError('No update could be downloaded')
+            raise RuntimeError('No firmware could be downloaded for {0}'.format(target_filename))
         actual_checksum = UpdateController._calculate_checksum(filename=target_filename)
         if actual_checksum != checksum:
             raise RuntimeError('Downloaded firmware {0} checksum {1} does not match expected {2}'.format(target_filename, actual_checksum, checksum))
