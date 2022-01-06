@@ -54,6 +54,7 @@ def migrate(migrator, database, fake=False, **kwargs):
     # ------------------------
     class User(BaseModel):
         class UserRoles(object):
+            SUPER = 'SUPER'
             USER = 'USER'
             ADMIN = 'ADMIN'
             TECHNICIAN = 'TECHNICIAN'
@@ -85,7 +86,7 @@ def migrate(migrator, database, fake=False, **kwargs):
             id=old_user.id,
             username=old_user.username,
             password=old_user.password,
-            role=User.UserRoles.ADMIN,
+            role=User.UserRoles.SUPER,
             language=User.UserLanguages.EN,
             accepted_terms=old_user.accepted_terms
         )
