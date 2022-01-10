@@ -110,16 +110,16 @@ class UpdateController(object):
     # Below order of services are important, this is the order in which the updates will be performed
     SUPPORTED_FIRMWARES = {Platform.Type.CORE: ['gateway_service', 'gateway_frontend',
                                                 'master_coreplus',
-                                                'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan',
-                                                'energy', 'p1_concentrator'],
+                                                'energy', 'p1_concentrator',
+                                                'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan'],
                            Platform.Type.CORE_PLUS: ['gateway_service', 'gateway_frontend',
                                                      'master_coreplus',
-                                                     'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan',
-                                                     'energy', 'p1_concentrator'],
+                                                     'energy', 'p1_concentrator',
+                                                     'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan'],
                            Platform.Type.CLASSIC: ['gateway_service', 'gateway_frontend',
                                                    'master_classic',
-                                                   'input', 'output', 'dimmer', 'can',
-                                                   'energy', 'p1_concentrator'],
+                                                   'energy', 'p1_concentrator',
+                                                   'input', 'output', 'dimmer', 'can'],
                            Platform.Type.ESAFE: ['gateway_service']}
 
     if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
