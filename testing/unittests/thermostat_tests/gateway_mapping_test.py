@@ -119,7 +119,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                              temp_day_2=21.0,
                                              start_day_2='16:00',
                                              end_day_2='22:00',
-                                             temp_night=17.0)
+                                             temp_night=19.0)
 
         self.assertEqual(ThermostatDTO(id=10,
                                        name='thermostat',
@@ -190,7 +190,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                                      temp_day_2=21.0,
                                                      start_day_2='16:00',
                                                      end_day_2='22:00',
-                                                     temp_night=17.0)
+                                                     temp_night=19.0)
 
         sensor = Sensor.create(id=15, source='master', external_id='0', physical_quantity='temperature', name='')
 
