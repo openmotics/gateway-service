@@ -26,7 +26,7 @@ import time
 if False:  # MYPY
     from typing import Union, Dict, List, Tuple
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Hardware(object):
@@ -401,6 +401,15 @@ class Platform(object):
             if platform in Platform.Types:
                 return platform
         return Platform.Type.CLASSIC
+
+
+    @staticmethod
+    def get_registration_key():
+        # type: () -> str
+        from six.moves.configparser import ConfigParser
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        return config.get('OpenMotics', 'uuid')
 
     @staticmethod
     def has_master_hardware():

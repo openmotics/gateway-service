@@ -35,6 +35,8 @@ from gateway.models import Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
+from platform_utils import Platform
+import gateway
 
 
 if False:  # MYPY
@@ -167,7 +169,7 @@ class OpenmoticsService(object):
               update_controller=INJECTED  # type: UpdateController
               ):
         """ Main function. """
-        logger.info('Starting OM core service...')
+        logger.info('Starting OM core service (%s) [%s]... ', gateway.__version__, Platform.get_platform())
 
         # MasterController should be running
         master_controller.start()

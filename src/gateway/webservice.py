@@ -2489,6 +2489,13 @@ class WebInterface(object):
     def restart_services(self):
         return self._system_controller.restart_services()
 
+    @cherrypy.expose
+    @cherrypy.tools.authenticated()
+    def get_logs(self):
+        cherrypy.response.headers['Content-Type'] = 'application/octet-stream'
+        cherrypy.response.headers['Content-Disposition'] = 'attachment;filename={0}.tar.gz'.format(Platform.get_registration_key())
+        return self._system_controller.get_logs()
+
     @openmotics_api(auth=False)
     def health_check(self):
         """ Requests the state of the various services and checks the returned value for the global state """
