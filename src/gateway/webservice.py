@@ -691,6 +691,7 @@ class WebInterface(object):
             'ventilation',  # Native ventilation
             'modules_information',  # Clean module information
             'dynamic_updates',  # Dynamic updates
+            'copy_thermostat_schedules',  # Allow to copy schedules and certain presets with a single API call
             # TODO: remove
             'default_timer_disabled',
             '100_steps_dimmer',
@@ -1473,6 +1474,15 @@ class WebInterface(object):
 
     # Heating thermostats
 
+    def _fetch_heating_thermostat_dto(self, thermostat_id):
+        try:
+            return self._thermostat_controller.load_heating_thermostat(thermostat_id=thermostat_id)
+        except DoesNotExist:
+            if thermostat_id >= 32:
+                raise
+            mode = 'heating'  # type: Literal['heating']
+            return ThermostatMapper.get_default_dto(thermostat_id=thermostat_id, mode=mode)
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_thermostat_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
@@ -1480,13 +1490,7 @@ class WebInterface(object):
         :param id: The id of the thermostat_configuration
         :param fields: The field of the thermostat_configuration to get, None if all
         """
-        try:
-            thermostat_dto = self._thermostat_controller.load_heating_thermostat(id)
-        except DoesNotExist:
-            if id >= 32:
-                raise
-            mode = 'heating'  # type: Literal['heating']
-            thermostat_dto = ThermostatMapper.get_default_dto(thermostat_id=id, mode=mode)
+        thermostat_dto = self._fetch_heating_thermostat_dto(thermostat_id=id)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1518,6 +1522,17 @@ class WebInterface(object):
         """ Set multiple thermostat_configurations. """
         data = [ThermostatSerializer.deserialize(entry) for entry in config]
         self._thermostat_controller.save_heating_thermostats(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(source_id=int, destination_id=int))
+    def copy_thermostat_schedule(self, source_id, destination_id):  # type: (int, int) -> Dict
+        """
+        Copies the schedule from one thermostat to the other
+        """
+        source_dto = self._fetch_heating_thermostat_dto(thermostat_id=source_id)
+        destination_dto = self._fetch_heating_thermostat_dto(thermostat_id=destination_id)
+        self._thermostat_controller.copy_heating_schedule(source_dto=source_dto,
+                                                          destination_dto=destination_dto)
         return {}
 
     # Sensor configurations
@@ -1601,6 +1616,15 @@ class WebInterface(object):
 
     # Cooling thermostats
 
+    def _fetch_cooling_thermostat_dto(self, thermostat_id):
+        try:
+            return self._thermostat_controller.load_cooling_thermostat(thermostat_id=thermostat_id)
+        except DoesNotExist:
+            if thermostat_id >= 32:
+                raise
+            mode = 'cooling'  # type: Literal['cooling']
+            return ThermostatMapper.get_default_dto(thermostat_id=thermostat_id, mode=mode)
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_cooling_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
@@ -1608,13 +1632,7 @@ class WebInterface(object):
         :param id: The id of the cooling_configuration
         :param fields: The field of the cooling_configuration to get, None if all
         """
-        try:
-            thermostat_dto = self._thermostat_controller.load_cooling_thermostat(id)
-        except DoesNotExist:
-            if id >= 32:
-                raise
-            mode = 'cooling'  # type: Literal['cooling']
-            thermostat_dto = ThermostatMapper.get_default_dto(thermostat_id=id, mode=mode)
+        thermostat_dto = self._fetch_cooling_thermostat_dto(thermostat_id=id)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1646,6 +1664,17 @@ class WebInterface(object):
         """ Set multiple cooling_configurations. """
         data = [ThermostatSerializer.deserialize(entry) for entry in config]
         self._thermostat_controller.save_cooling_thermostats(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(source_id=int, destination_id=int))
+    def copy_cooling_schedule(self, source_id, destination_id):  # type: (int, int) -> Dict
+        """
+        Copies the schedule from one thermostat to the other
+        """
+        source_dto = self._fetch_cooloing_thermostat_dto(thermostat_id=source_id)
+        destination_dto = self._fetch_cooling_thermostat_dto(thermostat_id=destination_id)
+        self._thermostat_controller.copy_cooling_schedule(source_dto=source_dto,
+                                                          destination_dto=destination_dto)
         return {}
 
     # Cooling Pump Groups

@@ -60,6 +60,19 @@ class ThermostatController(object):
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         raise NotImplementedError()
 
+    def copy_heating_schedule(self, source_dto, destination_dto):  # type: (ThermostatDTO, ThermostatDTO) -> None
+        destination_dto.auto_mon = source_dto.auto_mon  # Schedule
+        destination_dto.auto_tue = source_dto.auto_tue
+        destination_dto.auto_wed = source_dto.auto_wed
+        destination_dto.auto_thu = source_dto.auto_thu
+        destination_dto.auto_fri = source_dto.auto_fri
+        destination_dto.auto_sat = source_dto.auto_sat
+        destination_dto.auto_sun = source_dto.auto_sun
+        destination_dto.setp3 = source_dto.setp3  # Presets
+        destination_dto.setp4 = source_dto.setp4
+        destination_dto.setp5 = source_dto.setp5
+        self.save_heating_thermostats([destination_dto])
+
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         raise NotImplementedError()
 
@@ -108,6 +121,19 @@ class ThermostatController(object):
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         raise NotImplementedError()
+
+    def copy_cooling_schedule(self, source_dto, destination_dto):  # type: (ThermostatDTO, ThermostatDTO) -> None
+        destination_dto.auto_mon = source_dto.auto_mon  # Schedule
+        destination_dto.auto_tue = source_dto.auto_tue
+        destination_dto.auto_wed = source_dto.auto_wed
+        destination_dto.auto_thu = source_dto.auto_thu
+        destination_dto.auto_fri = source_dto.auto_fri
+        destination_dto.auto_sat = source_dto.auto_sat
+        destination_dto.auto_sun = source_dto.auto_sun
+        destination_dto.setp3 = source_dto.setp3  # Presets
+        destination_dto.setp4 = source_dto.setp4
+        destination_dto.setp5 = source_dto.setp5
+        self.save_cooling_thermostats([destination_dto])
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         raise NotImplementedError()

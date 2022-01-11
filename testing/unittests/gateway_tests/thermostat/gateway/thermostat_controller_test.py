@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
+import copy
+import json
 import logging
 import unittest
 from datetime import datetime, timedelta
@@ -427,8 +429,6 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.statusses[0].setpoint_temperature = 19.0
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        return
-
         self.controller.set_per_thermostat_mode(thermostat_id=1,
                                                 automatic=False,
                                                 setpoint=3)
@@ -467,7 +467,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                  'steering_power': 100},
                       'location': {}}
         self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
-        expected.statusses[0].setpoint_temperature = 15.0
+        expected.statusses[0].setpoint_temperature = 19.0
         expected.statusses[0].setpoint = 0
         expected.statusses[0].automatic = True
         expected.statusses[0].preset = 'auto'
@@ -480,7 +480,7 @@ class ThermostatControllerTest(unittest.TestCase):
 
         preset = self.controller.get_current_preset(thermostat_number=1)
         self.assertTrue(preset.active)
-        self.assertEqual(30.0, preset.cooling_setpoint)
+        self.assertEqual(23, preset.cooling_setpoint)
         self.assertEqual(16.0, preset.heating_setpoint)
         self.assertEqual(Preset.Types.AUTO, preset.type)
 
@@ -509,7 +509,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.output_controller.set_output_status.reset_mock()
         self.output_controller.get_output_status.return_value = OutputStatusDTO(id=4, status=False)
         self.controller.set_thermostat_group(thermostat_group_id=0, state='on', mode='heating')
-        expected.statusses[0].setpoint_temperature = 16.0
+        expected.statusses[0].setpoint_temperature = 19.0
         expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
         expected.statusses[0].automatic = expected.automatic = True
         expected.statusses[0].steering_power = 100
@@ -518,3 +518,47 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.mode = 'heating'
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
         self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=True, dimmer=100)
+
+    def test_copy_schedule(self):
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
+        Thermostat.create(number=1,
+                          name='thermostat 1',
+                          sensor=sensor,
+                          pid_heating_p=200,
+                          pid_heating_i=100,
+                          pid_heating_d=50,
+                          pid_cooling_p=200,
+                          pid_cooling_i=100,
+                          pid_cooling_d=50,
+                          automatic=True,
+                          room=None,
+                          start=0,
+                          valve_config='equal',
+                          thermostat_group=self._thermostat_group)
+
+        thermostat_dto = self.controller.load_heating_thermostat(thermostat_id=1)
+        self.controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
+
+        thermostat = Thermostat.get(number=1)
+        default_schedule = json.loads(json.dumps(DaySchedule.DEFAULT_SCHEDULE['heating']))  # It's also encoded/decoded internally
+        self.assertEqual(default_schedule, thermostat.heating_schedules[0].schedule_data)
+        for preset, expected in {Preset.Types.AWAY: 16.0,
+                                 Preset.Types.VACATION: 15.0,
+                                 Preset.Types.PARTY: 22.0}.items():
+            self.assertEqual(expected, thermostat.get_preset(preset).heating_setpoint)
+
+        source_dto = copy.deepcopy(thermostat_dto)
+        source_dto.auto_mon = ThermostatScheduleDTO(temp_night=1.0, temp_day_1=2.0, temp_day_2=3.0,
+                                                    start_day_1='04:00', end_day_1='05:00',
+                                                    start_day_2='06:00', end_day_2='07:00')
+        source_dto.setp3 = 8.0
+        source_dto.setp4 = 9.0
+        source_dto.setp5 = 10.0
+        self.controller.copy_heating_schedule(source_dto, thermostat_dto)
+        thermostat = Thermostat.get(number=1)
+        self.assertEqual({str(0): 1.0, str(4*60*60): 2.0, str(5*60*60): 1.0, str(6*60*60): 3.0, str(7*60*60): 1.0},
+                         thermostat.heating_schedules[0].schedule_data)
+        for preset, expected in {Preset.Types.AWAY: 8.0,
+                                 Preset.Types.VACATION: 9.0,
+                                 Preset.Types.PARTY: 10.0}.items():
+            self.assertEqual(expected, thermostat.get_preset(preset).heating_setpoint)
