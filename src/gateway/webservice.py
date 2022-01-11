@@ -1671,7 +1671,7 @@ class WebInterface(object):
         """
         Copies the schedule from one thermostat to the other
         """
-        source_dto = self._fetch_cooloing_thermostat_dto(thermostat_id=source_id)
+        source_dto = self._fetch_cooling_thermostat_dto(thermostat_id=source_id)
         destination_dto = self._fetch_cooling_thermostat_dto(thermostat_id=destination_id)
         self._thermostat_controller.copy_cooling_schedule(source_dto=source_dto,
                                                           destination_dto=destination_dto)
