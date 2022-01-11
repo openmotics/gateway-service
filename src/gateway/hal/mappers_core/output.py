@@ -33,7 +33,9 @@ class OutputMapper(object):
     def orm_to_dto(orm_object):  # type: (OutputConfiguration) -> OutputDTO
         module_type = orm_object.module.device_type
         if '.000.000.' in orm_object.module.address:
-            module_type = 'O'  # Internal outputs are returned as physical/real
+            if module_type == 'l':
+                module_type = 'o'  # Open collector is returned as normal output
+            module_type = module_type.upper()  # Internal outputs are returned as physical/real
         timer = None  # type: Optional[int]
         if orm_object.timer_type == OutputConfiguration.TimerType.PER_1_S:
             timer = orm_object.timer_value
