@@ -683,6 +683,9 @@ class MasterCoreController(MasterController):
                 self._output_shutter_map[shutter.outputs.output_0] = shutter.id
                 self._output_shutter_map[shutter.outputs.output_1] = shutter.id
                 is_configured = True
+                # Turn off outputs if the shutter was not configured before
+                self.set_output(output_id=shutter.outputs.output_0, state=False)
+                self.set_output(output_id=shutter.outputs.output_1, state=False)
             else:
                 output_set = shutter.output_set  # Previous outputs need to be restored
                 self._output_shutter_map.pop(shutter.outputs.output_0, None)

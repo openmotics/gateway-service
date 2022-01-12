@@ -55,7 +55,6 @@ class ShutterMapper(object):
         if 'name' in shutter_dto.loaded_fields:
             new_data['name'] = shutter_dto.name
         for field in ['timer_up', 'timer_down']:
-            # TODO: Currently denonify as byte, since high-level code most likely assumes this is a byte
             dto_value = getattr(shutter_dto, field)
             if dto_value is None:
                 new_data[field] = ShutterMapper.WORD_MAX
