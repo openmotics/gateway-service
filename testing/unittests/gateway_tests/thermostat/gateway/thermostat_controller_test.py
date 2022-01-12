@@ -480,7 +480,7 @@ class ThermostatControllerTest(unittest.TestCase):
 
         preset = self.controller.get_current_preset(thermostat_number=1)
         self.assertTrue(preset.active)
-        self.assertEqual(23, preset.cooling_setpoint)
+        self.assertEqual(26.0, preset.cooling_setpoint)
         self.assertEqual(16.0, preset.heating_setpoint)
         self.assertEqual(Preset.Types.AUTO, preset.type)
 
