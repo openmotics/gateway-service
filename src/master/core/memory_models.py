@@ -201,7 +201,7 @@ class SensorModuleConfiguration(MemoryModelDefinition):
         # Source: Inside the `Eeprom.c` file in the master fimrware code
         if self.device_type in ['T']:
             return HardwareType.PHYSICAL
-        if self.device_type in ['d']:
+        if self.device_type in ['s']:
             return HardwareType.EMULATED
         return HardwareType.VIRTUAL
 

@@ -1056,10 +1056,9 @@ class MasterCoreController(MasterController):
                 inputs.append(device_type)  # Slave and virtual input module
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
-            device_type = sensor_module_info.device_type
-            if sensor_module_info == HardwareType.PHYSICAL:
+            if sensor_module_info.hardware_type == HardwareType.PHYSICAL:
                 inputs.append('T')
-            elif sensor_module_info == HardwareType.EMULATED:
+            elif sensor_module_info.hardware_type == HardwareType.EMULATED:
                 can_inputs.append('T')  # uCAN sensor "module"
         for module_id in range(nr_of_can_controls):
             can_inputs.append('C')
