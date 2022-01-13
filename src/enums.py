@@ -22,3 +22,18 @@ class HardwareType(object):
     PHYSICAL = 'physical'
     EMULATED = 'emulated'
     INTERNAL = 'internal'
+
+
+class OutputType(object):
+    OUTLET = 0
+    VALVE = 1
+    ALARM = 2
+    APPLIANCE = 3
+    PUMP = 4
+    HVAC = 5
+    GENERIC = 6
+    MOTOR = 7
+    VENTILATION = 9
+    HEADER = 9
+    SHUTTER_RELAY = 127
+    LIGHT = 255

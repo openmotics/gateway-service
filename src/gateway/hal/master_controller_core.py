@@ -59,7 +59,7 @@ from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 from platform_utils import Hardware
 from logs import Logs
-from enums import HardwareType
+from enums import HardwareType, OutputType
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
@@ -603,8 +603,14 @@ class MasterCoreController(MasterController):
     def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         for output_dto in outputs:
             output = OutputMapper.dto_to_orm(output_dto)
+            if output.output_type == OutputType.SHUTTER_RELAY and not output.is_shutter:
+                # Configure the output as a shutter
+                self._configure_output_shutter(output=output, is_shutter=True)
+            elif output.output_type != OutputType.SHUTTER_RELAY and output.is_shutter:
+                # Configure the output as output
+                self._configure_output_shutter(output=output, is_shutter=False)
             if output.is_shutter:
-                # Shutter outputs cannot be changed
+                # Any further configuration not required
                 continue
             output.save(activate=False)
             CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
@@ -624,6 +630,29 @@ class MasterCoreController(MasterController):
                                                  dimmer=Dimmer.system_value_to_dimmer(data['dimmer']),
                                                  locked=output.locking.locked))
         return output_status
+
+    def _configure_output_shutter(self, output, is_shutter):  # type: (OutputConfiguration, bool) -> None
+        shutter = ShutterConfiguration(output.id // 2)
+        output_module = output.module
+        if is_shutter:
+            shutter.outputs.output_0 = shutter.id * 2
+            output_set = shutter.output_set
+            self._output_shutter_map[shutter.outputs.output_0] = shutter.id
+            self._output_shutter_map[shutter.outputs.output_1] = shutter.id
+            self.set_output(output_id=shutter.outputs.output_0, state=False)
+            self.set_output(output_id=shutter.outputs.output_1, state=False)
+            output.output_type = OutputType.SHUTTER_RELAY
+        else:
+            output_set = shutter.output_set  # Previous outputs need to be restored
+            self._output_shutter_map.pop(shutter.outputs.output_0, None)
+            self._output_shutter_map.pop(shutter.outputs.output_1, None)
+            shutter.outputs.output_0 = 255 * 2
+            if output.output_type == OutputType.SHUTTER_RELAY:
+                output.output_type = OutputType.OUTLET
+        setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
+        output.save(activate=False)
+        shutter.save(activate=False)
+        output_module.save(activate=False)
 
     # Shutters
 
@@ -674,28 +703,12 @@ class MasterCoreController(MasterController):
     def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
         for shutter_dto in shutters:
             # Validate whether output module exists
-            output_module = OutputConfiguration(shutter_dto.id * 2).module
+            output = OutputConfiguration(shutter_dto.id * 2)
+            if not output.is_shutter:
+                continue  # Not configured as a shutter
             # Configure shutter
+            output_module = output.module
             shutter = ShutterMapper.dto_to_orm(shutter_dto)
-            if shutter.timer_down not in [0, 65535] and shutter.timer_up not in [0, 65535]:
-                # Shutter is "configured"
-                shutter.outputs.output_0 = shutter.id * 2
-                output_set = shutter.output_set
-                self._output_shutter_map[shutter.outputs.output_0] = shutter.id
-                self._output_shutter_map[shutter.outputs.output_1] = shutter.id
-                is_configured = True
-                # Turn off outputs if the shutter was not configured before
-                self.set_output(output_id=shutter.outputs.output_0, state=False)
-                self.set_output(output_id=shutter.outputs.output_1, state=False)
-            else:
-                output_set = shutter.output_set  # Previous outputs need to be restored
-                self._output_shutter_map.pop(shutter.outputs.output_0, None)
-                self._output_shutter_map.pop(shutter.outputs.output_1, None)
-                shutter.outputs.output_0 = 255 * 2
-                is_configured = False
-            shutter.save(activate=False)
-            # Mark related Outputs as "occupied by shutter"
-            setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
             output_module.save(activate=False)
         MemoryActivator.activate()
