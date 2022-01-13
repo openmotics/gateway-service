@@ -70,6 +70,9 @@ class OutputModuleConfiguration(MemoryModelDefinition):
     firmware_version: str
     shutter_config: _ShutterComposition
 
+    @property
+    def hardware_type(self) -> str: ...
+
 
 class OutputConfiguration(MemoryModelDefinition):
     class TimerType(MemoryEnumDefinition):
@@ -110,6 +113,9 @@ class InputModuleConfiguration(MemoryModelDefinition):
     device_type: str
     address: str
     firmware_version: str
+
+    @property
+    def hardware_type(self) -> str: ...
 
 
 class InputConfiguration(MemoryModelDefinition):
@@ -153,6 +159,9 @@ class SensorModuleConfiguration(MemoryModelDefinition):
     device_type: str
     address: str
     firmware_version: str
+
+    @property
+    def hardware_type(self) -> str: ...
 
 
 class SensorConfiguration(MemoryModelDefinition):
@@ -209,6 +218,9 @@ class CanControlModuleConfiguration(MemoryModelDefinition):
     id: int
     device_type: str
     address: str
+
+    @property
+    def hardware_type(self) -> str: ...
 
 
 class UCanModuleConfiguration(MemoryModelDefinition):

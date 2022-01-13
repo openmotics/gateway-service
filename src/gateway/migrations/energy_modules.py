@@ -17,10 +17,10 @@ import os
 import logging
 import constants
 from ioc import INJECTED, Inject
-from gateway.enums import HardwareType
 from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import EnergyModule, EnergyCT, Module
 from gateway.dto import ModuleDTO
+from enums import HardwareType
 
 if False:  # MYPY
     from gateway.hal.master_controller_classic import MasterClassicController

@@ -19,7 +19,6 @@ Module serializer
 from __future__ import absolute_import
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import ModuleDTO
-from gateway.enums import ModuleType, HardwareType
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Any

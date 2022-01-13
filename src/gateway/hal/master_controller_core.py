@@ -24,13 +24,12 @@ import time
 from datetime import datetime
 from threading import Timer, Lock
 
-from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
     MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     ShutterDTO, ShutterGroupDTO
-from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, HardwareType, ModuleType
+from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, ModuleType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -60,6 +59,7 @@ from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 from platform_utils import Hardware
 from logs import Logs
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
@@ -226,7 +226,8 @@ class MasterCoreController(MasterController):
             elif core_event.type == MasterCoreEvent.Types.MODULE_NOT_RESPONDING:
                 log_event = False  # Don't log MODULE_NOT_RESPONDING separately
                 address = core_event.data['address']
-                if '.000.000.' in address:
+                device_type = chr(int(address.split('.')[0]))
+                if device_type != device_type.upper():  # Means virtual, internal or emulated
                     logger.info('Got firmware information: {0} (internal module)'.format(address))
                 else:
                     logger.info('Got firmware information: {0} (timeout)'.format(address))
@@ -888,10 +889,8 @@ class MasterCoreController(MasterController):
         ids = []
         for module_id in self._enumerate_io_modules('input', amount_per_module=1):
             input_module_info = InputModuleConfiguration(module_id)
-            if input_module_info.device_type == 'b':
-                continue  # Skip emulated modules since they don't keep counts
-            if input_module_info.device_type == 'i' and '.000.000.' not in input_module_info.address:
-                continue  # Skip virtual modules
+            if input_module_info.hardware_type != HardwareType.PHYSICAL:
+                continue  # Only physical modules can count
             ids.append(module_id)
         return ids
 
@@ -1033,8 +1032,7 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            if output_module_info.address[4:15] in ['000.000.000', '000.000.001',
-                                                    '000.000.002', '000.000.003']:
+            if output_module_info.hardware_type == HardwareType.INTERNAL:
                 outputs.append({'o': 'P',
                                 'd': 'F'}.get(device_type, device_type))
             else:
@@ -1050,18 +1048,17 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            if device_type == 'i' and input_module_info.address.endswith('000.000.000'):
+            if input_module_info.hardware_type == HardwareType.INTERNAL:
                 inputs.append('J')  # Internal input module
-            elif device_type == 'b':
+            elif input_module_info.hardware_type == HardwareType.EMULATED:
                 can_inputs.append('I')  # uCAN input "module"
-            elif device_type in ['I', 'i']:
+            else:
                 inputs.append(device_type)  # Slave and virtual input module
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
-            device_type = sensor_module_info.device_type
-            if device_type == 'T':
+            if sensor_module_info.hardware_type == HardwareType.PHYSICAL:
                 inputs.append('T')
-            elif device_type == 's':
+            elif sensor_module_info.hardware_type == HardwareType.EMULATED:
                 can_inputs.append('T')  # uCAN sensor "module"
         for module_id in range(nr_of_can_controls):
             can_inputs.append('C')
@@ -1135,20 +1132,12 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if device_type == 'i':
-                if '.000.000.' in input_module_info.address:
-                    hardware_type = HardwareType.INTERNAL
-                else:
-                    hardware_type = HardwareType.VIRTUAL
-            elif device_type == 'b':
-                hardware_type = HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=input_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=input_module_info.hardware_type,
                             order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
+            if input_module_info.hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _get_version(input_module_info.address)
             information.append(dto)
 
@@ -1156,23 +1145,17 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if device_type in ['l', 'o', 'd']:
-                if '.000.000.' in output_module_info.address:
-                    hardware_type = HardwareType.INTERNAL
-                else:
-                    hardware_type = HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=output_module_info.hardware_type,
                             order=module_id)
             shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                                     address='114.{0}'.format(output_module_info.address[4:]),
                                     module_type=ModuleType.SHUTTER,
-                                    hardware_type=hardware_type,
+                                    hardware_type=output_module_info.hardware_type,
                                     order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
+            if output_module_info.hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _get_version(output_module_info.address)
                 shutter_dto.online = dto.online
                 shutter_dto.hardware_version = dto.hardware_version

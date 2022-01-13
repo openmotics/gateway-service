@@ -21,6 +21,7 @@ from gateway.dto.input import InputDTO
 from gateway.hal.mappers_core.group_action import GroupActionMapper
 from master.core.basic_action import BasicAction
 from master.core.memory_models import InputConfiguration
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import List, Dict, Any, Optional, Tuple
@@ -35,9 +36,9 @@ class InputMapper(object):
     @staticmethod
     def orm_to_dto(orm_object):  # type: (InputConfiguration) -> InputDTO
         module_type = orm_object.module.device_type
-        if module_type == 'b':
+        if orm_object.module.hardware_type == HardwareType.EMULATED:
             module_type = 'I'  # Emulated inputs are returned as physical/real
-        if '.000.000.' in orm_object.module.address:
+        elif orm_object.module.hardware_type == HardwareType.INTERNAL:
             module_type = 'I'  # Internal inputs are returned as physical/real
         action, basic_actions = InputMapper.core_input_configuration_to_classic_actions(orm_object)
         return InputDTO(id=orm_object.id,

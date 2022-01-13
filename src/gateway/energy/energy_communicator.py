@@ -24,7 +24,6 @@ from threading import RLock, Thread
 from six.moves.queue import Empty
 
 from gateway.daemon_thread import BaseThread
-from gateway.enums import HardwareType
 from gateway.exceptions import CommunicationFailure
 from gateway.models import EnergyModule, EnergyCT, Module
 from gateway.dto import ModuleDTO
@@ -34,6 +33,7 @@ from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, NORMAL_MODE,
 from gateway.energy.energy_command import EnergyCommand
 from serial_utils import CommunicationStatus, CommunicationTimedOutException, \
     Printable
+from enums import HardwareType
 
 if False:  # MYPY:
     from typing import Any, Dict, List, Literal, Optional, Tuple, Union, Callable

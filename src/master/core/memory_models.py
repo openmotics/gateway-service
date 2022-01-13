@@ -30,6 +30,7 @@ from master.core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDe
                                       CompositeMemoryModelDefinition, CompositeNumberField, CompositeBitField,
                                       MemoryEnumDefinition, EnumEntry, IdField,
                                       MemoryChecksum)
+from enums import HardwareType
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
@@ -81,6 +82,15 @@ class OutputModuleConfiguration(MemoryModelDefinition):
     firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 4), read_only=True)  # 1-80, 4-6
     shutter_config = _ShutterComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (392, id)))  # 392, 0-79
 
+    @property
+    def hardware_type(self):
+        # Source: Inside the `Eeprom.c` file in the master fimrware code
+        if self.device_type in ['o', 'l', 'd'] and '.000.000.' in self.address:
+            return HardwareType.INTERNAL
+        if self.device_type in ['O', 'R', 'D', 'L']:
+            return HardwareType.PHYSICAL
+        return HardwareType.VIRTUAL
+
 
 class OutputConfiguration(MemoryModelDefinition):
     class TimerType(MemoryEnumDefinition):
@@ -123,6 +133,17 @@ class InputModuleConfiguration(MemoryModelDefinition):
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0), length=1, read_only=True)  # 81-238, 0-3
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0), read_only=True)  # 81-238, 0-3
     firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 4), read_only=True)  # 81-238, 4-6
+
+    @property
+    def hardware_type(self):
+        # Source: Inside the `Eeprom.c` file in the master fimrware code
+        if self.device_type in ['i'] and '.000.000.' in self.address:
+            return HardwareType.INTERNAL
+        if self.device_type in ['b']:
+            return HardwareType.EMULATED
+        if self.device_type in ['I', 'C']:
+            return HardwareType.PHYSICAL
+        return HardwareType.VIRTUAL
 
 
 class InputConfiguration(MemoryModelDefinition):
@@ -174,6 +195,15 @@ class SensorModuleConfiguration(MemoryModelDefinition):
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0), length=1, read_only=True)  # 239-254, 0-3
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0), read_only=True)  # 239-254, 0-3
     firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 4), read_only=True)  # 239-254, 4-6
+
+    @property
+    def hardware_type(self):
+        # Source: Inside the `Eeprom.c` file in the master fimrware code
+        if self.device_type in ['T']:
+            return HardwareType.PHYSICAL
+        if self.device_type in ['s']:
+            return HardwareType.EMULATED
+        return HardwareType.VIRTUAL
 
 
 class SensorConfiguration(MemoryModelDefinition):
@@ -233,6 +263,10 @@ class CanControlModuleConfiguration(MemoryModelDefinition):
     id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 9)))
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), length=1, read_only=True)  # 255, 0-255
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), read_only=True)  # 255, 0-255
+
+    @property
+    def hardware_type(self):
+        return HardwareType.PHYSICAL
 
 
 class UCanModuleConfiguration(MemoryModelDefinition):

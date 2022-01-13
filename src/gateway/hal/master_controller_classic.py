@@ -34,7 +34,7 @@ from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
     OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
     ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
     ThermostatGroupDTO
-from gateway.enums import ShutterEnums, HardwareType, ModuleType
+from gateway.enums import ShutterEnums, ModuleType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
     GlobalFeedbackMapper, GlobalRTD10Mapper, GroupActionMapper, InputMapper, \
@@ -63,6 +63,7 @@ from master.classic.slave_updater import SlaveUpdater
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 from logs import Logs
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple, Set

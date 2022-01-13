@@ -114,13 +114,6 @@ class EnergyEnums(object):
                          Version.P1_CONCENTRATOR: 'p1_concentrator'}
 
 
-class HardwareType(object):
-    VIRTUAL = 'virtual'
-    PHYSICAL = 'physical'
-    EMULATED = 'emulated'
-    INTERNAL = 'internal'
-
-
 class ModuleType(object):
     SENSOR = 'sensor'
     INPUT = 'input'
