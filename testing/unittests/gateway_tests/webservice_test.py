@@ -27,7 +27,7 @@ from gateway.dto import DimmerConfigurationDTO, EnergyModuleDTO, \
     ThermostatGroupDTO, ThermostatStatusDTO, UserDTO, VentilationDTO, \
     VentilationSourceDTO, VentilationStatusDTO, PumpGroupDTO
 from gateway.energy_module_controller import EnergyModuleController
-from gateway.enums import HardwareType, ModuleType
+from gateway.enums import ModuleType
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
 from gateway.input_controller import InputController
@@ -44,6 +44,7 @@ from gateway.user_controller import UserController
 from gateway.ventilation_controller import VentilationController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
+from enums import HardwareType
 
 
 class WebInterfaceTest(unittest.TestCase):

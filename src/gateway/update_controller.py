@@ -37,7 +37,8 @@ from gateway.dto import ModuleDTO
 from gateway.daemon_thread import DaemonThread
 from gateway.models import Config, EnergyModule, Module
 from platform_utils import Platform, System
-from gateway.enums import EnergyEnums, ModuleType, UpdateEnums, HardwareType
+from gateway.enums import EnergyEnums, ModuleType, UpdateEnums
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import Any, List, Union, Optional, Tuple, Dict, Set

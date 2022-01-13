@@ -22,7 +22,7 @@ import unittest
 
 import mock
 
-from gateway.enums import EnergyEnums, HardwareType
+from gateway.enums import EnergyEnums
 from gateway.pubsub import PubSub
 from gateway.models import Module, EnergyModule, EnergyCT
 from gateway.dto import ModuleDTO
@@ -31,6 +31,7 @@ from gateway.energy.energy_command import EnergyCommand
 from gateway.energy.module_helper_energy import EnergyModuleHelper
 from gateway.energy.module_helper_p1c import P1ConcentratorHelper
 from peewee import SqliteDatabase
+from enums import HardwareType
 
 MODELS = [Module, EnergyModule, EnergyCT]
 

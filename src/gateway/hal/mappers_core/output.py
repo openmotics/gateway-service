@@ -19,6 +19,7 @@ Output Mapper
 from __future__ import absolute_import
 from gateway.dto.output import OutputDTO
 from master.core.memory_models import OutputConfiguration
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import List, Dict, Any, Optional
@@ -32,10 +33,10 @@ class OutputMapper(object):
     @staticmethod
     def orm_to_dto(orm_object):  # type: (OutputConfiguration) -> OutputDTO
         module_type = orm_object.module.device_type
-        if '.000.000.' in orm_object.module.address:
-            if module_type == 'l':
-                module_type = 'o'  # Open collector is returned as normal output
-            module_type = module_type.upper()  # Internal outputs are returned as physical/real
+        if orm_object.module.hardware_type == HardwareType.INTERNAL:
+            module_type = module_type.upper()
+        if module_type == 'l':
+            module_type = 'O'  # Open collector is returned as normal output
         timer = None  # type: Optional[int]
         if orm_object.timer_type == OutputConfiguration.TimerType.PER_1_S:
             timer = orm_object.timer_value
