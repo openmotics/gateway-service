@@ -268,6 +268,23 @@ class SystemController(BaseController):
         Timer(2, _restart, args=[service_names]).start()
         return {'restart_services': 'pending'}
 
+    def get_logs(self):
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            tmp_log_dir = '{0}/logs'.format(tmp_dir)
+            log_dir = '/var/log/supervisor'
+            shutil.copytree(log_dir, tmp_log_dir)
+
+            archive_filename = 'logs.tar.gz'
+            retcode = subprocess.call('cd {0}; tar czvf {1} *'.format(tmp_log_dir, archive_filename), shell=True)
+            if retcode != 0:
+                raise Exception('The logs archive could not be created.')
+
+            with open('{0}/{1}'.format(tmp_log_dir, archive_filename), 'r') as logs_archive:
+                return logs_archive.read()
+        finally:
+            shutil.rmtree(tmp_dir)
+
     @Inject
     def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
         if active:
