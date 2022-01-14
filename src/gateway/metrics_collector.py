@@ -68,7 +68,7 @@ class MetricsCollector(object):
                            OutputType.GENERIC: 'generic',
                            OutputType.MOTOR: 'motor',
                            OutputType.VENTILATION: 'ventilation',
-                           OutputType.HEADER: 'heater',
+                           OutputType.HEATER: 'heater',
                            OutputType.SHUTTER_RELAY: 'shutter_relay',
                            OutputType.LIGHT: 'light'}
 

@@ -34,6 +34,6 @@ class OutputType(object):
     GENERIC = 6
     MOTOR = 7
     VENTILATION = 9
-    HEADER = 9
+    HEATER = 9
     SHUTTER_RELAY = 127
     LIGHT = 255
