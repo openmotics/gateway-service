@@ -589,7 +589,7 @@ class MasterCoreController(MasterController):
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
-            return OutputDTO(id=output.id)
+            return OutputDTO(id=output.id, output_type=OutputType.SHUTTER_RELAY)
         output_dto = OutputMapper.orm_to_dto(output)
         CANFeedbackController.load_output_led_feedback_configuration(output, output_dto)
         return output_dto

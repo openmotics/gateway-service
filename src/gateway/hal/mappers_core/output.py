@@ -35,7 +35,7 @@ class OutputMapper(object):
         module_type = orm_object.module.device_type
         if orm_object.module.hardware_type == HardwareType.INTERNAL:
             module_type = module_type.upper()
-        if module_type == 'l':
+        if module_type == 'L':
             module_type = 'O'  # Open collector is returned as normal output
         timer = None  # type: Optional[int]
         if orm_object.timer_type == OutputConfiguration.TimerType.PER_1_S:
