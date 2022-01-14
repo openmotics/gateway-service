@@ -33,7 +33,7 @@ class OutputType(object):
     HVAC = 5
     GENERIC = 6
     MOTOR = 7
-    VENTILATION = 9
+    VENTILATION = 8
     HEATER = 9
     SHUTTER_RELAY = 127
     LIGHT = 255
