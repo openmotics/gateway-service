@@ -19,7 +19,7 @@ Output Mapper
 from __future__ import absolute_import
 from gateway.dto.output import OutputDTO
 from master.core.memory_models import OutputConfiguration
-from enums import HardwareType
+from enums import HardwareType, OutputType
 
 if False:  # MYPY
     from typing import List, Dict, Any, Optional
@@ -35,18 +35,23 @@ class OutputMapper(object):
         module_type = orm_object.module.device_type
         if orm_object.module.hardware_type == HardwareType.INTERNAL:
             module_type = module_type.upper()
-        if module_type == 'l':
+        if module_type == 'L':
             module_type = 'O'  # Open collector is returned as normal output
         timer = None  # type: Optional[int]
         if orm_object.timer_type == OutputConfiguration.TimerType.PER_1_S:
             timer = orm_object.timer_value
         elif orm_object.timer_type == OutputConfiguration.TimerType.PER_100_MS:
             timer = int(orm_object.timer_value / 10.0)
+        output_type = orm_object.output_type
+        if orm_object.is_shutter:
+            output_type = OutputType.SHUTTER_RELAY  # Make sure the output type is correct for shutters
+        elif output_type == OutputType.SHUTTER_RELAY:
+            output_type = OutputType.OUTLET
         return OutputDTO(id=orm_object.id,
                          name=orm_object.name,
                          module_type=module_type,
                          timer=timer,
-                         output_type=orm_object.output_type)
+                         output_type=output_type)
 
     @staticmethod
     def dto_to_orm(output_dto):  # type: (OutputDTO) -> OutputConfiguration
