@@ -25,6 +25,7 @@ from threading import Event
 
 import six
 
+from enums import OutputType
 from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
 from gateway.enums import EnergyEnums
@@ -58,17 +59,18 @@ class MetricsCollector(object):
                            'O': 'output',
                            'd': 'dimmer',
                            'D': 'dimmer'}
-    OUTPUT_OUTPUT_TYPES = {0: 'outlet',
-                           1: 'valve',
-                           2: 'alarm',
-                           3: 'appliance',
-                           4: 'pump',
-                           5: 'hvac',
-                           6: 'generic',
-                           7: 'motor',
-                           8: 'ventilation',
-                           9: 'heater',
-                           255: 'light'}
+    OUTPUT_OUTPUT_TYPES = {OutputType.OUTLET: 'outlet',
+                           OutputType.VALVE: 'valve',
+                           OutputType.ALARM: 'alarm',
+                           OutputType.APPLIANCE: 'appliance',
+                           OutputType.PUMP: 'pump',
+                           OutputType.HVAC: 'hvac',
+                           OutputType.GENERIC: 'generic',
+                           OutputType.MOTOR: 'motor',
+                           OutputType.VENTILATION: 'ventilation',
+                           OutputType.HEATER: 'heater',
+                           OutputType.SHUTTER_RELAY: 'shutter_relay',
+                           OutputType.LIGHT: 'light'}
 
     @Inject
     def __init__(self, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,

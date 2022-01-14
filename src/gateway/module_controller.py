@@ -21,11 +21,12 @@ import six
 import time
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import ModuleDTO
-from gateway.enums import HardwareType, ModuleType, IndicateType
+from gateway.enums import ModuleType, IndicateType
 from gateway.exceptions import CommunicationFailure
 from gateway.base_controller import BaseController
 from gateway.models import Module, Sensor
 from gateway.mappers.module import ModuleMapper
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Any, Set

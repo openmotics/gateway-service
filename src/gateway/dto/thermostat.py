@@ -63,7 +63,7 @@ class ThermostatDTO(BaseDTO):
         return (self.output0 is not None and
                 self.output0 <= 240 and
                 self.sensor is not None and
-                (self.sensor <= 31 or self.sensor == 240))
+                (self.sensor not in (None, 255)))
 
 
 class ThermostatGroupDTO(BaseDTO):

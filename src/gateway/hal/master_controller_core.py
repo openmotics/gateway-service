@@ -24,13 +24,12 @@ import time
 from datetime import datetime
 from threading import Timer, Lock
 
-from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
     MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     ShutterDTO, ShutterGroupDTO
-from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, HardwareType, ModuleType
+from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, ModuleType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -60,6 +59,7 @@ from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 from platform_utils import Hardware
 from logs import Logs
+from enums import HardwareType, OutputType
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
@@ -226,7 +226,8 @@ class MasterCoreController(MasterController):
             elif core_event.type == MasterCoreEvent.Types.MODULE_NOT_RESPONDING:
                 log_event = False  # Don't log MODULE_NOT_RESPONDING separately
                 address = core_event.data['address']
-                if '.000.000.' in address:
+                device_type = chr(int(address.split('.')[0]))
+                if device_type != device_type.upper():  # Means virtual, internal or emulated
                     logger.info('Got firmware information: {0} (internal module)'.format(address))
                 else:
                     logger.info('Got firmware information: {0} (timeout)'.format(address))
@@ -588,7 +589,7 @@ class MasterCoreController(MasterController):
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
-            return OutputDTO(id=output.id)
+            return OutputDTO(id=output.id, output_type=OutputType.SHUTTER_RELAY)
         output_dto = OutputMapper.orm_to_dto(output)
         CANFeedbackController.load_output_led_feedback_configuration(output, output_dto)
         return output_dto
@@ -602,8 +603,14 @@ class MasterCoreController(MasterController):
     def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         for output_dto in outputs:
             output = OutputMapper.dto_to_orm(output_dto)
+            if output.output_type == OutputType.SHUTTER_RELAY and not output.is_shutter:
+                # Configure the output as a shutter
+                self._configure_output_shutter(output=output, is_shutter=True)
+            elif output.output_type != OutputType.SHUTTER_RELAY and output.is_shutter:
+                # Configure the output as output
+                self._configure_output_shutter(output=output, is_shutter=False)
             if output.is_shutter:
-                # Shutter outputs cannot be changed
+                # Any further configuration not required
                 continue
             output.save(activate=False)
             CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
@@ -623,6 +630,29 @@ class MasterCoreController(MasterController):
                                                  dimmer=Dimmer.system_value_to_dimmer(data['dimmer']),
                                                  locked=output.locking.locked))
         return output_status
+
+    def _configure_output_shutter(self, output, is_shutter):  # type: (OutputConfiguration, bool) -> None
+        shutter = ShutterConfiguration(output.id // 2)
+        output_module = output.module
+        if is_shutter:
+            shutter.outputs.output_0 = shutter.id * 2
+            output_set = shutter.output_set
+            self._output_shutter_map[shutter.outputs.output_0] = shutter.id
+            self._output_shutter_map[shutter.outputs.output_1] = shutter.id
+            self.set_output(output_id=shutter.outputs.output_0, state=False)
+            self.set_output(output_id=shutter.outputs.output_1, state=False)
+            output.output_type = OutputType.SHUTTER_RELAY
+        else:
+            output_set = shutter.output_set  # Previous outputs need to be restored
+            self._output_shutter_map.pop(shutter.outputs.output_0, None)
+            self._output_shutter_map.pop(shutter.outputs.output_1, None)
+            shutter.outputs.output_0 = 255 * 2
+            if output.output_type == OutputType.SHUTTER_RELAY:
+                output.output_type = OutputType.OUTLET
+        setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
+        output.save(activate=False)
+        shutter.save(activate=False)
+        output_module.save(activate=False)
 
     # Shutters
 
@@ -673,25 +703,12 @@ class MasterCoreController(MasterController):
     def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
         for shutter_dto in shutters:
             # Validate whether output module exists
-            output_module = OutputConfiguration(shutter_dto.id * 2).module
+            output = OutputConfiguration(shutter_dto.id * 2)
+            if not output.is_shutter:
+                continue  # Not configured as a shutter
             # Configure shutter
+            output_module = output.module
             shutter = ShutterMapper.dto_to_orm(shutter_dto)
-            if shutter.timer_down not in [0, 65535] and shutter.timer_up not in [0, 65535]:
-                # Shutter is "configured"
-                shutter.outputs.output_0 = shutter.id * 2
-                output_set = shutter.output_set
-                self._output_shutter_map[shutter.outputs.output_0] = shutter.id
-                self._output_shutter_map[shutter.outputs.output_1] = shutter.id
-                is_configured = True
-            else:
-                output_set = shutter.output_set  # Previous outputs need to be restored
-                self._output_shutter_map.pop(shutter.outputs.output_0, None)
-                self._output_shutter_map.pop(shutter.outputs.output_1, None)
-                shutter.outputs.output_0 = 255 * 2
-                is_configured = False
-            shutter.save(activate=False)
-            # Mark related Outputs as "occupied by shutter"
-            setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
             output_module.save(activate=False)
         MemoryActivator.activate()
@@ -885,10 +902,8 @@ class MasterCoreController(MasterController):
         ids = []
         for module_id in self._enumerate_io_modules('input', amount_per_module=1):
             input_module_info = InputModuleConfiguration(module_id)
-            if input_module_info.device_type == 'b':
-                continue  # Skip emulated modules since they don't keep counts
-            if input_module_info.device_type == 'i' and '.000.000.' not in input_module_info.address:
-                continue  # Skip virtual modules
+            if input_module_info.hardware_type != HardwareType.PHYSICAL:
+                continue  # Only physical modules can count
             ids.append(module_id)
         return ids
 
@@ -1030,8 +1045,7 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            if output_module_info.address[4:15] in ['000.000.000', '000.000.001',
-                                                    '000.000.002', '000.000.003']:
+            if output_module_info.hardware_type == HardwareType.INTERNAL:
                 outputs.append({'o': 'P',
                                 'd': 'F'}.get(device_type, device_type))
             else:
@@ -1047,18 +1061,17 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            if device_type == 'i' and input_module_info.address.endswith('000.000.000'):
+            if input_module_info.hardware_type == HardwareType.INTERNAL:
                 inputs.append('J')  # Internal input module
-            elif device_type == 'b':
+            elif input_module_info.hardware_type == HardwareType.EMULATED:
                 can_inputs.append('I')  # uCAN input "module"
-            elif device_type in ['I', 'i']:
+            else:
                 inputs.append(device_type)  # Slave and virtual input module
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
-            device_type = sensor_module_info.device_type
-            if device_type == 'T':
+            if sensor_module_info.hardware_type == HardwareType.PHYSICAL:
                 inputs.append('T')
-            elif device_type == 's':
+            elif sensor_module_info.hardware_type == HardwareType.EMULATED:
                 can_inputs.append('T')  # uCAN sensor "module"
         for module_id in range(nr_of_can_controls):
             can_inputs.append('C')
@@ -1132,20 +1145,12 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if device_type == 'i':
-                if '.000.000.' in input_module_info.address:
-                    hardware_type = HardwareType.INTERNAL
-                else:
-                    hardware_type = HardwareType.VIRTUAL
-            elif device_type == 'b':
-                hardware_type = HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=input_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=input_module_info.hardware_type,
                             order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
+            if input_module_info.hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _get_version(input_module_info.address)
             information.append(dto)
 
@@ -1153,23 +1158,17 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if device_type in ['l', 'o', 'd']:
-                if '.000.000.' in output_module_info.address:
-                    hardware_type = HardwareType.INTERNAL
-                else:
-                    hardware_type = HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=output_module_info.hardware_type,
                             order=module_id)
             shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                                     address='114.{0}'.format(output_module_info.address[4:]),
                                     module_type=ModuleType.SHUTTER,
-                                    hardware_type=hardware_type,
+                                    hardware_type=output_module_info.hardware_type,
                                     order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
+            if output_module_info.hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _get_version(output_module_info.address)
                 shutter_dto.online = dto.online
                 shutter_dto.hardware_version = dto.hardware_version
