@@ -2520,7 +2520,7 @@ class WebInterface(object):
 
     @cherrypy.expose
     @cherrypy.tools.authenticated()
-    def get_logs(self):
+    def get_system_logs(self):
         cherrypy.response.headers['Content-Type'] = 'application/octet-stream'
         cherrypy.response.headers['Content-Disposition'] = 'attachment;filename={0}.tar.gz'.format(Platform.get_registration_key())
         return self._system_controller.get_logs()
