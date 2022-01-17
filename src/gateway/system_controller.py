@@ -18,6 +18,7 @@ System BLL
 from __future__ import absolute_import
 
 import glob
+import io
 import logging
 import os
 import shutil
@@ -25,6 +26,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+import tarfile
 from threading import Timer
 
 from six.moves.configparser import ConfigParser
@@ -268,13 +270,18 @@ class SystemController(BaseController):
         Timer(2, _restart, args=[service_names]).start()
         return {'restart_services': 'pending'}
 
+    def get_logs(self):
+        fh = io.BytesIO()
+        with tarfile.open(fileobj=fh, mode='w:gz') as archive:
+            archive.add('/var/log/supervisor', recursive=True)
+        return fh.getvalue()
+
     @Inject
     def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
         if active:
             watchdog.start()
         else:
             watchdog.stop()
-
 
     def is_esafe_touchscreen_calibrated(self):
         _ = self
