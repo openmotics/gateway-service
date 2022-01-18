@@ -556,7 +556,7 @@ class DaySchedule(BaseModel):
 
     @property
     def schedule_data(self):  # type: () -> Dict[int, float]
-        return json.loads(self.content)
+        return {int(k): v for k, v in json.loads(self.content).items()}
 
     @schedule_data.setter
     def schedule_data(self, value):  # type: (Dict[int, float]) -> None

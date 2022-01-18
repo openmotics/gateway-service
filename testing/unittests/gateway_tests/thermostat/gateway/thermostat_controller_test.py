@@ -167,7 +167,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.controller.refresh_thermostats_from_db()
 
         schedules = self.scheduling_controller.save_schedules.call_args_list[0][0][0]
-        self.assertEqual(len(schedules), 5 * 7, [x.external_id for x in schedules])
+        self.assertEqual(len(schedules), 35, [x.external_id for x in schedules])
         self.assertIn('1.0', [x.external_id for x in schedules])   # 1..7  heating
         self.assertIn('7.4', [x.external_id for x in schedules])
         schedule = next(x for x in schedules if x.name == 'H1 day 0 00:00')
@@ -543,14 +543,14 @@ class ThermostatControllerTest(unittest.TestCase):
         self.controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
 
         thermostat = Thermostat.get(number=1)
-        default_schedule = json.loads(json.dumps(DaySchedule.DEFAULT_SCHEDULE['heating']))  # It's also encoded/decoded internally
+        default_schedule = DaySchedule.DEFAULT_SCHEDULE['heating']
         self.assertEqual(default_schedule, thermostat.heating_schedules[0].schedule_data)
         for preset, expected in {Preset.Types.AWAY: 16.0,
                                  Preset.Types.VACATION: 15.0,
                                  Preset.Types.PARTY: 22.0}.items():
             self.assertEqual(expected, thermostat.get_preset(preset).heating_setpoint)
 
-        source_dto = copy.deepcopy(thermostat_dto)
+        source_dto = ThermostatDTO(id=2)
         source_dto.auto_mon = ThermostatScheduleDTO(temp_night=1.0, temp_day_1=2.0, temp_day_2=3.0,
                                                     start_day_1='04:00', end_day_1='05:00',
                                                     start_day_2='06:00', end_day_2='07:00')
@@ -558,8 +558,7 @@ class ThermostatControllerTest(unittest.TestCase):
         source_dto.setp4 = 9.0
         source_dto.setp5 = 10.0
         self.controller.copy_heating_schedule(source_dto, thermostat_dto)
-        thermostat = Thermostat.get(number=1)
-        self.assertEqual({str(0): 1.0, str(4*60*60): 2.0, str(5*60*60): 1.0, str(6*60*60): 3.0, str(7*60*60): 1.0},
+        self.assertEqual({0: 1.0, 4*60*60: 2.0, 5*60*60: 1.0, 6*60*60: 3.0, 7*60*60: 1.0},
                          thermostat.heating_schedules[0].schedule_data)
         for preset, expected in {Preset.Types.AWAY: 8.0,
                                  Preset.Types.VACATION: 9.0,
