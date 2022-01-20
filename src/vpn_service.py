@@ -19,12 +19,11 @@ is instructed to open a VPN tunnel or not, and will receive some configration in
 
 from __future__ import absolute_import
 
-from platform_utils import System, Hardware
+from platform_utils import System
 System.import_libs()
 
 import tempfile
 import glob
-import logging
 import logging.handlers
 import os
 import signal
@@ -37,9 +36,6 @@ from collections import deque
 from threading import Lock
 
 import requests
-import six
-from requests import ConnectionError
-from requests.adapters import HTTPAdapter
 from requests.exceptions import HTTPError
 import ujson as json
 from six.moves.configparser import ConfigParser, NoOptionError
@@ -240,7 +236,7 @@ class CertificateFiles(object):
     @staticmethod
     def get_versions():
         versions = set(x.split(os.path.sep)[-1] for x in glob.glob(CertificateFiles.cert_path('*')))
-        versions -= set([CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.OPENVPN])
+        versions -= {CertificateFiles.CURRENT, CertificateFiles.PREVIOUS, CertificateFiles.OPENVPN}
         return versions
 
     @staticmethod
@@ -255,7 +251,7 @@ class CertificateFiles(object):
                 logger.info('Marking certificates %s as failed', vpn_target)
                 marker = self.cert_path(vpn_target, '.failure')
                 if not os.path.exists(marker):
-                    with open(marker, 'w') as fd:
+                    with open(marker, 'w'):
                         pass
             except Exception:
                 vpn_target = None
@@ -305,7 +301,6 @@ class CertificateFiles(object):
                 return True
         return False
 
-
     def setup_links(self):
         if all(os.path.exists(x) for x in (self.current, self.openvpn)):
             return
@@ -339,7 +334,7 @@ class CertificateFiles(object):
                     link_target = os.readlink(link).split(os.path.sep)[-1]
                     if link_target in versions:
                         logger.info('Keeping certificates %s', link_target)
-                        versions -= set([link_target])
+                        versions -= {link_target}
                 except Exception:
                     pass
             for version in versions:
@@ -353,8 +348,8 @@ class CertificateFiles(object):
         version = self.cert_path(target)
         if not os.path.exists(version):
             os.makedirs(version)
-        for key, file in self.FILES.items():
-            with open(os.path.join(version, file), 'w') as fd:
+        for key, file_ in self.FILES.items():
+            with open(os.path.join(version, file_), 'w') as fd:
                 fd.write(data['data'][key])
 
     def activate(self, target):
@@ -459,9 +454,6 @@ class TaskExecutor(object):
     def __init__(self, cloud=None, message_client=INJECTED):
         self._configuration = {}
         self._intervals = {}
-        self._online = False
-        self._vpn_open = False
-        self.connect_retries = 0
         self._cloud = cloud
         self._message_client = message_client
         self._queue = deque()  # type: Deque[Dict[str,Any]]
@@ -488,11 +480,8 @@ class TaskExecutor(object):
         self._queue.appendleft(data)
         self._thread.request_single_run()
 
-    @property
-    def vpn_open(self):
-        return self._vpn_open
-
-    def execute(self, tasks, context):
+    @staticmethod
+    def execute(tasks, context):
         events = []
         for task in tasks:
             try:
@@ -509,7 +498,7 @@ class TaskExecutor(object):
                 data = self._queue.pop()
             except IndexError:
                 return
-            _, events = self.execute(self._tasks, data)
+            _, events = TaskExecutor.execute(self._tasks, data)
             for event_type, event_data in events:
                 if self._message_client:
                     self._message_client.send_event(event_type, event_data)
@@ -552,7 +541,6 @@ class HeartbeatService(object):
         return {'cloud_disabled': not self._cloud_enabled,
                 'cloud_last_connect': None if not self._cloud_enabled else self._last_successful_heartbeat,
                 'sleep_time': self._sleep_time,
-                'vpn_open': self._executor.vpn_open,
                 'last_cycle': self._last_cycle}
 
     def _handle_event(self, event, payload):
@@ -638,7 +626,12 @@ class HeartbeatService(object):
         return duration
 
 
-class ConfigurationTask(object):
+class Task(object):
+    def run(self, context):
+        raise NotImplementedError()
+
+
+class ConfigurationTask(Task):
     def __init__(self):
         self._configuration = {}
 
@@ -652,7 +645,7 @@ class ConfigurationTask(object):
         self._configuration = data
 
 
-class EventsTask(object):
+class EventsTask(Task):
     def __init__(self):
         self._intervals = {}
 
@@ -662,12 +655,12 @@ class EventsTask(object):
             yield event
         data = context.get('intervals')
         if data is not None and self._intervals != data:
-            yield (OMBusEvents.METRICS_INTERVAL_CHANGE, data)
+            yield OMBusEvents.METRICS_INTERVAL_CHANGE, data
             logger.info('Intervals changed: %s', data)
         self._intervals = data
 
 
-class ConnectivityTask(object):
+class ConnectivityTask(Task):
     def __init__(self):
         self.connected = False
         self.last_heartbeat = time.time()  # unknown
@@ -688,7 +681,7 @@ class ConnectivityTask(object):
         else:
             self.connected = True
         context['connectivity_success'] = self.connected
-        yield (OMBusEvents.CONNECTIVITY, self.connected)
+        yield OMBusEvents.CONNECTIVITY, self.connected
         if context['cloud_enabled'] and not self.connected and \
                 self.last_heartbeat < time.time() - REBOOT_TIMEOUT:
             context['perform_reboot'] = True
@@ -722,14 +715,14 @@ class ConnectivityTask(object):
         return False
 
 
-class RebootTask(object):
+class RebootTask(Task):
     def run(self, context):
         logger.debug('Running reboot task...')
         if context.get('perform_reboot', False):
             subprocess.call('sync && reboot', shell=True)
 
 
-class OpenVPNTask(object):
+class OpenVPNTask(Task):
     def __init__(self):
         self.open = False
         self.connect_retries = 0
@@ -777,10 +770,10 @@ class OpenVPNTask(object):
             logger.info('OpenVPN changed: open=%s', status)
             self.open = status
 
-        yield (OMBusEvents.VPN_OPEN, status)
+        yield OMBusEvents.VPN_OPEN, status
 
 
-class UpdateCertsTask(object):
+class UpdateCertsTask(Task):
     def __init__(self, cloud):
         self._cloud = cloud
 
@@ -797,20 +790,20 @@ class UpdateCertsTask(object):
         try:
             if should_update:
                 logger.info('Rotating client certificates...')
-                files = self.get_cert_files()
+                files = UpdateCertsTask._get_cert_files()
 
                 if self._cloud.confirm_client_certs():
                     try:
                         self.verify_client_certificates(files.current)
                         logger.info('Confirmed existing client certificates')
-                        yield (OMBusEvents.CLIENT_CERTS_CHANGED, changed)
+                        yield OMBusEvents.CLIENT_CERTS_CHANGED, changed
                         return
                     except Exception:
                         pass
 
                 files.cleanup_versions()
                 data = self._cloud.issue_client_certs()
-                target = self.new_version()
+                target = UpdateCertsTask._new_version()
                 files.setup_certs(target, data)
 
                 logger.info('Validating client certificates...')
@@ -829,12 +822,14 @@ class UpdateCertsTask(object):
         except Exception:
             logger.exception('Unexpected exception rotating certificates')
         finally:
-            yield (OMBusEvents.CLIENT_CERTS_CHANGED, changed)
+            yield OMBusEvents.CLIENT_CERTS_CHANGED, changed
 
-    def new_version(self):
+    @staticmethod
+    def _new_version():
         return datetime.now().strftime('%Y%m%d%H%M')
 
-    def get_cert_files(self):
+    @staticmethod
+    def _get_cert_files():
         files = CertificateFiles()
         files.setup_links()
         return files

@@ -98,7 +98,6 @@ class MasterCoreController(MasterController):
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
-        self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
         self._discovery_log = []  # type: List[Dict[str, Any]]
         self._discovery_log_lock = Lock()
         self._last_health_warning = 0
@@ -972,7 +971,7 @@ class MasterCoreController(MasterController):
 
     # Module management
 
-    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+    def drive_led(self, led, state):  # type: (str, str) -> None
         led_to_action = {Leds.EXPANSION: 0,
                          Leds.P1: 6,
                          Leds.LAN_GREEN: 7,
@@ -981,20 +980,14 @@ class MasterCoreController(MasterController):
         if led not in led_to_action:
             return
         action = led_to_action[led]
-        blinking_to_parameter = {LedStates.BLINKING_25: 25,
-                                 LedStates.BLINKING_50: 50,
-                                 LedStates.BLINKING_75: 75,
-                                 LedStates.SOLID: 100}
-        if mode not in blinking_to_parameter:
-            return
-        extra_parameter = blinking_to_parameter[mode]
-        state = self._led_drive_states.get(led)
-        if state != (on, mode):
-            self._do_basic_action(BasicAction(action_type=210,
-                                              action=action,
-                                              device_nr=1 if on else 0,
-                                              extra_parameter=extra_parameter))
-            self._led_drive_states[led] = on, mode
+        extra_parameter = {LedStates.BLINKING_25: 25,
+                           LedStates.BLINKING_50: 50,
+                           LedStates.BLINKING_75: 75,
+                           LedStates.SOLID: 100}.get(state, 100)
+        self._do_basic_action(BasicAction(action_type=210,
+                                          action=action,
+                                          device_nr=0 if state == LedStates.OFF else 1,
+                                          extra_parameter=extra_parameter))
 
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
