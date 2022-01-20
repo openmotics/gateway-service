@@ -448,7 +448,7 @@ class MasterController(object):
 
     # Module functions
 
-    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+    def drive_led(self, led, state):  # type: (str, str) -> None
         raise NotImplementedError()
 
     def module_discover_start(self, timeout):  # type: (int) -> None

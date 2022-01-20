@@ -377,14 +377,14 @@ class Event(object):
                     leds[i] = Event.LedFrequencies.BLINKING_75
                 else:
                     leds[i] = Event.LedFrequencies.SOLID
-            return {'chip': device_nr,
+            return {'chip': action,
                     'leds': leds}
         if self.type == Event.Types.LED_ON:
             word_on = word_helper.decode(bytearray(data[0:2]))
             leds = {}
             for i in range(16):
                 leds[i] = Event.LedStates.ON if word_on & (1 << i) else Event.LedStates.OFF
-            return {'chip': device_nr,
+            return {'chip': action,
                     'leds': leds}
         if self.type == Event.Types.POWER:
             return {'bus': Event.Bus.RS485 if device_nr == 0 else Event.Bus.CAN,
