@@ -27,26 +27,26 @@ from threading import Lock, Timer
 
 import six
 
+from enums import HardwareType
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GlobalRTD10DTO, GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, \
-    LegacyStartupActionDTO, MasterSensorDTO, ModuleDTO, OutputDTO, \
-    OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
-    ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
-    ThermostatGroupDTO
-from gateway.enums import ShutterEnums, ModuleType
-from gateway.exceptions import UnsupportedException
+    GlobalRTD10DTO, GroupActionDTO, InputDTO, InputStatusDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
+    PumpGroupDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
+    ThermostatDTO, ThermostatGroupDTO
+from gateway.enums import ModuleType, ShutterEnums
+from gateway.exceptions import CommunicationFailure, MasterUnavailable, \
+    UnsupportedException
 from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
     GlobalFeedbackMapper, GlobalRTD10Mapper, GroupActionMapper, InputMapper, \
-    LegacyScheduleMapper, LegacyStartupActionMapper, OutputMapper, \
-    PulseCounterMapper, PumpGroupMapper, RTD10Mapper, SensorMapper, \
-    ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
+    OutputMapper, PulseCounterMapper, PumpGroupMapper, RTD10Mapper, \
+    SensorMapper, ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
     ThermostatMapper
-from gateway.exceptions import CommunicationFailure, MasterUnavailable
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from logs import Logs
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
 from master.classic.eeprom_models import CoolingConfiguration, \
@@ -62,8 +62,6 @@ from master.classic.master_heartbeat import MasterHeartbeat
 from master.classic.slave_updater import SlaveUpdater
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
-from logs import Logs
-from enums import HardwareType
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple, Set
@@ -1569,35 +1567,6 @@ class MasterClassicController(MasterController):
         for group_action in group_actions:
             batch.append(GroupActionMapper.dto_to_orm(group_action))
         self._eeprom_controller.write_batch(batch)
-
-    # Schedules
-
-    @communication_enabled
-    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
-        classic_object = self._eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id)
-        return LegacyScheduleMapper.orm_to_dto(classic_object)
-
-    @communication_enabled
-    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
-        return [LegacyScheduleMapper.orm_to_dto(o)
-                for o in self._eeprom_controller.read_all(ScheduledActionConfiguration)]
-
-    @communication_enabled
-    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
-        batch = []
-        for schedule in scheduled_actions:
-            batch.append(LegacyScheduleMapper.dto_to_orm(schedule))
-        self._eeprom_controller.write_batch(batch)
-
-    @communication_enabled
-    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
-        classic_object = self._eeprom_controller.read(StartupActionConfiguration)
-        return LegacyStartupActionMapper.orm_to_dto(classic_object)
-
-    @communication_enabled
-    def save_startup_action(self, startup_action):
-        # type: (LegacyStartupActionDTO) -> None
-        self._eeprom_controller.write(LegacyStartupActionMapper.dto_to_orm(startup_action))
 
     # Dimmer functions
 
