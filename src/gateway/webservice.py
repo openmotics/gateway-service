@@ -38,15 +38,13 @@ import gateway
 from gateway.api.serializers import DimmerConfigurationSerializer, \
     EnergyModuleSerializer, GlobalFeedbackSerializer, GlobalRTD10Serializer, \
     GroupActionSerializer, InputSerializer, InputStateSerializer, \
-    LegacyScheduleSerializer, LegacyStartupActionSerializer, \
-    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
-    PulseCounterSerializer, PumpGroupSerializer, RoomSerializer, \
-    RTD10Serializer, ScheduleSerializer, SensorSerializer, \
-    SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatSerializer, \
-    VentilationSerializer, VentilationStatusSerializer, \
-    LegacyThermostatGroupStatusSerializer
+    LegacyThermostatGroupStatusSerializer, ModuleSerializer, \
+    OutputSerializer, OutputStateSerializer, PulseCounterSerializer, \
+    PumpGroupSerializer, RoomSerializer, RTD10Serializer, ScheduleSerializer, \
+    SensorSerializer, SensorStatusSerializer, ShutterGroupSerializer, \
+    ShutterSerializer, ThermostatAircoStatusSerializer, \
+    ThermostatGroupSerializer, ThermostatGroupStatusSerializer, \
+    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
@@ -58,15 +56,15 @@ from gateway.exceptions import CommunicationFailure, \
     ItemDoesNotExistException, ParseException, UnsupportedException, \
     WrongInputParametersException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, Schedule, User, Module
+from gateway.models import Config, Database, Feature, Module, Schedule, User
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.uart_controller import UARTController
+from gateway.update_controller import UpdateController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool, WebSocketEncoding
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
-from gateway.update_controller import UpdateController
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -1840,38 +1838,6 @@ class WebInterface(object):
         self._group_action_controller.save_group_actions(data)
         return {}
 
-    # Schedules  # TODO: Legacy, cleanp
-
-    @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_scheduled_action_configuration(self, id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str, Any]
-        """ Get a specific scheduled_action_configuration defined by its id. """
-        return {'config': LegacyScheduleSerializer.serialize(schedule_dto=self._scheduling_controller.load_scheduled_action(id),
-                                                             fields=fields)}
-
-    @openmotics_api(auth=True, check=types(fields='json'))
-    def get_scheduled_action_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str, List[Any]]
-        """ Get all scheduled_action_configurations. """
-        return {'config': [LegacyScheduleSerializer.serialize(schedule_dto=schedule, fields=fields)
-                           for schedule in self._scheduling_controller.load_scheduled_actions()]}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_scheduled_action_configuration(self, config):
-        # type: (Dict[str, Any]) -> Dict[str, Any]
-        """ Set one scheduled_action_configuration. """
-        data = LegacyScheduleSerializer.deserialize(config)
-        self._scheduling_controller.save_scheduled_actions([data])
-        return {}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_scheduled_action_configurations(self, config):
-        # type: (List[Dict[str, Any]]) -> Dict[str, Any]
-        """ Set multiple scheduled_action_configurations. """
-        data = [LegacyScheduleSerializer.deserialize(entry) for entry in config]
-        self._scheduling_controller.save_scheduled_actions(data)
-        return {}
-
     # PulseCounters
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
@@ -1929,23 +1895,6 @@ class WebInterface(object):
         with a pulse_counter_id >= 24.
         """
         return {'value': self._pulse_counter_controller.set_value(pulse_counter_id, value)}
-
-    # Startup actions  # TODO: Legacy, cleanp
-
-    @openmotics_api(auth=True, check=types(fields='json'))
-    def get_startup_action_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str, Any]
-        """ Get the startup_action_configuration. """
-        return {'config': LegacyStartupActionSerializer.serialize(startup_action_dto=self._scheduling_controller.load_startup_action(),
-                                                                  fields=fields)}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_startup_action_configuration(self, config):
-        # type: (Dict[str, Any]) -> Dict[str, Any]
-        """ Set the startup_action_configuration. """
-        data = LegacyStartupActionSerializer.deserialize(config)
-        self._scheduling_controller.save_startup_action(data)
-        return {}
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_dimmer_configuration(self, fields=None):

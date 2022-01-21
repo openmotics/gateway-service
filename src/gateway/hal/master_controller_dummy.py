@@ -18,11 +18,11 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 import logging
+
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
-    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
-    PumpGroupDTO, ShutterDTO, ShutterGroupDTO, \
-    ThermostatAircoStatusDTO, ThermostatDTO
+    GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
+    OutputDTO, OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
+    ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
@@ -247,13 +247,3 @@ class MasterDummyController(MasterController):
     def load_dimmer_configuration(self):
         # type: () -> DimmerConfigurationDTO
         return DimmerConfigurationDTO()  # All default values
-
-    # Schedules
-
-    def load_scheduled_actions(self):
-        # type: (Any) -> List[LegacyScheduleDTO]
-        return []
-
-    def load_startup_action(self):
-        # type: (Any) -> LegacyStartupActionDTO
-        return LegacyStartupActionDTO(actions=[])

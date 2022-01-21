@@ -18,13 +18,10 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GroupActionDTO, InputDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
-    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
-    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
-    OutputStatusDTO, LegacyStartupActionDTO, LegacyScheduleDTO, \
-    DimmerConfigurationDTO, InputStatusDTO
-
+    GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
+    OutputDTO, OutputStatusDTO, PulseCounterDTO, SensorDTO, ShutterDTO, \
+    ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
+    ThermostatGroupDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple, Set
@@ -493,23 +490,6 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
-        raise NotImplementedError()
-
-    # Schedule
-
-    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
-        raise NotImplementedError()
-
-    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
-        raise NotImplementedError()
-
-    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
-        raise NotImplementedError()
-
-    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
-        raise NotImplementedError()
-
-    def save_startup_action(self, startup_action):  # type: (LegacyStartupActionDTO) -> None
         raise NotImplementedError()
 
     # Dimmer functions
