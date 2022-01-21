@@ -107,6 +107,14 @@ class Hardware(object):
         return  # Unknown
 
     @staticmethod
+    def get_board_serial_number():
+        with open('/sys/bus/i2c/devices/0-0050/eeprom') as fd:
+            serial_pos, serial_length = 16, 12
+            fd.seek(serial_pos)
+            serial_number = str(fd.read(serial_length))
+            return serial_number
+
+    @staticmethod
     def get_main_interface():
         board_type = Hardware.get_board_type()
         if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB, Hardware.BoardType.ESAFE]:
