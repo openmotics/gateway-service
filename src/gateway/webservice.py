@@ -711,7 +711,6 @@ class WebInterface(object):
                 'operating_system': System.get_operating_system().get('ID', 'unknown'),
                 'hardware': Hardware.get_board_type(),
                 'hardware_serial': Hardware.get_board_serial_number(),
-                'registration_key': Platform.get_registration_key(),
                 'mac_address': Hardware.get_mac_address()}
 
     @openmotics_api(auth=True, check=types(type=int, id=int))
