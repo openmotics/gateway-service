@@ -28,7 +28,7 @@ from ioc import Injectable, Singleton
 
 if False:  # MYPY
     from typing import Callable, Dict, List, Literal, Tuple, Union
-    GATEWAY_TOPIC = Literal['config', 'state']
+    GATEWAY_TOPIC = Literal['config', 'scheduler', 'state']
     MASTER_TOPIC = Literal['eeprom', 'module', 'power', 'output', 'input', 'shutter', 'sensor']
     ESAFE_TOPIC = Literal['delivery', 'lock', 'config', 'rfid']
 
@@ -69,6 +69,7 @@ class PubSub(object):
 
     class GatewayTopics(BaseEnum):
         CONFIG = 'config'  # type: GATEWAY_TOPIC
+        SCHEDULER = 'scheduler'  # type: GATEWAY_TOPIC
         STATE = 'state'  # type: GATEWAY_TOPIC
 
     class EsafeTopics(BaseEnum):

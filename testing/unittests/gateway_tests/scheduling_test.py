@@ -25,20 +25,19 @@ from datetime import datetime, timedelta
 from mock import Mock
 from peewee import SqliteDatabase
 
-from gateway.dto import ScheduleDTO
+from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.master_controller import MasterController
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import Schedule
+from gateway.models import DaySchedule, Schedule
 from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
 from gateway.system_controller import SystemController
-from gateway.ventilation_controller import VentilationController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Schedule]
+MODELS = [DaySchedule, Schedule]
 
 
 class SchedulingControllerTest(unittest.TestCase):
@@ -48,45 +47,42 @@ class SchedulingControllerTest(unittest.TestCase):
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.bind(MODELS)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
 
         self.group_action_controller = Mock(GroupActionController)
-        self.group_action_controller.do_group_action.return_value = {}
-        self.group_action_controller.do_basic_action.return_value = {}
-
-        SetUpTestInjections(pubsub=Mock(PubSub),
-                            maintenance_controller=Mock(MaintenanceController),
-                            master_controller=Mock(MasterController),
-                            module_controller=Mock(ModuleController))
+        SetUpTestInjections(message_client=None,
+                            module_controller=None,
+                            pubsub=Mock(PubSub))
         SetUpTestInjections(system_controller=SystemController())
-        SetUpTestInjections(user_controller=None,
-                            message_client=None,
-                            configuration_controller=None,
-                            thermostat_controller=None,
-                            ventilation_controller=Mock(VentilationController),
-                            shutter_controller=Mock(),
-                            output_controller=Mock(),
-                            room_controller=Mock(),
-                            input_controller=Mock(),
-                            sensor_controller=Mock(),
-                            pulse_counter_controller=Mock(),
-                            frontpanel_controller=Mock(),
+        SetUpTestInjections(configuration_controller=None,
+                            energy_module_controller=None,
+                            frontpanel_controller=None,
                             group_action_controller=self.group_action_controller,
-                            energy_module_controller=Mock(),
-                            uart_controller=Mock(),
-                            update_controller=Mock(),
+                            input_controller=None,
+                            maintenance_controller=None,
+                            output_controller=None,
+                            pulse_counter_controller=None,
+                            room_controller=None,
+                            sensor_controller=None,
+                            shutter_controller=None,
+                            thermostat_controller=None,
+                            uart_controller=None,
+                            update_controller=None,
+                            user_controller=None,
+                            ventilation_controller=None,
                             rebus_controller=None)
         self.controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=self.controller)
-        self.controller.set_webinterface(WebInterface())
+        self.web_interface = WebInterface()
+        self.controller.set_webinterface(self.web_interface)
         self.controller.start()
 
     def tearDown(self):
+        self.controller.stop()
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
-        self.controller.stop()
 
     def test_save_load(self):
         dto = ScheduleDTO(id=None, source='gateway', name='schedule', start=0, action='GROUP_ACTION', arguments=0)
@@ -95,12 +91,27 @@ class SchedulingControllerTest(unittest.TestCase):
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
-        self.controller._schedules = {}  # Clear cache
-        self.controller.reload_schedules()
+        self.controller._schedules = {}  # Clear internal cache
+        self.controller.refresh_schedules()
         loaded_dto = self.controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
+
+    def test_update_thermostat_setpoints(self):
+        self.controller.update_thermostat_setpoints(0, 'heating', [
+            DaySchedule(id=10, index=0, content='{"21600": 21.5}')
+        ])
+        jobs = self.controller._scheduler.get_jobs()
+        assert len(jobs) == 1
+        assert jobs[0].id == 'thermostat.heating.0.mon.06h00m'
+
+        self.controller.update_thermostat_setpoints(0, 'heating', [
+            DaySchedule(id=10, index=0, content='{"28800": 22.0}')
+        ])
+        jobs = self.controller._scheduler.get_jobs()
+        assert len(jobs) == 1
+        assert jobs[0].id == 'thermostat.heating.0.mon.08h00m'
 
     def test_base_validation(self):
         with self.assertRaises(RuntimeError):
@@ -125,6 +136,9 @@ class SchedulingControllerTest(unittest.TestCase):
             self.controller._validate(schedule)
 
     def test_group_action(self):
+        self.group_action_controller.do_group_action.return_value = {}
+        self.group_action_controller.do_basic_action.return_value = {}
+
         # New self.controller is empty
         self.assertEqual(0, len(self.controller.load_schedules()))
 

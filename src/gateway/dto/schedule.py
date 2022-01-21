@@ -17,13 +17,22 @@
 Schedule DTO
 """
 import time
+from datetime import datetime
+
 from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional, Any, List
 
 
-class ScheduleDTO(BaseDTO):
+class BaseScheduleDTO(BaseDTO):
+    @property
+    def job_id(self):
+        # type: () -> str
+        raise NotImplementedError()
+
+
+class ScheduleDTO(BaseScheduleDTO):
     def __init__(self, id, name, start, action, source=None, external_id=None, status=None, repeat=None, duration=None, end=None, arguments=None):
         self.id = id  # type: int
         self.source = source  # type: str
@@ -37,27 +46,15 @@ class ScheduleDTO(BaseDTO):
         self.end = end  # type: Optional[float]
         self.arguments = arguments  # type: Optional[Any]
 
+        # Status
         self.next_execution = None  # type: Optional[float]
         self.last_executed = None  # type: Optional[float]
         self.running = False  # type: bool
 
-    def __eq__(self, other):
-        if not isinstance(other, ScheduleDTO):
-            return False
-        return self.id == other.id
-
     @property
-    def is_due(self):
-        if self.repeat is None:
-            # Single-run schedules should start on their set starting time if not yet executed
-            if self.last_executed is not None:
-                return False
-            return self.start <= time.time()
-        # Repeating
-        now = time.time()
-        lower_limit = now - (15 * 60)  # Don't execute a schedule that's overdue for 15 minutes
-        upper_limit = now if self.end is None else min(now, self.end)
-        return self.next_execution is not None and lower_limit <= self.next_execution <= upper_limit
+    def job_id(self):
+        # type: () -> str
+        return 'schedule.{0}'.format(self.id)
 
     @property
     def has_ended(self):
@@ -66,3 +63,19 @@ class ScheduleDTO(BaseDTO):
         if self.end is not None:
             return self.end < time.time()
         return False
+
+
+class ScheduleSetpointDTO(BaseScheduleDTO):
+    def __init__(self, thermostat=None, mode=None, temperature=None, weekday=None, hour=None, minute=None):
+        self.thermostat = thermostat  # type: int
+        self.mode = mode  # type: str
+        self.temperature = temperature  # type: float
+        self.weekday = weekday  # type: int
+        self.hour = hour  # type: int
+        self.minute = minute  # type: int
+
+    @property
+    def job_id(self):
+        # type: () -> str
+        day = {0: 'mon', 1: 'tue', 2: 'wed', 3: 'thu', 4: 'fri', 5: 'sat', 6: 'sun'}.get(self.weekday)
+        return 'thermostat.{0}.{1}.{2}.{3:02}h{4:02}m'.format(self.mode, self.thermostat, day, self.hour, self.minute)

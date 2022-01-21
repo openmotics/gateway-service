@@ -48,11 +48,10 @@ logger = logging.getLogger(__name__)
 
 @Injectable.named('system_controller')
 @Singleton
-class SystemController(BaseController):
+class SystemController(object):
 
     @Inject
-    def __init__(self, master_controller=INJECTED, module_controller=INJECTED, message_client=INJECTED):
-        super(SystemController, self).__init__(master_controller)
+    def __init__(self, module_controller=INJECTED, message_client=INJECTED):
         self._module_controller = module_controller  # type: ModuleController
         self._message_client = message_client  # type: MessageClient
 
