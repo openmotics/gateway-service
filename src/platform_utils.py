@@ -108,11 +108,15 @@ class Hardware(object):
 
     @staticmethod
     def get_board_serial_number():
-        with open('/sys/bus/i2c/devices/0-0050/eeprom') as fd:
-            serial_pos, serial_length = 16, 12
-            fd.seek(serial_pos)
-            serial_number = str(fd.read(serial_length))
-            return serial_number
+        serial_number = None
+        try:
+            with open('/sys/bus/i2c/devices/0-0050/eeprom') as fd:
+                serial_pos, serial_length = 16, 12
+                fd.seek(serial_pos)
+                serial_number = str(fd.read(serial_length))
+        except Exception:
+            logger.error('Unable to read board serial number')
+        return serial_number
 
     @staticmethod
     def get_main_interface():
