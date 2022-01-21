@@ -201,10 +201,10 @@ class ThermostatControllerGateway(ThermostatController):
                                                                         temperature_field: setpoint}}
                         thermostat_schedules.append(thermostat_schedule)
 
-        if thermostat_schedules:
-            self._scheduling_controller.save_schedules(thermostat_schedules)
         if schedule_mapping:
             self._scheduling_controller.remove_schedules(list(schedule_mapping.values()))
+        if thermostat_schedules:
+            self._scheduling_controller.save_schedules(thermostat_schedules)
 
     def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
         # type: (int, Optional[float], Optional[float], Optional[float]) -> None
@@ -491,14 +491,7 @@ class ThermostatControllerGateway(ThermostatController):
                 for thermostat in Thermostat.select()]
 
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
-        mode = ThermostatMode.HEATING
-        for thermostat_dto in thermostats:
-            # TODO: mappers should only transform data, not save models
-            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
-            thermostat.save()
-        self._thermostat_config_changed()
-        if self._sync_thread:
-            self._sync_thread.request_single_run()
+        self._save_thermostat_configurations(thermostats, ThermostatMode.HEATING)
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         mode = ThermostatMode.COOLING
@@ -511,11 +504,32 @@ class ThermostatControllerGateway(ThermostatController):
                 for thermostat in Thermostat.select()]
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
-        mode = ThermostatMode.COOLING
+        self._save_thermostat_configurations(thermostats, ThermostatMode.COOLING)
+
+    def _save_thermostat_configurations(self, thermostats, mode):  # type: (List[ThermostatDTO], str) -> None
         for thermostat_dto in thermostats:
-            # TODO: mappers should only transform data, not save models
-            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
+            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto)
             thermostat.save()
+            update, remove = ThermostatMapper.get_valve_links(thermostat_dto, mode)
+            for valve_to_thermostat in remove:
+                valve_to_thermostat.delete()
+            for valve_to_thermostat in update:
+                valve_to_thermostat.valve.save()
+                valve_to_thermostat.save()
+            if thermostat.sensor is None and thermostat.valves == []:
+                thermostat.delete()
+            else:
+                update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, mode)
+                for day_schedule in remove:
+                    day_schedule.delete()
+                for day_schedule in update:
+                    day_schedule.save()
+                # TODO: trigger update for schedules
+                update, remove = ThermostatMapper.get_preset_links(thermostat_dto, mode)
+                for preset in remove:
+                    preset.delete()
+                for preset in update:
+                    preset.save()
         self._thermostat_config_changed()
         if self._sync_thread:
             self._sync_thread.request_single_run()
