@@ -83,6 +83,7 @@ class Hardware(object):
 
     @staticmethod
     def get_board_type():
+        # type: () -> Union[str, None]
         try:
             with open('/proc/device-tree/model', 'r') as mfh:
                 board_type = mfh.read().strip('\x00').replace(' ', '_')
@@ -104,10 +105,11 @@ class Hardware(object):
         except IOError:
             pass
         logger.warning('could not detect board type, unknown')
-        return  # Unknown
+        return None  # Unknown
 
     @staticmethod
     def get_board_serial_number():
+        # type: () -> Union[str, None]
         serial_number = None
         try:
             with open('/sys/bus/i2c/devices/0-0050/eeprom') as fd:
@@ -129,7 +131,8 @@ class Hardware(object):
         return 'lo'
 
     @staticmethod
-    def get_mac_address():  # type: () -> Union[str, None]
+    def get_mac_address():
+        # type: () -> Union[str, None]
         """ Get the main interface mac address """
         interface = Hardware.get_main_interface()
         try:

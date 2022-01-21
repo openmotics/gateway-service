@@ -706,7 +706,8 @@ class WebInterface(object):
         return {'features': list(features)}
 
     @openmotics_api(auth=True)
-    def get_platform_details(self):  # type: () -> Dict[str, str]
+    def get_platform_details(self):
+        # type: () -> Dict[str,  Union[str, None]]
         return {'platform': Platform.get_platform(),
                 'operating_system': System.get_operating_system().get('ID', 'unknown'),
                 'hardware': Hardware.get_board_type(),
