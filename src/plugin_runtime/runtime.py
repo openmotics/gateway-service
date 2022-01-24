@@ -76,7 +76,8 @@ class PluginRuntime(object):
             http_port = int(config.get('OpenMotics', 'http_port'))
         except (NoSectionError, NoOptionError):
             http_port = 80
-        self._webinterface = WebInterfaceDispatcher(self._writer.log, port=http_port)
+        self._webinterface = WebInterfaceDispatcher(self._writer.log,
+                                                    port=http_port)
 
     def _init_plugin(self):
         # type: () -> None
@@ -98,7 +99,7 @@ class PluginRuntime(object):
         check_plugin(plugin_class)
 
         # Set the name, version, interfaces
-        self._name = plugin_class.name
+        self._name = self._webinterface.plugin_name = plugin_class.name
         self._version = plugin_class.version
         self._interfaces = plugin_class.interfaces
 

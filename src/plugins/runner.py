@@ -14,10 +14,10 @@ from six.moves.queue import Empty, Full, Queue
 from gateway.daemon_thread import BaseThread
 from toolbox import PluginIPCReader, PluginIPCWriter
 from plugin_runtime.base import PluginWebRequest, PluginWebResponse
+from gateway.webservice import WebInterface, log_access
 
 if False:  # MYPY
     from typing import Any, Dict, Callable, List, Optional, AnyStr
-    from gateway.webservice import WebInterface
 
 logger_ = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ class Service(object):
                 return self
         return None
 
+    @log_access
     @cherrypy.expose
     def index(self, method, plugin_web_request, *args, **kwargs):
         # type: (str, PluginWebRequest, Any, Any) -> Optional[AnyStr]
