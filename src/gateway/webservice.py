@@ -94,6 +94,7 @@ if False:  # MYPY
     from plugins.base import PluginController
 
 logger = logging.getLogger(__name__)
+access_logger = logging.getLogger(Logs.WEBSERVICE_ACCESS_LOGGER)
 
 
 class FloatWrapper(float):
@@ -122,6 +123,52 @@ def limit_floats(struct):
         return struct
 
 
+def log_access(f, mask=None):
+    @decorator
+    def wrapper(func, *args, **kwargs):
+        start = time.time()
+        request = cherrypy.request
+        response = cherrypy.response
+
+        params = {}
+        query_string = request.query_string
+        if query_string:
+            for entry in query_string.split('&'):
+                if '=' not in entry:
+                    continue
+                key, value = entry.split('=')
+                if mask is None or key not in mask:
+                    params[key] = value
+                else:
+                    params[key] = '***'
+        headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
+                             for header in ['X-Request-Id', 'User-Agent']
+                             if header in request.headers)
+
+        access_logger.debug(
+            '{0} - {1} - {2}{3} - Query parameters: {4}{5}'.format(
+                request.remote.ip,
+                request.method,
+                request.script_name, request.path_info,
+                json.dumps(params),
+                ' - {0}'.format(headers) if headers else ''
+            )
+        )
+        return_data = func(*args, **kwargs)
+        access_logger.info(
+            '{0} - {1} - {2}{3} - Status: {4} - Duration: {5:.2f}s'.format(
+                request.remote.ip,
+                request.method,
+                request.script_name, request.path_info,
+                response.status,
+                time.time() - start
+            )
+        )
+        return return_data
+    return wrapper(f)
+
+
+@log_access
 def error_generic(status, message, *args, **kwargs):
     _ = args, kwargs
     cherrypy.response.headers["Content-Type"] = "application/json"
@@ -129,6 +176,7 @@ def error_generic(status, message, *args, **kwargs):
     return json.dumps({"success": False, "msg": message})
 
 
+@log_access
 def error_unexpected():
     cherrypy.response.headers["Content-Type"] = "application/json"
     cherrypy.response.status = 500  # Internal Server Error
@@ -326,13 +374,14 @@ def _openmotics_api(f, *args, **kwargs):
 
 
 def openmotics_api(auth=False, check=None, pass_token=False, pass_role=False,
-                   plugin_exposed=True, deprecated=None, version=0):
+                   plugin_exposed=True, deprecated=None, mask=None, version=0):
     def wrapper(func):
         func.deprecated = deprecated
         func = _openmotics_api(func)
         if auth is True:
             func = cherrypy.tools.authenticated(pass_token=pass_token, pass_role=pass_role, version=version)(func)
         func = cherrypy.tools.params(**(check or {}))(func)
+        func = log_access(func, mask)
         func.exposed = True
         func.plugin_exposed = plugin_exposed
         func.check = check
@@ -485,7 +534,7 @@ class WebInterface(object):
         static_dir = constants.get_static_dir()
         return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
-    @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
+    @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False, mask=['password'])
     def login(self, username, password, accept_terms=None, timeout=None, impersonate=None):
         """
         Login to the web service, returns a token if successful, returns HTTP status code 401 otherwise.
@@ -526,7 +575,7 @@ class WebInterface(object):
             return {'status': 'Could not log out successfully'}
         return {'status': 'OK'}
 
-    @openmotics_api(plugin_exposed=False)
+    @openmotics_api(plugin_exposed=False, mask=['password'])
     def create_user(self, username, password):
         """
         Create a new user using a username and a password. Only possible in authorized mode.
@@ -2503,7 +2552,7 @@ class WebInterface(object):
         self._module_controller.save_can_bus_termination(enabled=enabled)
         return {}
 
-    @openmotics_api(check=types(confirm=bool, can=bool), auth=True, plugin_exposed=False)
+    @openmotics_api(check=types(confirm=bool, can=bool), auth=True, plugin_exposed=False, mask=['password'])
     def factory_reset(self, username, password, confirm=False, can=True):
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
@@ -2518,6 +2567,7 @@ class WebInterface(object):
     def restart_services(self):
         return self._system_controller.restart_services()
 
+    @log_access
     @cherrypy.expose
     @cherrypy.tools.authenticated()
     def get_system_logs(self):
@@ -2550,6 +2600,7 @@ class WebInterface(object):
         else:
             raise NotImplementedError()
 
+    @log_access
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
@@ -2561,6 +2612,7 @@ class WebInterface(object):
                                                 'interval': None if interval is None else int(interval),
                                                 'interface': self}
 
+    @log_access
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
@@ -2575,6 +2627,7 @@ class WebInterface(object):
             'serialization': serialization
         }
 
+    @log_access
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
@@ -2639,7 +2692,10 @@ class WebService(object):
             cherrypy.tree.mount(root=self._webinterface,
                                 config=config)
 
-            cherrypy.config.update({'engine.autoreload.on': False})
+            cherrypy.config.update({'engine.autoreload.on': False,
+                                    'log.screen': False,
+                                    'log.access_file': '',
+                                    'log.error_file': ''})
             cherrypy.server.unsubscribe()
 
             self._https_server = cherrypy._cpserver.Server()
