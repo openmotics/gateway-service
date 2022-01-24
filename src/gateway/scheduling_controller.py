@@ -80,7 +80,7 @@ class SchedulingController(object):
         self._web_interface = None  # type: Optional[WebInterface]
         self._schedules = {}  # type: Dict[int, ScheduleDTO]
         self._jobs = {}  # type: Dict[str, Job]
-        timezone = system_controller.get_python_timezone()
+        timezone = system_controller.get_timezone()
         self._scheduler = BackgroundScheduler(timezone=timezone, job_defaults={
             'coalesce': True,
             'misfire_grace_time': 3600  # 1h
