@@ -181,8 +181,9 @@ def error_unexpected():
     return json.dumps({"success": False, "msg": "unknown_error"})
 
 
-cherrypy.config.update({'error_page.404': error_generic,
-                        'error_page.401': error_generic,
+cherrypy.config.update({'error_page.401': error_generic,
+                        'error_page.404': error_generic,
+                        'error_page.406': error_generic,
                         'error_page.503': error_generic,
                         'request.error_response': error_unexpected})
 
@@ -212,7 +213,6 @@ def params_parser(params, param_types):
 def params_handler(expect_body_type=None, **kwargs):
     """ Converts/parses/loads specified request params. """
     request = cherrypy.request
-    response = cherrypy.response
     try:
         if request.method in request.methods_with_bodies:
             body = request.body.read()
@@ -229,21 +229,13 @@ def params_handler(expect_body_type=None, **kwargs):
             else:
                 if expect_body_type is not None:
                     raise WrongInputParametersException('No body has been passed to the request')
-    except Exception:
-        response.headers['Content-Type'] = 'application/json'
-        response.status = 406  # No Acceptable
-        contents = json.dumps({'success': False, 'msg': 'invalid_body'})
-        response.body = contents.encode()
-        request.handler = None
-        return
+    except Exception as ex:
+        logger.error('Could not process params: {0}'.format(ex))
+        raise cherrypy.HTTPError(406, 'invalid_body')
     try:
         params_parser(request.params, kwargs)
     except ValueError:
-        response.headers['Content-Type'] = 'application/json'
-        response.status = 406  # No Acceptable
-        contents = json.dumps({'success': False, 'msg': 'invalid_parameters'})
-        response.body = contents.encode()
-        request.handler = None
+        raise cherrypy.HTTPError(406, 'invalid_parameters')
 
 
 def cors_handler():
@@ -303,11 +295,8 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             else:
                 request.params['role'] = checked_token.user.role
     except Exception as ex:
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        cherrypy.response.status = 401  # Unauthorized
-        contents = json.dumps({'success': False, 'msg': 'invalid_token', 'detail': str(ex)})
-        cherrypy.response.body = contents.encode()
-        request.handler = None
+        logger.error('Could not authenticate: {0}'.format(ex))
+        raise cherrypy.HTTPError(401, 'invalid_token')
 
 
 cherrypy.tools.cors = cherrypy.Tool('before_handler', cors_handler, priority=10)
