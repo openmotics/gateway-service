@@ -22,27 +22,28 @@ import logging
 import struct
 import time
 from datetime import datetime
-from threading import Timer, Lock
+from threading import Lock, Timer
 
+from enums import HardwareType, OutputType
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
-    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
-    ShutterDTO, ShutterGroupDTO
-from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, ModuleType
-from gateway.exceptions import UnsupportedException
+    GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
+    OutputDTO, OutputStatusDTO, PulseCounterDTO, ShutterDTO, ShutterGroupDTO
+from gateway.enums import IndicateType, Leds, LedStates, ModuleType, \
+    ShutterEnums
+from gateway.exceptions import CommunicationFailure, UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
-from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from logs import Logs
 from master.core.basic_action import BasicAction
 from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
-from master.core.core_communicator import BackgroundConsumer, CoreCommunicator, \
-    CommunicationBlocker
+from master.core.core_communicator import BackgroundConsumer, \
+    CommunicationBlocker, CoreCommunicator
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.group_action import GroupActionController
@@ -54,12 +55,10 @@ from master.core.memory_models import CanControlModuleConfiguration, \
 from master.core.memory_types import MemoryActivator, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.slave_updater import SlaveUpdater
-from master.core.system_value import Humidity, Temperature, Dimmer
+from master.core.system_value import Dimmer, Humidity, Temperature
 from master.core.system_value import Timer as SVTTimer
-from serial_utils import CommunicationStatus, CommunicationTimedOutException
 from platform_utils import Hardware
-from logs import Logs
-from enums import HardwareType, OutputType
+from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
@@ -1509,14 +1508,6 @@ class MasterCoreController(MasterController):
         return False  # TODO: Implement
 
     # Legacy
-
-    def load_scheduled_actions(self):
-        # type: (Any) -> List[LegacyScheduleDTO]
-        return []
-
-    def load_startup_action(self):
-        # type: (Any) -> LegacyStartupActionDTO
-        return LegacyStartupActionDTO(actions=[])
 
     def load_dimmer_configuration(self):
         # type: () -> DimmerConfigurationDTO

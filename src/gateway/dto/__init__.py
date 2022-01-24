@@ -29,8 +29,7 @@ from gateway.dto.pulse_counter import PulseCounterDTO
 from gateway.dto.rfid import RfidDTO
 from gateway.dto.room import RoomDTO
 from gateway.dto.rtd10 import RTD10DTO, GlobalRTD10DTO
-from gateway.dto.schedule import LegacyScheduleDTO, LegacyStartupActionDTO, \
-    ScheduleDTO
+from gateway.dto.schedule import ScheduleDTO
 from gateway.dto.sensor import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
     SensorStatusDTO
 from gateway.dto.shutter import ShutterDTO

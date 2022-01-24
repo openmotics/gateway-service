@@ -39,7 +39,6 @@ from serial_utils import CommunicationTimedOutException
 if False:  # MYPY
     from typing import Dict, List, Optional
     from apscheduler.job import Job
-    from gateway.dto import LegacyScheduleDTO, LegacyStartupActionDTO
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.master_controller import MasterController
     from gateway.system_controller import SystemController
@@ -267,28 +266,6 @@ class SchedulingController(object):
             check = getattr(func, 'check')
             if check is not None:
                 params_parser(arguments['parameters'], check)
-
-    # Legacy master driven schedules & startup action
-
-    def load_scheduled_action(self, scheduled_action_id):
-        # type: (int) -> LegacyScheduleDTO
-        return self._master_controller.load_scheduled_action(scheduled_action_id)
-
-    def load_scheduled_actions(self):
-        # type: () -> List[LegacyScheduleDTO]
-        return self._master_controller.load_scheduled_actions()
-
-    def save_scheduled_actions(self, scheduled_actions):
-        # type: (List[LegacyScheduleDTO]) -> None
-        self._master_controller.save_scheduled_actions(scheduled_actions)
-
-    def load_startup_action(self):
-        # type: () -> LegacyStartupActionDTO
-        return self._master_controller.load_startup_action()
-
-    def save_startup_action(self, startup_action):
-        # type: (LegacyStartupActionDTO) -> None
-        self._master_controller.save_startup_action(startup_action)
 
 
 def datetime_to_timestamp(date):

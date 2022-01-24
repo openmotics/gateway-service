@@ -66,18 +66,3 @@ class ScheduleDTO(BaseDTO):
         if self.end is not None:
             return self.end < time.time()
         return False
-
-
-class LegacyScheduleDTO(BaseDTO):
-    def __init__(self, id, hour=0, minute=0, day=0, action=None):
-        # type: (int, int, int, int, Optional[List[int]]) -> None
-        self.id = id
-        self.hour = hour
-        self.minute = minute
-        self.day = day
-        self.action = [] if action is None else action  # type: List[int]
-
-
-class LegacyStartupActionDTO(BaseDTO):
-    def __init__(self, actions=None):  # type: (Optional[List[int]]) -> None
-        self.actions = [] if actions is None else actions  # type: List[int]
