@@ -44,6 +44,7 @@ class WebInterfaceDispatcher(object):
         self.__port = port
         self.__warned = False
         self.__available_calls = _load_webinterface()
+        self.plugin_name = None
 
     def __getattr__(self, attribute):
         if attribute in self.__available_calls:
@@ -83,7 +84,8 @@ class WebInterfaceDispatcher(object):
             try:
                 response = requests.get('http://{0}:{1}/{2}'.format(self.__hostname, self.__port, name),
                                         params=kwargs,
-                                        timeout=30.0)
+                                        timeout=30.0,
+                                        headers={'User-Agent': 'Plugin {0}'.format(self.plugin_name)})
                 return response.text
             except Exception:
                 return json.dumps({'success': False,
