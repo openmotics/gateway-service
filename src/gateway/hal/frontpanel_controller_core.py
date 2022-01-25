@@ -19,7 +19,6 @@ from __future__ import absolute_import
 
 import logging
 import time
-from threading import Lock, Event
 from gateway.enums import Leds, Buttons, ButtonStates, SerialPorts, LedStates
 from gateway.daemon_thread import DaemonThread
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -32,7 +31,6 @@ from platform_utils import Platform
 if False:  # MYPY
     from typing import Any, Dict, List, Optional
     from master.core.core_communicator import CoreCommunicator
-    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +82,7 @@ class FrontpanelCoreController(FrontpanelController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
         )
-        self._led_controllers = {}  # type: Dict[str, LedController]
-        self._led_controller_lock = Lock()
-        self._led_event_lock = Lock()
+        self._led_states = {}  # type: Dict[str, str]
         self._carrier = True
         self._connectivity = True
         self._activity = False
@@ -102,32 +98,7 @@ class FrontpanelCoreController(FrontpanelController):
         return self._process_event(MasterCoreEvent(data))
 
     def _process_event(self, core_event):  # type: (MasterCoreEvent) -> None
-        # From both the LED_BLINK and LED_ON event, the LED_ON event will always be sent first
-        if core_event.type == MasterCoreEvent.Types.LED_BLINK:
-            with self._led_event_lock:
-                chip = core_event.data['chip']
-                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform]:
-                    for led_id in range(16):
-                        led = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform][chip].get(led_id)
-                        if led is None:
-                            continue
-                        with self._led_controller_lock:
-                            led_controller = self._led_controllers.setdefault(led, LedController(led))
-                        led_controller.set_mode(core_event.data['leds'][led_id])
-                        led_controller.report()
-        elif core_event.type == MasterCoreEvent.Types.LED_ON:
-            with self._led_event_lock:
-                chip = core_event.data['chip']
-                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform]:
-                    for led_id in range(16):
-                        led = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform][chip].get(led_id)
-                        if led is None:
-                            continue
-                        new_state = core_event.data['leds'].get(led_id, MasterCoreEvent.LedStates.OFF)
-                        with self._led_controller_lock:
-                            led_controller = self._led_controllers.setdefault(led, LedController(led))
-                        led_controller.set_on(new_state != MasterCoreEvent.LedStates.OFF)
-        elif core_event.type == MasterCoreEvent.Types.BUTTON_PRESS:
+        if core_event.type == MasterCoreEvent.Types.BUTTON_PRESS:
             state = FrontpanelCoreController.BUTTON_STATE_MAPPING_ID_TO_ENUM.get(core_event.data['state'])
             if state is not None:
                 button = FrontpanelCoreController.BUTTON_MAPPING_ID_TO_ENUM[core_event.data['button']]
@@ -226,9 +197,9 @@ class FrontpanelCoreController(FrontpanelController):
 
     def _update_cloud_led(self):
         # Cloud led state:
-        # * Off: No heartbeat
-        # * Blinking: Heartbeat but VPN not (yet) open
-        # * Solid: Heartbeat and VPN is open
+        # * Off: No heartbeat and no VPN
+        # * Blinking: Heartbeat != VPN
+        # * Solid: Heartbeat and VPN
         if not self._cloud and not self._vpn:
             state = LedStates.OFF
         elif self._cloud != self._vpn:
@@ -240,76 +211,10 @@ class FrontpanelCoreController(FrontpanelController):
     def _drive_led(self, led, state):
         if led not in FrontpanelCoreController.AVAILABLE_LEDS[self._platform]:
             return
-        with self._led_controller_lock:
-            led_controller = self._led_controllers.setdefault(led, LedController(led))
+        if self._led_states.get(led) == state:
+            return
         try:
-            led_controller.set(state=state)
+            self._master_controller.drive_led(led=led, state=state)
+            self._led_states[led] = state
         except Exception as ex:
             logger.error(ex)
-
-
-class LedController(object):
-    FORCE_TOGGLE_WAIT = 2.0
-
-    @Inject
-    def __init__(self, led, master_controller=INJECTED):
-        self._master_controller = master_controller  # type: MasterController
-        self._led = led  # type: str
-        self._state = 'UNKNOWN'
-        self._desired_state = None  # type: Optional[str]
-        self._on = None  # type: Optional[bool]
-        self._mode = None  # type: Optional[str]
-        self._change_pending = False
-        self._event = Event()
-        self._event_lock = Lock()
-        self._force_toggle = True  # Ensures an event is received
-        self._failures = False
-
-    @property
-    def state(self):
-        return self._state
-
-    def set(self, state, timeout=2.0):   # type: (str, float) -> None
-        with self._event_lock:
-            if state == self._state:
-                return
-            self._event.clear()
-            self._desired_state = state
-            if self._force_toggle:
-                inverted_state = LedStates.OFF if state != LedStates.OFF else LedStates.SOLID
-                self._master_controller.drive_led(led=self._led,
-                                                  state=inverted_state)
-                time.sleep(LedController.FORCE_TOGGLE_WAIT)  # Give a possible event some propagation time
-                self._force_toggle = False
-            self._master_controller.drive_led(led=self._led,
-                                              state=state)
-        if not self._event.wait(timeout=timeout):
-            # Due to race conditions in the master it happens that events are not send. This means this code can
-            # either not use the events at all and assumes state, or it forces a toggle next time to trigger a
-            # new event if none has been received yet. The current implementation uses the latter.
-            self._force_toggle = True
-            self._failures = True
-            raise RuntimeError('Could not update {0} led to {1} in {2}s'.format(self._led, state, timeout))
-        elif self._failures:
-            logger.info('Led {0} state recovered, current state: {1}'.format(self._led, state))
-            self._failures = False
-
-    def report(self):
-        state = LedStates.OFF
-        if self._on:
-            state = self._mode
-        with self._event_lock:
-            if self._state != state:
-                logger.debug('Led {0} new state: {1} -> {2}'.format(self._led, self._state, state))
-            self._state = state
-            if self._state == self._desired_state:
-                self._desired_state = None
-                self._event.set()
-                return True
-        return False
-
-    def set_on(self, on):  # type: (bool) -> None
-        self._on = on
-
-    def set_mode(self, mode):  # type: (str) -> None
-        self._mode = mode

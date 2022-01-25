@@ -40,8 +40,6 @@ class Event(object):
         MODULE_DISCOVERY = 'MODULE_DISCOVERY'
         SLAVE_SEARCH = 'SLAVE_SEARCH'
         BUTTON_PRESS = 'BUTTON_PRESS'
-        LED_ON = 'LED_ON'
-        LED_BLINK = 'LED_BLINK'
         UCAN = 'UCAN'
         EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
         MODULE_NOT_RESPONDING = 'MODULE_NOT_RESPONDING'
@@ -136,34 +134,6 @@ class Event(object):
         RS485 = 'RS485'
         CAN = 'CAN'
 
-    class Leds(object):
-        LED_0 = 0
-        LED_1 = 1
-        LED_2 = 2
-        LED_3 = 3
-        LED_4 = 4
-        LED_5 = 5
-        LED_6 = 6
-        LED_7 = 7
-        LED_8 = 8
-        LED_9 = 9
-        LED_10 = 10
-        LED_11 = 11
-        LED_12 = 12
-        LED_13 = 13
-        LED_14 = 14
-        LED_15 = 15
-
-    class LedStates(object):
-        OFF = 'OFF'
-        ON = 'ON'
-
-    class LedFrequencies(object):
-        BLINKING_25 = 'BLINKING_25'
-        BLINKING_50 = 'BLINKING_50'
-        BLINKING_75 = 'BLINKING_75'
-        SOLID = 'SOLID'
-
     class Buttons(object):
         SETUP = 0
         ACTION = 1
@@ -191,8 +161,6 @@ class Event(object):
                 248: Types.SYSTEM,
                 249: Types.EXECUTE_GATEWAY_API,
                 250: Types.BUTTON_PRESS,
-                251: Types.LED_BLINK,
-                252: Types.LED_ON,
                 253: Types.POWER,
                 254: Types.RESET_ACTION}
 
@@ -363,29 +331,6 @@ class Event(object):
         if self.type == Event.Types.BUTTON_PRESS:
             return {'button': device_nr,
                     'state': data[0]}
-        if self.type == Event.Types.LED_BLINK:
-            word_25 = device_nr
-            word_50 = word_helper.decode(bytearray(data[0:2]))
-            word_75 = word_helper.decode(bytearray(data[2:4]))
-            leds = {}
-            for i in range(16):
-                if word_25 & (1 << i):
-                    leds[i] = Event.LedFrequencies.BLINKING_25
-                elif word_50 & (1 << i):
-                    leds[i] = Event.LedFrequencies.BLINKING_50
-                elif word_75 & (1 << i):
-                    leds[i] = Event.LedFrequencies.BLINKING_75
-                else:
-                    leds[i] = Event.LedFrequencies.SOLID
-            return {'chip': action,
-                    'leds': leds}
-        if self.type == Event.Types.LED_ON:
-            word_on = word_helper.decode(bytearray(data[0:2]))
-            leds = {}
-            for i in range(16):
-                leds[i] = Event.LedStates.ON if word_on & (1 << i) else Event.LedStates.OFF
-            return {'chip': action,
-                    'leds': leds}
         if self.type == Event.Types.POWER:
             return {'bus': Event.Bus.RS485 if device_nr == 0 else Event.Bus.CAN,
                     'power': data[0 > 1]}
