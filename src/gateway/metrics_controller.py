@@ -391,7 +391,7 @@ class MetricsController(object):
                 if self._throttled_down:
                     self._refresh_cloud_interval()
             except Exception as ex:
-                logger.error('Error sending metrics to Cloud: {0}'.format(ex))
+                logger.exception('Error sending metrics to Cloud: {0}'.format(ex))
                 if time_ago_send > 60 * 60:
                     # Decrease metrics rate, but at least every 2 hours
                     # Decrease cloud try interval, but at least every hour
