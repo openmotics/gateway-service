@@ -18,12 +18,9 @@ from __future__ import absolute_import
 import unittest
 import xmlrunner
 from mock import Mock
-from threading import Thread
-from six.moves.queue import Queue, Empty
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from gateway.enums import LedStates, SerialPorts, Leds
-from master.core.events import Event
-from gateway.hal.frontpanel_controller_core import FrontpanelCoreController, LedController
+from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
 
 
 class FrontpanelControllerCoreTest(unittest.TestCase):
@@ -34,9 +31,6 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
 
     def setUp(self):
         self._controller = FrontpanelControllerCoreTest._get_controller()
-
-    def tearDown(self):
-        self._controller._abort()
 
     def test_serial_activity(self):
         self._controller._report_serial_activity(SerialPorts.P1, False)
@@ -81,15 +75,11 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
         self.assertLed(Leds.CLOUD, LedStates.SOLID)
 
     def assertLed(self, led, state):
-        led_controller = self._controller._led_controllers.setdefault(led, LedController(led))
-        self.assertIsNotNone(led_controller)
-        self.assertEqual(state,  led_controller._state)
+        self.assertEqual(state, self._controller._led_states.get(led))
 
     @staticmethod
     @Scope
     def _get_controller():
-        LedController.FORCE_TOGGLE_WAIT = 0.1
-
         driver_map = {}
         for chip_id, chip_mapping in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM['CORE'].items():
             for led_id, led_name in chip_mapping.items():
@@ -104,34 +94,10 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
                 led_states[chip_id][led_id] = False
                 led_modes[chip_id][led_id] = LedStates.SOLID
 
-        event_queue = Queue()
-        thread_control = {}
-
         def drive_led(led, state):
             drive_chip_id, drive_led_id = driver_map[led]
             led_states[drive_chip_id][drive_led_id] = 'ON' if state != LedStates.OFF else 'OFF'
             led_modes[drive_chip_id][drive_led_id] = state if state != LedStates.OFF else LedStates.SOLID
-
-            event = Event.build(Event.Types.LED_ON, {'chip': drive_chip_id, 'leds': led_states[drive_chip_id]})
-            event_queue.put(event)
-            event = Event.build(Event.Types.LED_BLINK, {'chip': drive_chip_id, 'leds': led_modes[drive_chip_id]})
-            event_queue.put(event)
-
-        def _send_events(thread_control_):
-            while True:
-                try:
-                    event = event_queue.get(block=True, timeout=0.2)
-                    controller._process_event(event)
-                except Empty:
-                    if thread_control_.get('stop'):
-                        return
-
-        thread = Thread(target=_send_events, args=(thread_control,))
-        thread.start()
-
-        def _abort():
-            thread_control['stop'] = True
-            thread.join()
 
         SetUpTestInjections(master_communicator=Mock(),
                             master_controller=Mock(),
@@ -140,7 +106,6 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
                             energy_module_controller=Mock())
         controller = FrontpanelCoreController()
         controller._master_controller.drive_led = drive_led
-        controller._abort = _abort
         controller._platform = 'CORE'
         return controller
 
