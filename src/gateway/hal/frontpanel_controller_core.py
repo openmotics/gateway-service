@@ -198,7 +198,7 @@ class FrontpanelCoreController(FrontpanelController):
     def _update_cloud_led(self):
         # Cloud led state:
         # * Off: No heartbeat and no VPN
-        # * Blinking: Heartbeat ! VPN
+        # * Blinking: Heartbeat != VPN
         # * Solid: Heartbeat and VPN
         if not self._cloud and not self._vpn:
             state = LedStates.OFF
