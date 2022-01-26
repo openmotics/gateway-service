@@ -203,16 +203,14 @@ def setup_target_platform(target_platform, message_client_name):
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
-                         ventilation_controller, apartment_controller, delivery_controller,
-                         system_config_controller, rfid_controller, energy_module_controller, update_controller)
+                         ventilation_controller, energy_module_controller, update_controller)
     from gateway.api.V1.webservice import webservice as webservice_v1
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
-         ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
-         rfid_controller, energy_module_controller, update_controller)
+         ventilation_controller, webservice_v1, energy_module_controller, update_controller)
 
     # V1 api
     # This will parse all the V1 api files that are included in the __init__.py file in the

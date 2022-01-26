@@ -21,10 +21,8 @@ import unittest
 
 import mock
 
-from gateway.apartment_controller import ApartmentController
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken, LoginMethod
-from gateway.api.serializers.apartment import ApartmentSerializer
-from gateway.dto import UserDTO, ApartmentDTO
+from gateway.dto import UserDTO
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.user_controller import UserController
 from gateway.api.V1.webservice import AuthenticationLevel
@@ -143,7 +141,7 @@ class ApiUsersTests(unittest.TestCase):
             self.assertNotIn('pin_code', user_dict)  # Do check that the pin code is not passed to the end user
             user_dto_response.pin_code = user_dto.pin_code  # Manually set the pin code since this is filtered out in the api
             all_equal = True
-            for field in ['first_name', 'last_name', 'role', 'language', 'accepted_terms', 'apartment']:
+            for field in ['first_name', 'last_name', 'role', 'language', 'accepted_terms']:
                 if not getattr(user_dto, field) == user_dict.get(field, None):
                     all_equal = False
                     break
@@ -407,36 +405,6 @@ class ApiUsersTests(unittest.TestCase):
                                           request_body=user_to_create)
             self.verify_user_created(user_to_create, response, check_for_pin=True)
 
-    def test_create_user_known_apartment(self):
-        user_to_create = {
-            'first_name': 'Test',
-            'last_name': 'User',
-            'apartment': 2,
-            'role': 'USER'
-        }
-        apartment_dto = ApartmentDTO(id=2, name='TEST_APARTMENT', doorbell_rebus_id=37, mailbox_rebus_id=38)
-        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
-                mock.patch.object(ApartmentController, 'load_apartment', return_value=apartment_dto), \
-                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'), \
-                mock.patch.object(ApartmentController, 'apartment_id_exists', return_value=True):
-            user_to_create_return = user_to_create.copy()
-            user_to_create_return['id'] = 5
-            user_dto_to_return = UserDTO(**user_to_create_return)
-            user_dto_to_return.set_password('Test')
-            user_dto_to_return.apartment = apartment_dto
-            save_user_func.return_value = user_dto_to_return
-
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
-            response = self.web.post_user(auth_token=auth_token,
-                                          request_body=user_to_create.copy())
-
-            # manually fill in the apartment field since it will be converted back to full output
-            user_to_create['apartment'] = ApartmentSerializer.serialize(apartment_dto)
-            self.verify_user_created(user_to_create, response, check_for_pin=True)
-            apartment_serial = ApartmentSerializer.serialize(apartment_dto)
-            resp_dict = json.loads(response)
-            self.assertEqual(apartment_serial, resp_dict['apartment'])
-
     def test_create_user_all(self):
         user_to_create = {
             'first_name': 'Test',
@@ -509,39 +477,6 @@ class ApiUsersTests(unittest.TestCase):
             self.assertEqual('CHANGED', resp_dict['first_name'])
             self.assertEqual('test@test.com', resp_dict['email'])
 
-    def test_update_user_with_apartment(self):
-        user_to_update = {
-            'first_name': 'Test',
-            'last_name': 'User',
-            'apartment': 2,
-            'role': 'USER'
-        }
-        apartment_dto = ApartmentDTO(id=2, name='TEST_APARTMENT', doorbell_rebus_id=37, mailbox_rebus_id=38)
-        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
-                mock.patch.object(self.users_controller, 'load_user') as load_user_func, \
-                mock.patch.object(ApartmentController, 'load_apartment', return_value=apartment_dto), \
-                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'), \
-                mock.patch.object(ApartmentController, 'apartment_id_exists', return_value=True):
-            user_to_update_return = user_to_update.copy()
-            user_to_update_return['id'] = 5
-            user_dto_to_return = UserDTO(**user_to_update_return)
-            user_dto_to_return.set_password('Test')
-            user_dto_to_return.apartment = apartment_dto
-            save_user_func.return_value = user_dto_to_return
-            load_user_func.return_value = self.normal_user_2
-
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
-            response = self.web.put_update_user(user_id=5,
-                                                auth_token=auth_token,
-                                                auth_security_level=AuthenticationLevel.HIGH,
-                                                request_body=user_to_update)
-
-            # manually fill in the apartment field since it will be converted back to full output
-            user_to_update['apartment'] = ApartmentSerializer.serialize(apartment_dto)
-            self.verify_user_created(user_to_update, response)
-            apartment_serial = ApartmentSerializer.serialize(apartment_dto)
-            resp_dict = json.loads(response)
-            self.assertEqual(apartment_serial, resp_dict['apartment'])
 
     def test_update_user_wrong_permission(self):
         user_to_update = {

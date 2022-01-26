@@ -26,12 +26,11 @@ import uuid
 
 import constants
 from ioc import Injectable, Inject, Singleton, INJECTED
-from gateway.dto import UserDTO, RfidDTO
+from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.exceptions import ItemDoesNotExistException, GatewayException, UnAuthorizedException
 from gateway.mappers.user import UserMapper
-from gateway.models import User, RFID
-from gateway.rfid_controller import RfidController
+from gateway.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +42,7 @@ if False:  # MYPY
 
 class LoginMethod(Enum):
     PIN_CODE = 'pin_code'
-    RFID = 'rfid'
     PASSWORD = 'password'
-
-
 
 @Injectable.named('authentication_controller')
 @Singleton
@@ -54,9 +50,8 @@ class AuthenticationController(object):
     TERMS_VERSION = 1
 
     @Inject
-    def __init__(self, token_timeout=INJECTED, token_store=INJECTED, rfid_controller=INJECTED):
-        # type: (int, TokenStore, RfidController) -> None
-        self._rfid_controller = rfid_controller
+    def __init__(self, token_timeout=INJECTED, token_store=INJECTED):
+        # type: (int, TokenStore) -> None
         self._token_timeout = token_timeout
         self.token_store = token_store  # type: TokenStore
         self.api_secret = AuthenticationController._retrieve_api_secret()
@@ -77,8 +72,14 @@ class AuthenticationController(object):
         except Exception:
             return None
 
-    def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None, login_method=LoginMethod.PASSWORD):
-        # type: (UserDTO, bool, Optional[float], Optional[str], LoginMethod) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login(self,
+              user_dto,                             # type: UserDTO
+              accept_terms=False,                   # type: bool
+              timeout=None,                         # type: Optional[float]
+              impersonate=None,                     # type: Optional[str]
+              login_method=LoginMethod.PASSWORD     # type: LoginMethod
+              ):
+        # type: (...)  -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
 
         # Set the proper timeout value
@@ -144,14 +145,6 @@ class AuthenticationController(object):
 
         user_dto = UserMapper.orm_to_dto(user_orm)
         return self.login(user_dto, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.PIN_CODE)
-
-    def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None):
-        # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
-        """  Login a user using an authorized RFID tag """
-        rfid_dto = self._rfid_controller.check_rfid_tag_for_login(rfid_tag_string)
-        if rfid_dto is None:
-            return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-        return self.login(rfid_dto.user, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.RFID)
 
     def logout(self, token):
         self.token_store.remove_token(token)

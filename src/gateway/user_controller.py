@@ -29,7 +29,6 @@ import uuid
 import constants
 from gateway.api.serializers import UserSerializer
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
-from gateway.delivery_controller import DeliveryController
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums, Languages
 from gateway.events import EsafeEvent, EventError
@@ -220,14 +219,9 @@ class UserController(object):
         return User.select().count()
 
     @Inject
-    def remove_user(self, user_dto, delivery_controller=INJECTED):
-        # type: (UserDTO, DeliveryController) -> None
+    def remove_user(self, user_dto):
+        # type: (UserDTO) -> None
         """  Remove a user. """
-        # Check if the user has som deliveries
-        deliveries = delivery_controller.load_deliveries(user_id=user_dto.id)
-        if len(deliveries) > 0:
-            raise StateException('Cannot delete user: User has still deliveries that are not picked up')
-
         # remove the token if one is there
         self.authentication_controller.remove_tokens_for_user(user_dto)
 
