@@ -22,7 +22,7 @@ import inspect
 import logging
 import types
 from threading import Lock
-
+import ujson as json
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -519,6 +519,12 @@ class EepromModel(object):
             if amount_of_modules == 255:
                 amount_of_modules = 0
             return amount_of_modules * eeprom_id.get_multiplier() - 1
+
+    def __str__(self):
+        return str(json.dumps(self.serialize(), indent=4))
+
+    def __repr__(self):
+        return str(self)
 
 
 class EepromId(object):

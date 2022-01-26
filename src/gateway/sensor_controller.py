@@ -207,7 +207,8 @@ class SensorController(BaseController):
                 if sensor.plugin is not None:
                     source_name = sensor.plugin.name
                 sensor_dto.source = SensorSourceDTO(sensor.source, name=source_name)
-
+            if sensor_dto.physical_quantity is None:
+                sensor_dto.physical_quantity = sensor.physical_quantity
             master_dto = SensorMapper.dto_to_master_dto(sensor_dto)
             if master_dto:
                 master_sensors.append(master_dto)
