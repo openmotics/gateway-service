@@ -322,11 +322,12 @@ class SensorControllerTest(unittest.TestCase):
                                physical_quantity='temperature',
                                unit='celcius',
                                name='foo',
+                               offset=-1.0,
                                virtual=True)
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
             saved_sensors = self.controller.save_sensors([sensor_dto])
             self.pubsub._publish_all_events(blocking=False)
-            save.assert_called_with([MasterSensorDTO(id=31, name='foo', virtual=True)])
+            save.assert_called_with([MasterSensorDTO(id=31, name='foo', virtual=True, offset=-1.0)])
             assert all([saved_sensor.id is not None for saved_sensor in saved_sensors])
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
