@@ -30,6 +30,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.base import JobLookupError
 from croniter import croniter
 
+from gateway.daemon_thread import DaemonThread
 from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
 from gateway.dto.schedule import BaseScheduleDTO
 from gateway.events import GatewayEvent
@@ -82,6 +83,7 @@ class SchedulingController(object):
         self._group_action_controller = group_action_controller
         self._pubsub = pubsub
         self._web_interface = None  # type: Optional[WebInterface]
+        self._sync_thread = None  # type: Optional[DaemonThread]
         self._schedules = {}  # type: Dict[int, ScheduleDTO]
         self._thermostat_setpoints = {} # type: Dict[Tuple[int,str],List[ScheduleSetpointDTO]]
         timezone = system_controller.get_timezone()
@@ -98,14 +100,21 @@ class SchedulingController(object):
     def start(self):
         # type: () -> None
         self._scheduler.start()
-        # self.reload_schedules()
+        self._sync_thread = DaemonThread(name='schedulingsync',
+                                         target=self._sync_configuration,
+                                         interval=900,
+                                         delay=300)
+        self._sync_thread.start()
 
     def stop(self):
         # type: () -> None
         self._scheduler.shutdown()
+        if self._sync_thread is not None:
+            self._sync_thread.stop()
 
     def refresh_schedules(self):
-        self._sync_configuration()  # TODO: use sync thread
+        if self._sync_thread is not None:
+            self._sync_thread.request_single_run()
 
     def _sync_configuration(self):
         # type: () -> None
@@ -123,6 +132,7 @@ class SchedulingController(object):
     def _submit(self, schedule_dto):
         # type: (ScheduleDTO) -> None
         if schedule_dto.status == 'ACTIVE':
+            logger.debug('Submitting schedule %s', schedule_dto)
             job_id = 'schedule.{0}'.format(schedule_dto.id)
             kwargs = {'replace_existing': True,
                       'id': job_id,
@@ -144,6 +154,7 @@ class SchedulingController(object):
     def _abort(self, base_dto):
         # type: (BaseScheduleDTO) -> None
         try:
+            logger.debug('Removing schedule %s', base_dto)
             self._scheduler.remove_job(base_dto.job_id)
         except JobLookupError:
             pass
@@ -220,11 +231,11 @@ class SchedulingController(object):
 
     def _execute_schedule(self, schedule_dto):
         # type: (ScheduleDTO) -> None
+        logger.info('Executing schedule %s (%s)', schedule_dto.name, schedule_dto.action)
         if schedule_dto.running:
             return
         try:
             schedule_dto.running = True
-            logger.debug('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
             if schedule_dto.arguments is None:
                 raise ValueError('Invalid schedule arguments')
             # Execute
@@ -258,9 +269,12 @@ class SchedulingController(object):
             schedule.save()
         else:
             job_id = 'schedule.{0}'.format(schedule_dto.id)
-            job = self._scheduler.get_job(job_id)
-            if job and hasattr(job, 'next_run_time') and job.next_run_time:
-                schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
+            try:
+                job = self._scheduler.get_job(job_id)
+                if job and hasattr(job, 'next_run_time') and job.next_run_time:
+                    schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
+            except JobLookupError:
+                pass
 
     def _validate(self, schedule):
         # type: (Schedule) -> None
