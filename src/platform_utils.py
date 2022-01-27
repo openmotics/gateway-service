@@ -217,9 +217,11 @@ class System(object):
         BUILDROOT = 'buildroot'
 
     @staticmethod
-    def restart_service(service):
+    def restart_service(service, wait=False):
         # type: (str) -> None
-        System.run_service_action('restart', service)
+        process = System.run_service_action('restart', service)
+        if wait:
+            process.wait()
 
     @staticmethod
     def run_service_action(action, service):
