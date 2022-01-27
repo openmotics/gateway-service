@@ -75,8 +75,7 @@ class SchedulingControllerTest(unittest.TestCase):
                             group_action_controller=self.group_action_controller,
                             energy_module_controller=Mock(),
                             uart_controller=Mock(),
-                            update_controller=Mock(),
-                            rebus_controller=None)
+                            update_controller=Mock())
         SetUpTestInjections(system_controller=SystemController())
         self.controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=self.controller)

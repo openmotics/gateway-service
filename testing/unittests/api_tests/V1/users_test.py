@@ -558,7 +558,7 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
         with mock.patch.object(self.users_controller, 'generate_new_pin_code', wraps=mock_generate_new_pin):
             # Test all the 4 roles in a normal way
             for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN', 'SUPER']:
-                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
                 self.assertStatus('200 OK')
                 number_of_digits = UserController.PinCodeLength[user_role]
                 body_dict = json.loads(body)
@@ -568,34 +568,28 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
                 self.assertNotIn(body_dict['code'], current_pins)
 
             # Don't pass the role in
-            status, headers, body = self.GET('/api/v1/users/available_code', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
             self.assertStatus('404 Not Found')
             body_json = json.loads(body)
             self.assertEqual({"msg": "Missing parameters: role", "success": False}, body_json)
 
             # pass in the wrong role
-            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
             self.assertStatus('400 Bad Request')
             self.assertTrue(body.startswith(b"Wrong input parameter: Role needs to be one of"))
 
     def test_get_user_pin_code(self):
         with mock.patch.object(self.users_controller, 'load_user', return_value=self.test_user):
-            # Do not pass the api-secret as a normal user
+            # Do not pass authentication as a normal user
             status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user)
             self.assertStatus('401 Unauthorized')
 
-            # Do not pass the api-secret as a normal user
             status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE)
             self.assertStatus('401 Unauthorized')
 
             # As a normal user
-            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user)
             self.assertStatus('401 Unauthorized')
-
-            # pass the api secret, login with pin
-            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE, headers={'X-API-Secret': 'Test-Secret'})
-            self.assertStatus('200 OK')
-            self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})
 
             # login with password
             status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)

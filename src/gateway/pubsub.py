@@ -21,7 +21,7 @@ from six.moves.queue import Queue, Empty
 
 from gateway.daemon_thread import DaemonThread
 from gateway.enums import BaseEnum
-from gateway.events import GatewayEvent, EsafeEvent
+from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
 
 from ioc import Injectable, Singleton
@@ -30,14 +30,13 @@ if False:  # MYPY
     from typing import Callable, Dict, List, Literal, Tuple, Union
     GATEWAY_TOPIC = Literal['config', 'state']
     MASTER_TOPIC = Literal['eeprom', 'module', 'power', 'output', 'input', 'shutter', 'sensor']
-    ESAFE_TOPIC = Literal['delivery', 'lock', 'config', 'rfid']
 
 logger = logging.getLogger(__name__)
 
 
 class EventStructure(object):
     def __init__(self, topic, event):
-        # type: (Union[MASTER_TOPIC, GATEWAY_TOPIC, ESAFE_TOPIC], Union[MasterEvent, GatewayEvent, EsafeEvent]) -> None
+        # type: (Union[MASTER_TOPIC, GATEWAY_TOPIC], Union[MasterEvent, GatewayEvent]) -> None
         self.topic = topic
         self.event = event
 
@@ -71,17 +70,10 @@ class PubSub(object):
         CONFIG = 'config'  # type: GATEWAY_TOPIC
         STATE = 'state'  # type: GATEWAY_TOPIC
 
-    class EsafeTopics(BaseEnum):
-        DELIVERY = 'delivery'   # type: ESAFE_TOPIC
-        LOCK = 'lock'           # type: ESAFE_TOPIC
-        CONFIG = 'config'       # type: ESAFE_TOPIC
-        RFID = 'rfid'           # type: ESAFE_TOPIC
-
     def __init__(self):
         # type: () -> None
         self._gateway_topics = defaultdict(list)  # type: Dict[GATEWAY_TOPIC,List[Callable[[GatewayEvent],None]]]
         self._master_topics = defaultdict(list)  # type: Dict[MASTER_TOPIC,List[Callable[[MasterEvent],None]]]
-        self._esafe_topics = defaultdict(list)  # type: Dict[ESAFE_TOPIC,List[Callable[[EsafeEvent],None]]]
         self._event_queue = Queue()  # type: Queue  # Queue[EventStructure]
         self._pub_thread = DaemonThread(name='pubsub', target=self._publisher_loop, interval=0.1, delay=0.2)
         self._is_running = False
@@ -120,9 +112,6 @@ class PubSub(object):
         elif isinstance(event_structure.event, GatewayEvent):
             gateway_topic = event_structure.topic  # type: GATEWAY_TOPIC  # type: ignore
             self._publish_gateway_event(gateway_topic, event_structure.event)
-        elif isinstance(event_structure.event, EsafeEvent):
-            esafe_topic = event_structure.topic  # type: ESAFE_TOPIC  # type: ignore
-            self._publish_esafe_event(esafe_topic, event_structure.event)
 
     def subscribe_master_events(self, topic, callback):
         # type: (MASTER_TOPIC, Callable[[MasterEvent],None]) -> None
@@ -166,28 +155,5 @@ class PubSub(object):
             try:
                 logger.debug('Executing callback {} with {}'.format(callback.__name__, gateway_event))
                 callback(gateway_event)
-            except Exception:
-                logger.exception('Failed to call handle %s for topic %s', callback, topic)
-
-    def subscribe_esafe_events(self, topic, callback):
-        # type: (ESAFE_TOPIC, Callable[[EsafeEvent],None]) -> None
-        self._esafe_topics[topic].append(callback)
-
-    def publish_esafe_event(self, topic, esafe_event):
-        # type: (ESAFE_TOPIC, EsafeEvent) -> None
-        self._event_queue.put(EventStructure(topic, esafe_event))
-
-    def _publish_esafe_event(self, topic, esafe_event):
-        # type: (ESAFE_TOPIC, EsafeEvent) -> None
-        logger.debug('Publishing esafe event {} {}'.format(topic, esafe_event))
-        callbacks = self._esafe_topics[topic]
-        if callbacks:
-            logger.debug('Received esafe event %s on topic "%s"', esafe_event.type, topic)
-        else:
-            logger.warning('Received esafe event %s on topic "%s" without subscribers', esafe_event.type, topic)
-        for callback in callbacks:
-            try:
-                logger.debug('Executing callback {} with {}'.format(callback.__name__, esafe_event))
-                callback(esafe_event)
             except Exception:
                 logger.exception('Failed to call handle %s for topic %s', callback, topic)

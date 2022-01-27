@@ -198,6 +198,7 @@ class AuthenticationApiCherryPyTest(BaseCherryPyUnitTester):
         with mock.patch.object(self.auth_controller, 'login_with_user_code') as login_func:
             login_func.return_value = (True, auth_token)
             status, headers, response = self.POST('/api/v1/authenticate/pin_code', login_user=self.test_user_1, body=None)
+            self.print_request_result()
             self.assertIn(WrongInputParametersException.bytes_message(), response)
 
     def test_deauthenticate_no_token(self):

@@ -54,23 +54,11 @@ class AuthenticationController(object):
         # type: (int, TokenStore) -> None
         self._token_timeout = token_timeout
         self.token_store = token_store  # type: TokenStore
-        self.api_secret = AuthenticationController._retrieve_api_secret()
         self.user_controller = None  # type: Optional[UserController]
 
     def set_user_controller(self, user_controller):
         # type: (UserController) -> None
         self.user_controller = user_controller
-
-    @staticmethod
-    def _retrieve_api_secret():
-        conf_file = constants.get_renson_main_config_file()
-        try:
-            with open(conf_file, 'rb') as conf_file_stream:
-                conf_json = json.load(conf_file_stream)
-                secret = conf_json['secret']
-            return secret
-        except Exception:
-            return None
 
     def login(self,
               user_dto,                             # type: UserDTO
@@ -155,9 +143,6 @@ class AuthenticationController(object):
 
     def remove_tokens_for_user(self, user_dto):
         self.token_store.remove_tokens_for_user(user_dto)
-
-    def check_api_secret(self, api_secret):
-        return self.api_secret == api_secret
 
 
 @Injectable.named('token_store')

@@ -79,8 +79,7 @@ class WebInterfaceTest(unittest.TestCase):
                             module_controller=self.module_controller,
                             energy_module_controller=self.energy_module_controller,
                             uart_controller=mock.Mock(),
-                            update_controller=mock.Mock(),
-                            rebus_controller=None)
+                            update_controller=mock.Mock())
         self.web = WebInterface()
 
     def test_get_usernames(self):
