@@ -1057,7 +1057,7 @@ class UpdateController(object):
         if metadata is None:
             logger.info('Downloading firmware metadata for {0} {1}'.format(firmware_type, version))
             response = requests.get(self._get_update_firmware_metadata_url(firmware_type, version),
-                                    timeout=2,
+                                    timeout=5,
                                     verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             if response.status_code != 200:
                 raise ValueError('Failed to get firmware metadata for {0} {1}'.format(firmware_type, version))
