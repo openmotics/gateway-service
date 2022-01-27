@@ -41,7 +41,6 @@ from ioc import SetTestMode, SetUpTestInjections
 MODELS = [Schedule]
 
 
-@unittest.skip
 class SchedulingControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
