@@ -218,7 +218,7 @@ class System(object):
 
     @staticmethod
     def restart_service(service, wait=False):
-        # type: (str) -> None
+        # type: (str, bool) -> None
         process = System.run_service_action('restart', service)
         if wait:
             process.wait()
