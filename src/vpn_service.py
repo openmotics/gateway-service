@@ -42,6 +42,7 @@ from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
+import gateway
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
@@ -941,7 +942,7 @@ def main():
     Logs.setup_logger()
     setup_minimal_vpn_platform(message_client_name='vpn_service')
 
-    logger.info('Starting VPN service')
+    logger.info('Starting VPN service v{0}'.format(gateway.__version__))
     heartbeat_service = HeartbeatService()
     heartbeat_service.start()
     heartbeat_service.run()

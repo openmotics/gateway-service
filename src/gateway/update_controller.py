@@ -305,8 +305,8 @@ class UpdateController(object):
         # type: (str, Logger) -> None
         """ Executed from within a separate process """
         logger.info('Stopping services')
-        System.run_service_action('stop', 'openmotics')
-        System.run_service_action('stop', 'vpn_service')
+        System.run_service_action('stop', 'openmotics').wait()
+        System.run_service_action('stop', 'vpn_service').wait()
 
         old_version_folder = ''
         running_marker = ''
@@ -405,8 +405,8 @@ class UpdateController(object):
 
             # Startup
             logger.info('Starting services')
-            System.run_service_action('start', 'openmotics')
-            System.run_service_action('start', 'vpn_service')
+            System.run_service_action('start', 'openmotics').wait()
+            System.run_service_action('start', 'vpn_service').wait()
 
             # Health-check
             logger.info('Checking health')
@@ -415,8 +415,8 @@ class UpdateController(object):
             # Rollback to old version
             if not update_successful:
                 logger.info('Update failed, restoring')
-                System.run_service_action('stop', 'openmotics')
-                System.run_service_action('stop', 'vpn_service')
+                System.run_service_action('stop', 'openmotics').wait()
+                System.run_service_action('stop', 'vpn_service').wait()
                 os.unlink(UpdateController.SERVICE_CURRENT)
                 os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
                 # Raise with actual reason
@@ -434,8 +434,8 @@ class UpdateController(object):
             if old_version_folder and not os.path.exists(UpdateController.SERVICE_CURRENT):
                 os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
             # Start services again
-            System.run_service_action('start', 'openmotics')
-            System.run_service_action('start', 'vpn_service')
+            System.run_service_action('start', 'openmotics').wait()
+            System.run_service_action('start', 'vpn_service').wait()
             raise
         finally:
             if running_marker and os.path.exists(running_marker):
