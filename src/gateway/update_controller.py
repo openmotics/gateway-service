@@ -410,11 +410,7 @@ class UpdateController(object):
 
             # Health-check
             logger.info('Checking health')
-
-            # TODO: Restore --------------------------------------------------------------------------------
-            time.sleep(15)
-            update_successful = False  # UpdateController._check_gateway_service_health(logger=logger)
-            # TODO: Restore --------------------------------------------------------------------------------
+            update_successful = UpdateController._check_gateway_service_health(logger=logger)
 
             # Rollback to old version
             if not update_successful:
