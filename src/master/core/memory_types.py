@@ -156,7 +156,7 @@ class MemoryModelDefinition(object):
                 ))
             container.save()
         if activate:
-            MemoryActivator.activate()
+            MemoryCommitter.commit()
 
     @classmethod
     def deserialize(cls, data):  # type: (Dict[str, Any]) -> MemoryModelDefinition
@@ -244,12 +244,12 @@ class MemoryModelDefinition(object):
         return cache
 
 
-class MemoryActivator(object):
-    """ Holds a static method to activate memory """
+class MemoryCommitter(object):
+    """ Holds a static method to commit memory """
     @staticmethod
     @Inject
-    def activate(memory_file=INJECTED):  # type: (MemoryFile) -> None
-        memory_file.activate()
+    def commit(memory_file=INJECTED):  # type: (MemoryFile) -> None
+        memory_file.commit()
 
 
 class GlobalMemoryModelDefinition(MemoryModelDefinition):
