@@ -52,7 +52,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration, UCanModuleConfiguration
-from master.core.memory_types import MemoryActivator, MemoryAddress
+from master.core.memory_types import MemoryCommitter, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.slave_updater import SlaveUpdater
 from master.core.system_value import Dimmer, Humidity, Temperature
@@ -376,6 +376,7 @@ class MasterCoreController(MasterController):
 
     def start(self):
         super(MasterCoreController, self).start()
+        self._memory_file.start()
         self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
                                                     interval=1, delay=10)
@@ -389,6 +390,7 @@ class MasterCoreController(MasterController):
         if self._synchronization_thread is not None:
             self._synchronization_thread.stop()
             self._synchronization_thread = None
+        self._memory_file.stop()
         super(MasterCoreController, self).stop()
 
     def set_plugin_controller(self, plugin_controller):
@@ -533,7 +535,7 @@ class MasterCoreController(MasterController):
         for input_dto in inputs:
             input_ = InputMapper.dto_to_orm(input_dto)
             input_.save(activate=False)
-        MemoryActivator.activate()
+        MemoryCommitter.commit()
 
     def _refresh_input_states(self):
         # type: () -> bool
@@ -610,7 +612,7 @@ class MasterCoreController(MasterController):
                 continue
             output.save(activate=False)
             CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
-        MemoryActivator.activate()
+        MemoryCommitter.commit()
 
     def load_output_status(self):
         # type: () -> List[OutputStatusDTO]
@@ -707,7 +709,7 @@ class MasterCoreController(MasterController):
             shutter = ShutterMapper.dto_to_orm(shutter_dto)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
             output_module.save(activate=False)
-        MemoryActivator.activate()
+        MemoryCommitter.commit()
 
     def _refresh_shutter_states(self):
         status_data = {x.id: x for x in self.load_output_status()}  # type: Dict[int, OutputStatusDTO]
@@ -843,7 +845,7 @@ class MasterCoreController(MasterController):
         for sensor_dto in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto)
             sensor.save(activate=False)
-        MemoryActivator.activate()
+        MemoryCommitter.commit()
 
     def _refresh_sensor_states(self):
         amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
@@ -964,7 +966,7 @@ class MasterCoreController(MasterController):
         for group_action_dto in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto)
             GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, activate=False)
-        MemoryActivator.activate()
+        MemoryCommitter.commit()
 
     # Module management
 
@@ -1422,7 +1424,7 @@ class MasterCoreController(MasterController):
                 page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
                 self._memory_file.write({page_address: page_data})
             current_page -= 1
-        self._memory_file.activate()
+        self._memory_file.commit()
         self.cold_reset()  # Cold reset, enforcing a reload of all settings
 
     def factory_reset(self, can=False):

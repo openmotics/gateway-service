@@ -21,7 +21,7 @@ import logging
 from gateway.dto import FeedbackLedDTO, GlobalFeedbackDTO
 from master.core.group_action import GroupActionController
 from master.core.basic_action import BasicAction
-from master.core.memory_types import MemoryActivator
+from master.core.memory_types import MemoryCommitter
 from master.core.memory_models import GlobalConfiguration
 
 if False:  # MYPY
@@ -99,7 +99,7 @@ class CANFeedbackController(object):
         output.save(activate=False)
         GroupActionController.save_group_action(group_action, ['name', 'actions'], activate=False)
         if activate:
-            MemoryActivator.activate()
+            MemoryCommitter.commit()
 
     @staticmethod
     def load_global_led_feedback_configuration():  # type: () -> Dict[int, GlobalFeedbackDTO]
@@ -191,7 +191,7 @@ class CANFeedbackController(object):
         global_configuration.save(activate=False)
         GroupActionController.save_group_action(group_action, ['name', 'actions'], activate=False)
         if activate:
-            MemoryActivator.activate()
+            MemoryCommitter.commit()
 
     @staticmethod
     def _available_led_data(dto):  # type: (Union[OutputDTO, GlobalFeedbackDTO]) -> Tuple[bool, bool]

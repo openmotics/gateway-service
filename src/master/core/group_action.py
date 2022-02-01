@@ -19,7 +19,7 @@ Contains Group Action related code
 from __future__ import absolute_import
 import logging
 from master.core.memory_models import GroupActionAddressConfiguration, GroupActionConfiguration, GroupActionBasicAction
-from master.core.memory_types import MemoryActivator
+from master.core.memory_types import MemoryCommitter
 
 if False:  # MYPY
     from typing import List, Dict, Optional
@@ -138,7 +138,7 @@ class GroupActionController(object):
             group_action_configuration.save(activate=False)
 
         if activate:
-            MemoryActivator.activate()
+            MemoryCommitter.commit()
 
     @staticmethod
     def _free_address_space_map(exclude_group_action_id=None):  # type: (Optional[int]) -> Dict[int, List[int]]
