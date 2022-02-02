@@ -122,20 +122,19 @@ class SchedulingController(object):
         for schedule in list(Schedule.select()):
             schedule_dto = ScheduleMapper.orm_to_dto(schedule)
             if self._schedules.get(schedule.id) != schedule_dto:
-                self._submit(schedule_dto)
+                self._submit_schedule(schedule_dto)
             stale_schedules.pop(schedule.id, None)
             self._update_status(schedule_dto)
         for schedule_dto in stale_schedules.values():
             self._abort(schedule_dto)
             self._schedules.pop(schedule_dto.id, None)
 
-    def _submit(self, schedule_dto):
+    def _submit_schedule(self, schedule_dto):
         # type: (ScheduleDTO) -> None
         if schedule_dto.status == 'ACTIVE':
             logger.debug('Submitting schedule %s', schedule_dto)
-            job_id = 'schedule.{0}'.format(schedule_dto.id)
             kwargs = {'replace_existing': True,
-                      'id': job_id,
+                      'id': schedule_dto.job_id,
                       'args': (schedule_dto,),
                       'name': schedule_dto.name}
 
@@ -166,8 +165,8 @@ class SchedulingController(object):
             raise Schedule.DoesNotExist('Schedule {0} does not exist'.format(schedule_id))
         return schedule_dto
 
-    def load_schedules(self, source=Schedule.Sources.GATEWAY):
-        # type: (str) -> List[ScheduleDTO]
+    def load_schedules(self):
+        # type: () -> List[ScheduleDTO]
         return [schedule_dto for schedule_dto in self._schedules.values()]
 
     def save_schedules(self, schedules):
@@ -268,9 +267,8 @@ class SchedulingController(object):
             schedule = ScheduleMapper.dto_to_orm(schedule_dto)
             schedule.save()
         else:
-            job_id = 'schedule.{0}'.format(schedule_dto.id)
             try:
-                job = self._scheduler.get_job(job_id)
+                job = self._scheduler.get_job(schedule_dto.job_id)
                 if job and hasattr(job, 'next_run_time') and job.next_run_time:
                     schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
             except JobLookupError:
