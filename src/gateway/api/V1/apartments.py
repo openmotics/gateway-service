@@ -98,8 +98,8 @@ class Apartments(RestAPIEndpoint):
             to_create_apartments.append(apartment_dto)
 
         apartments_serial = []
-        for apartment in to_create_apartments:
-            apartment_dto = self.apartment_controller.save_apartment(apartment)
+        apartment_dtos = self.apartment_controller.save_apartments(to_create_apartments)
+        for apartment_dto in apartment_dtos:
             apartments_serial.append(ApartmentSerializer.serialize(apartment_dto))
         return ApiResponse(body=apartments_serial)
 

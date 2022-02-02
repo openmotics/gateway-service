@@ -128,7 +128,7 @@ class Logs(object):
 
     @staticmethod
     def _get_service_namespaces():
-        return ['openmotics', 'gateway', 'master', 'plugins', 'energy', 'update']
+        return ['openmotics', 'gateway', 'master', 'plugins', 'energy', 'update', 'esafe']
 
     @staticmethod
     def _get_configured_loglevel(fallback=logging.INFO):
