@@ -2280,7 +2280,6 @@ class WebInterface(object):
         :type timezone: str
         """
         self._system_controller.set_timezone(timezone)
-        self._module_controller.sync_master_time()
         return {}
 
     @openmotics_api(auth=True)

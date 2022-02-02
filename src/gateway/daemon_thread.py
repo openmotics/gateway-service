@@ -70,11 +70,11 @@ class DaemonThread(object):
         # If `timeout` is `None`, this will wait forever until `self._tick` is set
         self._tick.wait(timeout)
 
-    def set_interval(self, interval):
-        # type: (Optional[float]) -> None
+    def set_interval(self, interval, tick=True):
+        # type: (Optional[float], bool) -> None
         changed = self._interval != interval
         self._interval = interval
-        if changed:
+        if changed and tick:
             self._tick.set()
 
     def request_single_run(self):

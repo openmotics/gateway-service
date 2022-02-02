@@ -96,7 +96,6 @@ class MasterClassicController(MasterController):
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
         self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
-        self._time_last_updated = 0.0
         self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
@@ -143,9 +142,6 @@ class MasterClassicController(MasterController):
                 self._master_version_last_updated = now
                 self._register_version_depending_background_consumers()
             # Validate communicator checks
-            if self._time_last_updated < now - 300:
-                self._check_master_time()
-                self._time_last_updated = now
             if self._settings_last_updated < now - 900:
                 self._check_master_settings()
                 self._settings_last_updated = now
@@ -183,34 +179,6 @@ class MasterClassicController(MasterController):
                                self._on_master_shutter_change)
         )
         self._background_consumers_registered = True
-
-    @communication_enabled
-    def _check_master_time(self):
-        # type: () -> None
-        """
-        Validates the master's time with the Gateway time
-        """
-        status = self._master_communicator.do_command(master_api.status())
-        master_time = datetime(1, 1, 1, status['hours'], status['minutes'], status['seconds'])
-
-        now = datetime.now()
-        expected_weekday = now.weekday() + 1
-        expected_time = now.replace(year=1, month=1, day=1, microsecond=0)
-
-        sync = False
-        if abs((master_time - expected_time).total_seconds()) > 180:  # Allow 3 minutes difference
-            sync = True
-        if status['weekday'] != expected_weekday:
-            sync = True
-
-        if sync is True:
-            logger.info('Time - master: {0} ({1}) - gateway: {2} ({3})'.format(
-                master_time, status['weekday'], expected_time, expected_weekday)
-            )
-            if expected_time.hour == 0 and expected_time.minute < 15:
-                logger.info('Skip setting time between 00:00 and 00:15')
-            else:
-                self.sync_time()
 
     @communication_enabled
     def _check_master_settings(self):
@@ -377,8 +345,7 @@ class MasterClassicController(MasterController):
 
     def get_master_online(self):
         # type: () -> bool
-        return self._time_last_updated > time.time() - 900 \
-            and self._heartbeat.is_online()
+        return self._heartbeat.is_online()
 
     def get_communicator_health(self):
         # type: () -> HEALTH
@@ -1380,16 +1347,22 @@ class MasterClassicController(MasterController):
         return {'output': ret}
 
     @communication_enabled
-    def sync_time(self):
-        # type: () -> None
-        logger.info('Setting the time on the master.')
-        now = datetime.now()
+    def set_datetime(self, dt):
+        # type: (datetime) -> None
+        logger.info('Setting the datetime on the master to {0}'.format(dt.strftime('%Y-%m-%d %H:%M:%S')))
         self._master_communicator.do_command(
             master_api.set_time(),
-            {'sec': now.second, 'min': now.minute, 'hours': now.hour,
-             'weekday': now.isoweekday(), 'day': now.day, 'month': now.month,
-             'year': now.year % 100}
+            {'sec': dt.second, 'min': dt.minute, 'hours': dt.hour,
+             'weekday': dt.isoweekday(),
+             'day': dt.day, 'month': dt.month, 'year': dt.year % 100}
         )
+
+    @communication_enabled
+    def get_datetime(self):
+        # type: () -> datetime
+        response = self._master_communicator.do_command(master_api.get_time())
+        return datetime(year=2000 + response['year'], month=response['month'], day=response['day'],
+                        hour=response['hours'], minute=response['minutes'], second=response['seconds'])
 
     def get_configuration_dirty_flag(self):
         # type: () -> bool
