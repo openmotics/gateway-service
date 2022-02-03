@@ -353,6 +353,7 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def get_firmware_version(self):
+        # type: () -> Tuple[int,...]
         out_dict = self._master_communicator.do_command(master_api.status())
         return int(out_dict['f1']), int(out_dict['f2']), int(out_dict['f3'])
 

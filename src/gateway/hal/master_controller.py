@@ -78,6 +78,7 @@ class MasterController(object):
         raise NotImplementedError()
 
     def get_firmware_version(self):
+        # type: () -> Tuple[int,...]
         raise NotImplementedError()
 
     # Input
