@@ -1362,7 +1362,7 @@ class MasterClassicController(MasterController):
         # type: () -> datetime
         response = self._master_communicator.do_command(master_api.get_time())
         return datetime(year=2000 + response['year'], month=response['month'], day=response['day'],
-                        hour=response['hours'], minute=response['minutes'], second=response['seconds'])
+                        hour=response['hours'], minute=response['min'], second=response['sec'])
 
     def get_configuration_dirty_flag(self):
         # type: () -> bool

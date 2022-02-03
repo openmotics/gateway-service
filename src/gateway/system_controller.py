@@ -129,7 +129,6 @@ class SystemController(BaseController):
             # The datetime is not synced with NTP
             logger.info('Updating system datetime to {0}'.format(master_datetime.strftime('%Y-%m-%d %H:%M:%S')))
             subprocess.call('timedatectl set-time "{0}"'.format(master_datetime.strftime('%Y-%m-%d %H:%M:%S')), shell=True)
-
             if self._sync_time_thread:
                 self._sync_time_thread.set_interval(interval=60, tick=False)
         elif abs(master_datetime - current_datetime) > timedelta(minutes=3):

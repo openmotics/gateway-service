@@ -153,8 +153,8 @@ def get_time():
     """ Gets the time from the master """
     return MasterCommandSpec('rt',
                              [Field.padding(13)],
-                             [Field.byte('seconds'), Field.byte('minutes'), Field.byte('hours'), Field.byte('weekday'),
-                              Field.byte('day'), Field.byte('month'), Field.byte('year')])
+                             [Field.byte('sec'), Field.byte('min'), Field.byte('hours'), Field.byte('weekday'),
+                              Field.byte('day'), Field.byte('month'), Field.byte('year'), Field.padding(6)])
 
 
 def eeprom_list():
