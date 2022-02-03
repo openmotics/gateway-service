@@ -27,21 +27,21 @@ import subprocess
 import tempfile
 import time
 import tarfile
+from datetime import datetime, timedelta
 from threading import Timer
-
-from six.moves.configparser import ConfigParser
 
 import constants
 from bus.om_bus_events import OMBusEvents
-from gateway.base_controller import BaseController
+from gateway.daemon_thread import DaemonThread
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
 
 if False:  # MYPY
-    from typing import Dict, Any, List, Optional, Iterable
+    from typing import Dict, Any, Optional, Iterable
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
     from bus.om_bus_client import MessageClient
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +51,24 @@ logger = logging.getLogger(__name__)
 class SystemController(object):
 
     @Inject
-    def __init__(self, module_controller=INJECTED, message_client=INJECTED):
+    def __init__(self, master_controller=INJECTED, module_controller=INJECTED, message_client=INJECTED):
         self._module_controller = module_controller  # type: ModuleController
+        self._master_controller = master_controller  # type: MasterController
         self._message_client = message_client  # type: MessageClient
+        self._sync_time_thread = None  # type: Optional[DaemonThread]
 
-    # Time related
+    def start(self):
+        # type: () -> None
+        self._sync_time_thread = DaemonThread(name='systemtimesync',
+                                              target=self._sync_time,
+                                              interval=60, delay=10)
+        self._sync_time_thread.start()
+
+    def stop(self):
+        # type: () -> None
+        if self._sync_time_thread:
+            self._sync_time_thread.stop()
+            self._sync_time_thread = None
 
     def set_timezone(self, timezone):
         _ = self  # Not static for consistency
@@ -69,6 +82,9 @@ class SystemController(object):
         time.tzset()
         if self._message_client is not None:
             self._message_client.send_event(OMBusEvents.TIME_CHANGED, {})
+        # Trigger time sync code
+        if self._sync_time_thread:
+            self._sync_time_thread.request_single_run()
 
     def get_timezone(self):
         try:
@@ -89,6 +105,39 @@ class SystemController(object):
     def get_python_timezone(self):
         _ = self
         return time.tzname[0]
+
+    def _sync_time(self):
+        """
+        This method does a 2-way datetime sync between the system and the master. It does that knowing:
+        * The master has a battery backed-up RTC
+        * The system has NTP sync
+        An NTP synced system datetime must be synced towards the master. However, when the system is not synced with NTP
+        the datetime from the master is applied to the system.
+        """
+        synced_threshold_datetime = datetime(year=2022, month=1, day=1, hour=0, minute=0, second=0)
+        current_datetime = datetime.now()
+        try:
+            master_datetime = self._master_controller.get_datetime()
+        except Exception as ex:
+            logger.error('Could not load datetime from master: {0}'.format(ex))
+            if self._sync_time_thread:
+                self._sync_time_thread.set_interval(interval=600, tick=False)
+            return
+
+        if current_datetime < synced_threshold_datetime:
+            # The datetime is not synced with NTP
+            logger.info('Updating system datetime to {0}'.format(master_datetime.strftime('%Y-%m-%d %H:%M:%S')))
+            subprocess.call('timedatectl set-time "{0}"'.format(master_datetime.strftime('%Y-%m-%d %H:%M:%S')), shell=True)
+            if self._sync_time_thread:
+                self._sync_time_thread.set_interval(interval=60, tick=False)
+        elif abs(master_datetime - current_datetime) > timedelta(minutes=3):
+            # Time is synced with NTP, and there's a large difference with the master
+            self._master_controller.set_datetime(current_datetime)
+            if self._sync_time_thread:
+                self._sync_time_thread.set_interval(interval=60, tick=False)
+        elif self._sync_time_thread:
+            # Everything is in sync, set longer interval
+            self._sync_time_thread.set_interval(interval=600, tick=False)
 
     # Backup and restore functions
 

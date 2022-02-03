@@ -201,9 +201,6 @@ class ModuleController(BaseController):
     def master_restore(self, data):
         return self._master_controller.restore(data)
 
-    def sync_master_time(self):  # type: () -> None
-        self._master_controller.sync_time()
-
     def flash_leds(self, led_type, led_id):
         if led_type == IndicateType.SENSOR:
             sensor = Sensor.select().where((Sensor.id == led_id) &

@@ -24,8 +24,8 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     ThermostatGroupDTO
 
 if False:  # MYPY
+    from datetime import datetime
     from typing import Any, Dict, List, Literal, Optional, Tuple, Set
-    from master.core.basic_action import BasicAction
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
@@ -435,8 +435,12 @@ class MasterController(object):
         # type: (bool) -> None
         raise NotImplementedError()
 
-    def sync_time(self):
-        # type: () -> None
+    def set_datetime(self, dt):
+        # type: (datetime) -> None
+        raise NotImplementedError()
+
+    def get_datetime(self):
+        # type: () -> datetime
         raise NotImplementedError()
 
     def get_configuration_dirty_flag(self):

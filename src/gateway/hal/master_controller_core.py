@@ -94,7 +94,6 @@ class MasterCoreController(MasterController):
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
         self._shutter_status = {}  # type: Dict[int, Tuple[Optional[bool], Optional[bool]]]
-        self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
         self._discovery_log = []  # type: List[Dict[str, Any]]
@@ -297,8 +296,6 @@ class MasterCoreController(MasterController):
         # type: () -> None
         try:
             # Refresh if required
-            if self._time_last_updated + 300 < time.time():
-                self._check_master_time()
             if self._refresh_input_states():
                 self._set_master_state(True)
             if self._sensor_last_updated + self._sensor_interval < time.time():
@@ -335,40 +332,6 @@ class MasterCoreController(MasterController):
         module_count = self._master_communicator.do_command(command=cmd,
                                                             fields={})[module_type]
         return range(module_count * amount_per_module)
-
-    def _check_master_time(self):
-        # type: () -> None
-        date_time = self._master_communicator.do_command(command=CoreAPI.get_date_time(),
-                                                         fields={})
-        if date_time is None:
-            return
-        try:
-            core_value = datetime(2000 + date_time['year'], date_time['month'], date_time['day'],
-                                  date_time['hours'], date_time['minutes'], date_time['seconds'])
-            core_weekday = date_time['weekday']
-        except ValueError:
-            core_value = datetime(2000, 1, 1, 0, 0, 0)
-            core_weekday = 0
-
-        now = datetime.now()
-        expected_weekday = now.weekday() + 1
-        expected_value = now.replace(microsecond=0)
-
-        sync = False
-        if abs((core_value - expected_value).total_seconds()) > 180:  # Allow 3 minutes difference
-            sync = True
-        if core_weekday != expected_weekday:
-            sync = True
-
-        if sync is True:
-            if expected_value.hour == 0 and expected_value.minute < 15:
-                logger.info('Skip setting time between 00:00 and 00:15')
-            else:
-                logger.info('Time - core: {0} ({1}) - gateway: {2} ({3})'.format(
-                    core_value, core_weekday, expected_value, expected_weekday)
-                )
-                self.sync_time()
-        self._time_last_updated = time.time()
 
     #######################
     # Internal management #
@@ -501,14 +464,20 @@ class MasterCoreController(MasterController):
                                                        fields={})['version']
         return tuple([int(x) for x in version.split('.')])
 
-    def sync_time(self):
-        # type: () -> None
-        logger.info('Setting the time on the core.')
-        now = datetime.now()
+    def set_datetime(self, dt):
+        # type: (datetime) -> None
+        logger.info('Setting the datetime on the core to {0}'.format(dt.strftime('%Y-%m-%d %H:%M:%S')))
         self._master_communicator.do_command(command=CoreAPI.set_date_time(),
-                                             fields={'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
-                                                     'weekday': now.isoweekday(),
-                                                     'day': now.day, 'month': now.month, 'year': now.year % 100})
+                                             fields={'hours': dt.hour, 'minutes': dt.minute, 'seconds': dt.second,
+                                                     'weekday': dt.isoweekday(),
+                                                     'day': dt.day, 'month': dt.month, 'year': dt.year % 100})
+
+    def get_datetime(self):
+        # type: () -> datetime
+        response = self._master_communicator.do_command(command=CoreAPI.get_date_time(),
+                                                        fields={})
+        return datetime(year=2000 + response['year'], month=response['month'], day=response['day'],
+                        hour=response['hours'], minute=response['minutes'], second=response['seconds'])
 
     # Input
 

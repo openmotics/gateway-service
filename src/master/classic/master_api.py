@@ -149,6 +149,14 @@ def set_time():
                               Field.lit('\r\n')])
 
 
+def get_time():
+    """ Gets the time from the master """
+    return MasterCommandSpec('rt',
+                             [Field.padding(13)],
+                             [Field.byte('sec'), Field.byte('min'), Field.byte('hours'), Field.byte('weekday'),
+                              Field.byte('day'), Field.byte('month'), Field.byte('year'), Field.padding(6)])
+
+
 def eeprom_list():
     """ List all bytes from a certain eeprom bank """
     return MasterCommandSpec('EL',
