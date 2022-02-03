@@ -41,7 +41,7 @@ git config gitflow.prefix.versiontag v
 
 Some parts of the code can be run locally using a dummy master implementation.
 
-The openmotics service loads a config file from `./etc` or `$OPENMOTICS_PREFIX/etc`,
+The openmotics service loads a config file from `$OPENMOTICS_PREFIX/etc`,
 where settings like the platform and ports can be overridden.
 
 ```sh
@@ -65,6 +65,8 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 * *Frederick Ryckbosch* - GitHub user: [fryckbos](https://github.com/fryckbos)
 * *Kenneth Henderick* - GitHub user: [khenderick](https://github.com/khenderick)
+* *Sander Van Schoote* - GitHub user: [svanscho](https://github.com/svanscho)
+* *Daiderd Jordan* - GitHub user: [LnL7](https://github.com/LnL7)
 
 ## License
 
