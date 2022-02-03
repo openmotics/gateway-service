@@ -534,7 +534,7 @@ class MasterCoreController(MasterController):
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
         for input_dto in inputs:
             input_ = InputMapper.dto_to_orm(input_dto)
-            input_.save(activate=False)
+            input_.save(commit=False)
         MemoryCommitter.commit()
 
     def _refresh_input_states(self):
@@ -610,8 +610,8 @@ class MasterCoreController(MasterController):
             if output.is_shutter:
                 # Any further configuration not required
                 continue
-            output.save(activate=False)
-            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
+            output.save(commit=False)
+            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, commit=False)
         MemoryCommitter.commit()
 
     def load_output_status(self):
@@ -648,9 +648,9 @@ class MasterCoreController(MasterController):
             if output.output_type == OutputType.SHUTTER_RELAY:
                 output.output_type = OutputType.OUTLET
         setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
-        output.save(activate=False)
-        shutter.save(activate=False)
-        output_module.save(activate=False)
+        output.save(commit=False)
+        shutter.save(commit=False)
+        output_module.save(commit=False)
 
     # Shutters
 
@@ -708,7 +708,7 @@ class MasterCoreController(MasterController):
             output_module = output.module
             shutter = ShutterMapper.dto_to_orm(shutter_dto)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
-            output_module.save(activate=False)
+            output_module.save(commit=False)
         MemoryCommitter.commit()
 
     def _refresh_shutter_states(self):
@@ -794,7 +794,7 @@ class MasterCoreController(MasterController):
         return [global_feedbacks.get(i, GlobalFeedbackDTO(id=i)) for i in range(32)]
 
     def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
-        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, activate=True)
+        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, commit=True)
 
     # Sensors
 
@@ -844,7 +844,7 @@ class MasterCoreController(MasterController):
     def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         for sensor_dto in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto)
-            sensor.save(activate=False)
+            sensor.save(commit=False)
         MemoryCommitter.commit()
 
     def _refresh_sensor_states(self):
@@ -965,7 +965,7 @@ class MasterCoreController(MasterController):
     def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
         for group_action_dto in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto)
-            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, activate=False)
+            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, commit=False)
         MemoryCommitter.commit()
 
     # Module management
