@@ -139,6 +139,7 @@ class InputConfiguration(MemoryModelDefinition):
     module: InputModuleConfiguration
     input_config: _InputConfigComposition
     dali_mapping: _DALIInputComposition
+    pulse_counter_id: int
     name: str
     input_link: _InputLink
     basic_action_press: BasicAction

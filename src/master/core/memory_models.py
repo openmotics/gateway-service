@@ -167,6 +167,7 @@ class InputConfiguration(MemoryModelDefinition):
     module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id // 8)
     input_config = _InputConfigComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 7 + id % 8)))  # 81-238, 7-14
     dali_mapping = _DALIInputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 15 + id % 8)))  # 81-238, 15-22
+    pulse_counter_id = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 120 + id % 8))  # 81-238, 120-127
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 128 + id % 8 * 16), length=16)  # 81-238, 128-255
     input_link = _InputLink(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, id % 8 * 2)))  # 81-238, 0-15
     basic_action_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 16 + id % 8 * 6))  # 81-238, 16-63
