@@ -30,19 +30,18 @@ import tarfile
 from datetime import datetime, timedelta
 from threading import Timer
 
-from six.moves.configparser import ConfigParser
 import constants
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
-from gateway.base_controller import BaseController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
 
 if False:  # MYPY
-    from typing import Dict, Any, List, Optional, Iterable
+    from typing import Dict, Any, Optional, Iterable
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
     from bus.om_bus_client import MessageClient
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +51,9 @@ logger = logging.getLogger(__name__)
 class SystemController(object):
 
     @Inject
-    def __init__(self, module_controller=INJECTED, message_client=INJECTED):
+    def __init__(self, master_controller=INJECTED, module_controller=INJECTED, message_client=INJECTED):
         self._module_controller = module_controller  # type: ModuleController
+        self._master_controller = master_controller  # type: MasterController
         self._message_client = message_client  # type: MessageClient
         self._sync_time_thread = None  # type: Optional[DaemonThread]
 
