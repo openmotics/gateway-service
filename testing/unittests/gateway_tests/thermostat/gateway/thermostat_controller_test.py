@@ -20,7 +20,7 @@ import logging
 import unittest
 from datetime import datetime, timedelta
 
-from mock import Mock
+from mock import Mock, call
 from peewee import SqliteDatabase
 
 from gateway.dto import OutputStatusDTO, PumpGroupDTO, ScheduleDTO, \
@@ -64,12 +64,12 @@ class ThermostatControllerTest(unittest.TestCase):
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self.scheduling_controller = Mock(SchedulingController)
-        self.scheduling_controller.load_schedules.return_value = []
         SetUpTestInjections(pubsub=self.pubsub,
                             scheduling_controller=self.scheduling_controller,
                             output_controller=self.output_controller,
                             sensor_controller=sensor_controller)
         self.controller = ThermostatControllerGateway()
+        self.controller._sync_auto_setpoints = False
         SetUpTestInjections(thermostat_controller=self.controller)
         sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')
         self._thermostat_group = ThermostatGroup.create(number=0,
@@ -109,26 +109,10 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(thermostats[0].sensor, None)
         self.assertEqual(thermostats[0].room, 2)
 
-    def test_auto_setpoint(self):
-        schedules = [
-            DaySchedule(mode='HEATING', index=0, schedule_data={21600: 21.0, 79200: 19.0}),
-            DaySchedule(mode='HEATING', index=1, schedule_data={0: 19.0, 21600: 21.0, 79200: 19.0}),
-            DaySchedule(mode='HEATING', index=6, schedule_data={0: 19.0, 21600: 22.5, 79200: 19.0}),
-        ]
-        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 5) + timedelta(hours=13))  # monday 1pm
-        self.assertEqual(setpoint, 21.0, '{}: {}'.format(t, setpoint))
-        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 5) + timedelta(hours=23))  # monday 11pm
-        self.assertEqual(setpoint, 19.0, '{}: {}'.format(t, setpoint))
-        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 11) + timedelta(hours=13))  # sunday 1pm
-        self.assertEqual(setpoint, 22.5, '{}: {}'.format(t, setpoint))
-        # Week rollover without 0 transition.
-        t, setpoint = self.controller._auto_setpoint_at(schedules, datetime(1970, 1, 5) + timedelta(hours=5))  # monday 5am
-        self.assertEqual(setpoint, 19.0, '{}: {}'.format(t, setpoint))
-
     def test_update_schedules(self):
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
-        thermostat = Thermostat.create(number=1,
-                                       name='thermostat 1',
+        thermostat = Thermostat.create(number=0,
+                                       name='thermostat 0',
                                        sensor=sensor,
                                        pid_heating_p=200,
                                        pid_heating_i=100,
@@ -141,10 +125,6 @@ class ThermostatControllerTest(unittest.TestCase):
                                        start=0,
                                        valve_config='equal',
                                        thermostat_group=self._thermostat_group)
-        self.scheduling_controller.load_schedules.return_value = [
-            ScheduleDTO(id=10, external_id='1.0', start=0, action='LOCAL_API', name='T1 day 0 00:00'),
-            ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
-        ]
         self.controller._sync_thread = Mock()
         schedule_dto = ThermostatScheduleDTO(temp_day_1=22.0,
                                              start_day_1='06:30',
@@ -154,7 +134,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                              end_day_2='23:00',
                                              temp_night=16.5)
         self.controller.save_heating_thermostats([
-            ThermostatDTO(id=thermostat.id,
+            ThermostatDTO(id=thermostat.number,
                           auto_mon=schedule_dto,
                           auto_tue=schedule_dto,
                           auto_wed=schedule_dto,
@@ -166,23 +146,9 @@ class ThermostatControllerTest(unittest.TestCase):
         self.controller._sync_thread.request_single_run.assert_called_with()
         self.controller.refresh_thermostats_from_db()
 
-        schedules = self.scheduling_controller.save_schedules.call_args_list[0][0][0]
-        self.assertEqual(len(schedules), 35, [x.external_id for x in schedules])
-        self.assertIn('1.0', [x.external_id for x in schedules])   # 1..7  heating
-        self.assertIn('7.4', [x.external_id for x in schedules])
-        schedule = next(x for x in schedules if x.name == 'H1 day 0 00:00')
-        self.assertEqual(schedule.arguments, {'name': 'set_setpoint_from_scheduler',
-                                              'parameters': {'thermostat': 1,
-                                                             'heating_temperature': 16.5}})
-        self.assertEqual(schedule.repeat, '00 00 * * 0')
-        schedule = next(x for x in schedules if x.name == 'H1 day 0 06:30')
-        self.assertEqual(schedule.arguments, {'name': 'set_setpoint_from_scheduler',
-                                              'parameters': {'thermostat': 1,
-                                                             'heating_temperature': 22.0}})
-        self.assertEqual(schedule.repeat, '30 06 * * 0')
-        self.scheduling_controller.remove_schedules.assert_called_with([
-            ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
-        ])
+        assert len(thermostat.heating_schedules) == 7
+        assert call(0, 'heating', thermostat.heating_schedules) in self.scheduling_controller.update_thermostat_setpoints.call_args_list
+        assert call(0, 'cooling', []) in self.scheduling_controller.update_thermostat_setpoints.call_args_list
 
     def test_save_pumpgroups(self):
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
@@ -260,10 +226,10 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=pump_output.id,
                                        valve_output_ids=[valve_1_output.id, valve_3_output.id])], pump_groups)
-        # pump_groups = self.controller.load_cooling_pump_groups()
-        # self.assertEqual([PumpGroupDTO(id=0,
-        #                                pump_output_id=pump_output.id,
-        #                                valve_output_ids=[valve_2_output.id])], pump_groups)
+        pump_groups = self.controller.load_cooling_pump_groups()
+        self.assertEqual([PumpGroupDTO(id=0,
+                                       pump_output_id=pump_output.id,
+                                       valve_output_ids=[valve_2_output.id])], pump_groups)
 
         self.controller.save_heating_pump_groups([
             PumpGroupDTO(id=0,
@@ -392,13 +358,16 @@ class ThermostatControllerTest(unittest.TestCase):
                                  valve=valve,
                                  mode=ThermostatGroup.Modes.HEATING,
                                  priority=0)
-        self.controller._sync_auto_setpoints = False
+        now = datetime.now()
+        self.scheduling_controller.last_thermostat_setpoint.return_value = (datetime(now.year, now.month, now.day, 0), 21.5)
         self.controller.refresh_config_from_db()
 
         mode_output = Output.create(number=5)
         OutputToThermostatGroup.create(thermostat_group=self._thermostat_group, output=mode_output, index=0, mode='heating', value=100)
         OutputToThermostatGroup.create(thermostat_group=self._thermostat_group, output=mode_output, index=0, mode='cooling', value=0)
-
+        # Apply last auto scheduled setpoints
+        self.controller._sync_auto_setpoints = True
+        self.controller.refresh_config_from_db()
         expected = ThermostatGroupStatusDTO(id=0,
                                             setpoint=0,
                                             cooling=False,
@@ -410,20 +379,19 @@ class ThermostatControllerTest(unittest.TestCase):
                                                                            state='on',
                                                                            preset='auto',
                                                                            actual_temperature=10.0,
-                                                                           setpoint_temperature=14.0,
+                                                                           setpoint_temperature=21.5,
                                                                            outside_temperature=10.0,
                                                                            output_0_level=0,  # Valve drivers are not active
                                                                            output_1_level=0,
                                                                            steering_power=100,  # PID active
                                                                            mode=0)])
-        self.assertEqual([expected], self.controller.get_thermostat_group_status())
+        assert [expected] == self.controller.get_thermostat_group_status()
 
         self.controller.set_current_setpoint(thermostat_number=1, heating_temperature=15.0)
         expected.statusses[0].setpoint_temperature = 15.0
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
 
-        now = datetime.now()
-        DaySchedule.create(thermostat_id=1, mode='heating', index=now.weekday(), content='{"0":19.0}')
+        self.scheduling_controller.last_thermostat_setpoint.return_value = (datetime(now.year, now.month, now.day, 0), 19.0)
         # Restore auto scheduled setpoints
         self.controller.set_thermostat(1, preset='auto')
         expected.statusses[0].setpoint_temperature = 19.0
@@ -474,53 +442,6 @@ class ThermostatControllerTest(unittest.TestCase):
         expected.automatic = True
         expected.setpoint = 0
         self.assertEqual([expected], self.controller.get_thermostat_group_status())
-
-        # TODO: Fix the below tests, since they sometimes fail, and sometimes succeed. Likely a threading issue
-        return
-
-        self.controller.set_current_setpoint(thermostat_number=1,
-                                             heating_temperature=16.0)
-
-        preset = self.controller.get_current_preset(thermostat_number=1)
-        self.assertTrue(preset.active)
-        self.assertEqual(26.0, preset.cooling_setpoint)
-        self.assertEqual(16.0, preset.heating_setpoint)
-        self.assertEqual(Preset.Types.AUTO, preset.type)
-
-        self.controller.set_current_preset(thermostat_number=1, preset_type=Preset.Types.PARTY)
-        expected.statusses[0].setpoint_temperature = 22.0
-        expected.statusses[0].setpoint = expected.setpoint = 5  # PARTY = legacy `5` setpoint
-        expected.statusses[0].automatic = expected.automatic = False
-        expected.statusses[0].preset = 'party'
-        self.assertEqual([expected], self.controller.get_thermostat_group_status())
-
-        self.output_controller.set_output_status.reset_mock()
-        self.output_controller.get_output_status.return_value = OutputStatusDTO(id=4, status=True)
-        self.controller.set_thermostat_group(thermostat_group_id=0, state='on', mode='cooling')
-        self.controller.set_per_thermostat_mode(thermostat_id=1, automatic=False, setpoint=4)
-        self.pubsub._publish_all_events(blocking=False)
-        self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'mode': 'COOLING'}, 'location': {}}), events)
-        expected.statusses[0].setpoint_temperature = 38.0
-        expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
-        expected.statusses[0].steering_power = 0
-        expected.statusses[0].preset = 'vacation'
-        expected.cooling = True
-        expected.mode = 'cooling'
-        self.assertEqual([expected], self.controller.get_thermostat_group_status())
-        self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=False, dimmer=0)
-
-        self.output_controller.set_output_status.reset_mock()
-        self.output_controller.get_output_status.return_value = OutputStatusDTO(id=4, status=False)
-        self.controller.set_thermostat_group(thermostat_group_id=0, state='on', mode='heating')
-        expected.statusses[0].setpoint_temperature = 19.0
-        expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
-        expected.statusses[0].automatic = expected.automatic = True
-        expected.statusses[0].steering_power = 100
-        expected.statusses[0].preset = 'auto'
-        expected.cooling = False
-        expected.mode = 'heating'
-        self.assertEqual([expected], self.controller.get_thermostat_group_status())
-        self.output_controller.set_output_status.assert_called_with(output_id=4, is_on=True, dimmer=100)
 
     def test_copy_schedule(self):
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')

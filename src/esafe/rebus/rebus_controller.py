@@ -18,6 +18,8 @@ eSafe controller will communicate over rebus with the esafe hardware
 
 from collections import defaultdict
 
+from multiprocessing import Lock
+
 from esafe.rebus.abstract_rebus_controller import RebusControllerInterface
 from gateway.apartment_controller import ApartmentController
 from gateway.daemon_thread import DaemonThread
@@ -41,6 +43,7 @@ except ImportError:
 import logging
 import time
 logger = logging.getLogger(__name__)
+lock_status_logger = logging.getLogger(__name__ + ".lock-status")
 
 if False:  # MYPY
     from typing import Dict, List, Optional
@@ -61,6 +64,7 @@ class RebusController(RebusControllerInterface):
         self.lock_ids = []  # type: List[int]
         self.lock_status = defaultdict(lambda: False)  # type: Dict[int, bool]
         self.done_discovering = False
+        self.rebus_lock = Lock()
 
     @property
     def rebus_device(self):
@@ -87,26 +91,23 @@ class RebusController(RebusControllerInterface):
 
     def _get_esafe_status(self):
         for lock_id in self.lock_ids:
-            logger.debug("Getting lock status for rebus id: {}".format(lock_id))
             try:
                 is_lock_open = self.devices[lock_id].get_lock_status()
             except RebusException as rebus_ex:
-                logger.error("could not get lock status of lock: {}: Exception: {}".format(lock_id, rebus_ex))
+                lock_status_logger.error("could not get lock status of lock: {}: Exception: {}".format(lock_id, rebus_ex))
                 continue
-            logger.debug("Status: {}".format(is_lock_open))
             if is_lock_open != self.lock_status[lock_id]:
                 event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
-                logger.debug("Sending event: {}".format(event))
+                lock_status_logger.debug("lock status changed, Sending event: {}".format(event))
                 self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
             self.lock_status[lock_id] = is_lock_open
-            logger.debug("Updated lock status: {}".format(self.lock_status[lock_id]))
-        time.sleep(1)
+            lock_status_logger.debug("Updated lock [{}] to status: {}".format(lock_id, 'open' if self.lock_status[lock_id] else 'closed'))
 
     # Mailbox Functions
 
     def get_mailboxes(self, rebus_id=None):
         # type: (Optional[int]) -> List[MailBoxDTO]
-        logger.debug('Getting mailboxes')
+        logger.debug('Getting mailboxes, rebus_id: {}'.format(rebus_id))
         if not self.done_discovering:
             return []
         mailboxes = []
@@ -158,10 +159,12 @@ class RebusController(RebusControllerInterface):
     # Generic Functions (parcelbox and mailbox)
 
     def open_box(self, rebus_id):
+        logger.info("Opening lock with rebus_id: {}".format(rebus_id))
         device = self.devices.get(rebus_id)
         if device is None or not isinstance(device, RebusComponentEsafeLock):
             raise ValueError('Trying to open rebus device that is not a parcelbox of mailbox')
-        success = device.open_lock(blocking=True)
+        with self.rebus_lock:
+            success = device.open_lock(blocking=True)
         if success:
             self.lock_status[rebus_id] = True
             event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': rebus_id, 'status': 'open'})
@@ -194,9 +197,10 @@ class RebusController(RebusControllerInterface):
         if doorbell is None or not isinstance(doorbell, RebusComponentEsafeEightChannelOutput):
             raise ValueError('Cannot ring doorbell device, device does not exists or is non doorbell device')
 
-        doorbell.set_output(doorbell_index, True)
-        time.sleep(0.5)
-        doorbell.set_output(doorbell_index, False)
+        with self.rebus_lock:
+            doorbell.set_output(doorbell_index, True)
+            time.sleep(0.5)
+            doorbell.set_output(doorbell_index, False)
         return
 
     ######################
