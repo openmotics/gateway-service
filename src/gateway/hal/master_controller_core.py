@@ -460,9 +460,10 @@ class MasterCoreController(MasterController):
         return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
+        # type: () -> Tuple[int,...]
         version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                        fields={})['version']
-        return tuple([int(x) for x in version.split('.')])
+        return tuple(map(int, version.split('.')))
 
     def set_datetime(self, dt):
         # type: (datetime) -> None
