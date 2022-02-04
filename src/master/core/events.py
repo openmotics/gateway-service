@@ -19,7 +19,7 @@ Module to handle Events from the Core
 from __future__ import absolute_import
 import logging
 from gateway.enums import ModuleType
-from master.core.fields import WordField, AddressField
+from master.core.fields import WordField, AddressField, UInt32Field
 from master.core.system_value import Temperature, Humidity, Timer, Dimmer
 from master.core.basic_action import BasicAction
 
@@ -31,6 +31,7 @@ class Event(object):
         OUTPUT = 'OUTPUT'
         INPUT = 'INPUT'
         SENSOR = 'SENSOR'
+        PULSE_COUNTER = 'PULSE_COUNTER'
         THERMOSTAT = 'THERMOSTAT'
         SYSTEM = 'SYSTEM'
         POWER = 'POWER'
@@ -149,6 +150,7 @@ class Event(object):
     TYPE_MAP = {0: Types.OUTPUT,
                 1: Types.INPUT,
                 2: Types.SENSOR,
+                3: Types.PULSE_COUNTER,
                 20: Types.THERMOSTAT,
                 21: Types.UCAN,
                 22: Types.EXECUTED_BA,
@@ -183,6 +185,7 @@ class Event(object):
 
     def _parse_data(self, action, device_nr, data):
         word_helper = WordField('')
+        uint32_helper = UInt32Field('')
         ucan_address_helper = AddressField('', length=3)
         address_helper = AddressField('', length=4)
 
@@ -227,6 +230,9 @@ class Event(object):
                                    'value': word_helper.decode(bytearray(data[2:4]))}]
             return {'sensor': device_nr,
                     'values': sensor_values}
+        if self.type == Event.Types.PULSE_COUNTER:
+            return {'pulse_counter': device_nr,
+                    'value': uint32_helper.decode(data)}
         if self.type == Event.Types.THERMOSTAT:
             origin_map = {0: Event.ThermostatOrigins.SLAVE,
                           1: Event.ThermostatOrigins.MASTER}

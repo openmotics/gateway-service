@@ -179,7 +179,7 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.controller.save_inputs(data)
             self.assertIn(mock.call({'id': 1, 'name': 'foo'}), deserialize.call_args_list)
             self.assertIn(mock.call({'id': 2, 'name': 'bar'}), deserialize.call_args_list)
-            save.assert_called_with(activate=False)
+            save.assert_called_with(commit=False)
 
     def test_inputs_with_status(self):
         from gateway.hal.master_controller_core import MasterInputState

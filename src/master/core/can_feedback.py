@@ -61,7 +61,7 @@ class CANFeedbackController(object):
                     break
 
     @staticmethod
-    def save_output_led_feedback_configuration(output, output_dto, activate=True):
+    def save_output_led_feedback_configuration(output, output_dto, commit=True):
         # type: (OutputConfiguration, OutputDTO, bool) -> None
         holds_data, holds_configuration = CANFeedbackController._available_led_data(output_dto)
         if not holds_data:
@@ -96,9 +96,9 @@ class CANFeedbackController(object):
         else:
             group_action.name = ''
             output.output_groupaction_follow = CANFeedbackController.WORD_MAX
-        output.save(activate=False)
-        GroupActionController.save_group_action(group_action, ['name', 'actions'], activate=False)
-        if activate:
+        output.save(commit=False)
+        GroupActionController.save_group_action(group_action, ['name', 'actions'], commit=False)
+        if commit:
             MemoryCommitter.commit()
 
     @staticmethod
@@ -143,7 +143,7 @@ class CANFeedbackController(object):
         return global_feedbacks
 
     @staticmethod
-    def save_global_led_feedback_configuration(global_feedbacks, activate=True):  # type: (List[GlobalFeedbackDTO], bool) -> None
+    def save_global_led_feedback_configuration(global_feedbacks, commit=True):  # type: (List[GlobalFeedbackDTO], bool) -> None
         # Important assumption in the below code to make this strategy solvable: If any of the 4 feedbacks is
         # given, they all are assumed to be given.
         global_configuration = GlobalConfiguration()
@@ -188,9 +188,9 @@ class CANFeedbackController(object):
         else:
             group_action.name = ''
             global_configuration.groupaction_any_output_changed = CANFeedbackController.WORD_MAX
-        global_configuration.save(activate=False)
-        GroupActionController.save_group_action(group_action, ['name', 'actions'], activate=False)
-        if activate:
+        global_configuration.save(commit=False)
+        GroupActionController.save_group_action(group_action, ['name', 'actions'], commit=False)
+        if commit:
             MemoryCommitter.commit()
 
     @staticmethod
