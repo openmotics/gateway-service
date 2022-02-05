@@ -17,9 +17,10 @@ where settings like the platform and ports can be overridden. You can specify th
 OPENMOTICS_PREFIX=/some/directory/pointing/to/openmotics/gateway
 ```
 
-Using the following .envrc direnv can be used to setup all the dependencies in your shell.
+Using the following .envrc direnv can be used to setup all the dependencies in your shell. (equivalent to nix-shell + creating and activating a virtualenv)
 ```
 dotenv
+use nix
 layout python python3
 ```
 
