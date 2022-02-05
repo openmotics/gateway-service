@@ -6,6 +6,47 @@ This project is the OpenMotics Gateway backend. It provides an API used by the f
 
 It is the glue between the OpenMotics Master (microcontroller) and the rest of the world.
 
+
+## Running locally
+
+Some parts of the code can be run locally using a dummy master implementation.
+
+The openmotics service loads a config file from `$OPENMOTICS_PREFIX/etc`,
+where settings like the platform and ports can be overridden. You can specify the env variables in a .env file:
+```
+OPENMOTICS_PREFIX=/some/directory/pointing/to/openmotics/gateway
+```
+
+Using the following .envrc direnv can be used to setup all the dependencies in your shell.
+```
+dotenv
+layout python python3
+```
+
+Installing python dependencies is done as normal
+```
+pip install -r requirements-py3.txt
+```
+
+```sh
+mkdir -p etc static
+cd etc
+# copy the example config file, it can be further customized
+cp ../example/openmotics.conf etc
+# generate self signed certificate
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout https.key -out https.crt -subj '/CN=om-developer'
+```
+
+Starting the necessary services using foreman
+```
+foreman start
+```
+
+**[OPTIONAL]** 
+
+Extracting the [frontend build](https://github.com/openmotics/frontend/releases/download/v1.13.5/gateway-frontend_1.13.5.tgz) to `./static` also gives access to the local protal interface.
+
+
 ## Git workflow
 
 We use [git-flow](https://github.com/petervanderdoes/gitflow-avh) which implements [Vincent Driessen](http://nvie.com/posts/a-successful-git-branching-model/)'s
@@ -36,21 +77,6 @@ git config gitflow.prefix.hotfix hotfix/
 git config gitflow.prefix.support support/
 git config gitflow.prefix.versiontag v
 ```
-
-## Running locally
-
-Some parts of the code can be run locally using a dummy master implementation.
-
-The openmotics service loads a config file from `./etc` or `$OPENMOTICS_PREFIX/etc`,
-where settings like the platform and ports can be overridden.
-
-```sh
-mkdir -p etc static
-cp example/openmotics.conf etc
-python openmotics_service.py
-```
-
-Extracting a frontend build to `./static` also gives access to the local protal interface.
 
 ## Built With
 
