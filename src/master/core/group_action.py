@@ -88,7 +88,7 @@ class GroupActionController(object):
                            actions=basic_actions)
 
     @staticmethod
-    def save_group_action(group_action, fields, activate=True):  # type: (GroupAction, List[str], bool) -> None
+    def save_group_action(group_action, fields, commit=True):  # type: (GroupAction, List[str], bool) -> None
         group_action_id = group_action.id
         if not (0 <= group_action_id <= 255):
             raise ValueError('GroupAction ID {0} not in range 0 <= id <= 255'.format(group_action_id))
@@ -103,7 +103,7 @@ class GroupActionController(object):
                 # Empty, clear addresses
                 address_configuration.start = GroupActionController.MAX_WORD
                 address_configuration.end = GroupActionController.MAX_WORD
-                address_configuration.save(activate=False)
+                address_configuration.save(commit=False)
             else:
                 if needed_length == previous_length:
                     # No new location needed
@@ -126,18 +126,18 @@ class GroupActionController(object):
                         start_address = available_start_addresses[0]
                     address_configuration.start = start_address
                     address_configuration.end = start_address + needed_length - 1
-                    address_configuration.save(activate=False)
+                    address_configuration.save(commit=False)
                 # Store BAs
                 for i, new_action in enumerate(group_action.actions):
                     basic_action = GroupActionBasicAction(start_address + i)
                     basic_action.basic_action = new_action
-                    basic_action.save(activate=False)
+                    basic_action.save(commit=False)
         if 'name' in fields:
             group_action_configuration = GroupActionConfiguration(group_action.id)
             group_action_configuration.name = group_action.name
-            group_action_configuration.save(activate=False)
+            group_action_configuration.save(commit=False)
 
-        if activate:
+        if commit:
             MemoryCommitter.commit()
 
     @staticmethod

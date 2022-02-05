@@ -93,6 +93,8 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 * *Frederick Ryckbosch* - GitHub user: [fryckbos](https://github.com/fryckbos)
 * *Kenneth Henderick* - GitHub user: [khenderick](https://github.com/khenderick)
+* *Sander Van Schoote* - GitHub user: [svanscho](https://github.com/svanscho)
+* *Daiderd Jordan* - GitHub user: [LnL7](https://github.com/LnL7)
 
 ## License
 

@@ -100,6 +100,7 @@ class MasterCoreController(MasterController):
         self._discovery_log_lock = Lock()
         self._last_health_warning = 0
         self._last_health_warning_timestamp = 0.0
+        self._pulse_counter_values = {}  # type: Dict[int, Optional[int]]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
@@ -189,6 +190,8 @@ class MasterCoreController(MasterController):
                                                                                      'value': value['value']})
                     self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
                     self._sensor_states[sensor_id][value['type']] = value['value']
+            elif core_event.type == MasterCoreEvent.Types.PULSE_COUNTER:
+                self._pulse_counter_values[core_event.data['pulse_counter']] = core_event.data['value']
             elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
                 self._handle_execute_event(action=core_event.data['action'],
                                            device_nr=core_event.data['device_nr'],
@@ -460,9 +463,10 @@ class MasterCoreController(MasterController):
         return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
+        # type: () -> Tuple[int,...]
         version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                        fields={})['version']
-        return tuple([int(x) for x in version.split('.')])
+        return tuple(map(int, version.split('.')))
 
     def set_datetime(self, dt):
         # type: (datetime) -> None
@@ -503,7 +507,7 @@ class MasterCoreController(MasterController):
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
         for input_dto in inputs:
             input_ = InputMapper.dto_to_orm(input_dto)
-            input_.save(activate=False)
+            input_.save(commit=False)
         MemoryCommitter.commit()
 
     def _refresh_input_states(self):
@@ -579,8 +583,8 @@ class MasterCoreController(MasterController):
             if output.is_shutter:
                 # Any further configuration not required
                 continue
-            output.save(activate=False)
-            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
+            output.save(commit=False)
+            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, commit=False)
         MemoryCommitter.commit()
 
     def load_output_status(self):
@@ -617,9 +621,9 @@ class MasterCoreController(MasterController):
             if output.output_type == OutputType.SHUTTER_RELAY:
                 output.output_type = OutputType.OUTLET
         setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
-        output.save(activate=False)
-        shutter.save(activate=False)
-        output_module.save(activate=False)
+        output.save(commit=False)
+        shutter.save(commit=False)
+        output_module.save(commit=False)
 
     # Shutters
 
@@ -677,7 +681,7 @@ class MasterCoreController(MasterController):
             output_module = output.module
             shutter = ShutterMapper.dto_to_orm(shutter_dto)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
-            output_module.save(activate=False)
+            output_module.save(commit=False)
         MemoryCommitter.commit()
 
     def _refresh_shutter_states(self):
@@ -763,7 +767,7 @@ class MasterCoreController(MasterController):
         return [global_feedbacks.get(i, GlobalFeedbackDTO(id=i)) for i in range(32)]
 
     def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
-        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, activate=True)
+        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, commit=True)
 
     # Sensors
 
@@ -813,7 +817,7 @@ class MasterCoreController(MasterController):
     def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         for sensor_dto in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto)
-            sensor.save(activate=False)
+            sensor.save(commit=False)
         MemoryCommitter.commit()
 
     def _refresh_sensor_states(self):
@@ -865,54 +869,71 @@ class MasterCoreController(MasterController):
 
     # PulseCounters
 
-    def _load_pulse_counter_module_ids(self):
-        ids = []
-        for module_id in self._enumerate_io_modules('input', amount_per_module=1):
-            input_module_info = InputModuleConfiguration(module_id)
-            if input_module_info.hardware_type != HardwareType.PHYSICAL:
-                continue  # Only physical modules can count
-            ids.append(module_id)
-        return ids
+    def _load_pulse_counter_input_mapping(self):
+        mapping = {}
+        for input_id in self._enumerate_io_modules('input', amount_per_module=8):
+            input_orm = InputConfiguration(input_id)
+            if input_orm.module.hardware_type not in [HardwareType.PHYSICAL, HardwareType.INTERNAL]:
+                continue  # Only physical & internal modules can count
+            if input_orm.pulse_counter_id < 32:
+                mapping[input_orm.pulse_counter_id] = input_id
+        return mapping
 
     @staticmethod
-    def _generate_pulse_counter_dto(pulse_counter_id):
+    def _generate_pulse_counter_dto(pulse_counter_id, input_id):
         return PulseCounterDTO(id=pulse_counter_id,
-                               name='PulseCounter Input {0}'.format(pulse_counter_id),
-                               input_id=None,
+                               name='PulseCounter {0}'.format(pulse_counter_id),
+                               input_id=input_id,
                                persistent=True)
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
-        _ = InputConfiguration(pulse_counter_id)
-        return MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id)
+        mapping = self._load_pulse_counter_input_mapping()
+        return MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id,
+                                                                input_id=mapping.get(pulse_counter_id))
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         pulse_counters = []
-        for module_id in self._load_pulse_counter_module_ids():
-            for i in range(8):
-                pulse_counter_id = module_id * 8 + i
-                pulse_counters.append(MasterCoreController._generate_pulse_counter_dto(pulse_counter_id))
+        mapping = self._load_pulse_counter_input_mapping()
+        for pulse_counter_id in range(self.get_amount_of_pulse_counters()):
+            pulse_counters.append(
+                MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id,
+                                                                 input_id=mapping.get(pulse_counter_id))
+            )
         return pulse_counters
 
     def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
-        # There are no real settings to pulse counters, so they cannot be saved
-        return
+        current_mapping = self._load_pulse_counter_input_mapping()
+        old_used_inputs = set(current_mapping.values())
+        new_mapping = copy.copy(current_mapping)
+        new_mapping.update({pc.id: pc.input_id for pc in pulse_counters if pc.id < 32})
+        new_used_inputs = set(new_mapping.values())
+        if len(new_mapping.values()) != len(new_used_inputs):
+            # Since .values() contains duplicate values, and the set `new_used_inputs` not, a difference
+            # in their length will indicate duplicates
+            raise RuntimeError('Duplicate mapping detected between PulseCounters and Inputs')
+        for removed_input_id in old_used_inputs - new_used_inputs:
+            input_orm = InputConfiguration(removed_input_id)
+            input_orm.pulse_counter_id = 255
+            input_orm.save(commit=False)
+        for pulse_counter_id, input_id in new_mapping.items():
+            input_orm = InputConfiguration(input_id)
+            input_orm.pulse_counter_id = pulse_counter_id
+            input_orm.save(commit=False)
+        MemoryCommitter.commit()
 
     def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
-        values = {i: None for i in range(self.get_amount_of_pulse_counters())}  # type: Dict[int, Optional[int]]
-        return values  # TODO: Re-enable below code once the firmware issues are fixed
-        # for module_id in self._load_pulse_counter_module_ids():
-        #     try:
-        #         counter_values = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
-        #                                                               fields={'input_nr': module_id * 8})
-        #         for input_id in range(8):
-        #             values[module_id * 8 + input_id] = counter_values['counter_{0}'.format(input_id)]
-        #     except Exception as ex:
-        #         logger.error('Could not request pulse counters for module {0}: {1}'.format(module_id, ex))
-        # return values
+        if len(self._pulse_counter_values) != self.get_amount_of_pulse_counters():
+            # Force refresh pulse counter values
+            for series in range(4):
+                result = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
+                                                              fields={'series': series})
+                for counter_id in range(8):
+                    self._pulse_counter_values[series * 8 + counter_id] = result['counter_{0}'.format(counter_id)]
+        return self._pulse_counter_values
 
     def get_amount_of_pulse_counters(self):  # type: () -> int
         _ = self
-        return 640
+        return 32
 
     # (Group)Actions
 
@@ -934,7 +955,7 @@ class MasterCoreController(MasterController):
     def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
         for group_action_dto in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto)
-            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, activate=False)
+            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, commit=False)
         MemoryCommitter.commit()
 
     # Module management
