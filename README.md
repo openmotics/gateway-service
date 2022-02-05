@@ -29,6 +29,7 @@ Installing python dependencies is done as normal
 pip install -r requirements-py3.txt
 ```
 
+Copy the configuration files and generate self signed certificates
 ```sh
 mkdir -p etc static
 cd etc
