@@ -45,14 +45,14 @@ class MaintenanceController(object):
         """
         :type maintenance_communicator: gateway.maintenance_communicator.MaintenanceCommunicator
         """
-        self._consumers = {}  # type: Dict[int, Optional[Callable[[str], Any]]]
+        self._consumers = {}  # type: Dict[int, Callable[[str], Any]]
         self._privatekey_filename = ssl_private_key
         self._certificate_filename = ssl_certificate
         self._maintenance_communicator = maintenance_communicator
         if self._maintenance_communicator:
             self._maintenance_communicator.set_receiver(self._received_data)
-        self._connection = None
-        self._server_thread = None
+        self._connection = None  # type: Optional[socket.socket]
+        self._server_thread = None  # type: Optional[BaseThread]
 
     #######################
     # Internal management #
@@ -69,9 +69,10 @@ class MaintenanceController(object):
             self._maintenance_communicator.stop()
 
     def _received_data(self, message):
+        # type: (str) -> None
         try:
             if self._connection is not None:
-                self._connection.sendall('{0}\n'.format(message.rstrip()))
+                self._connection.sendall(bytearray(message.rstrip().encode()) + bytearray(b'\n'))
         except Exception:
             logger.exception('Exception forwarding maintenance data to socket connection.')
         for consumer_id, callback in self._consumers.items():
@@ -81,10 +82,12 @@ class MaintenanceController(object):
                 logger.exception('Exception forwarding maintenance data to consumer %s', str(consumer_id))
 
     def _activate(self):
+        # type: () -> None
         if not self._maintenance_communicator.is_active():
             self._maintenance_communicator.activate()
 
     def _deactivate(self):
+        # type: () -> None
         if self._maintenance_communicator.is_active():
             self._maintenance_communicator.deactivate()
 
@@ -93,10 +96,12 @@ class MaintenanceController(object):
     #################
 
     def add_consumer(self, consumer_id, callback):
+        # type: (int, Callable[[str],Any]) -> None
         self._consumers[consumer_id] = callback
         self._activate()
 
     def remove_consumer(self, consumer_id):
+        # type: (int) -> None
         self._consumers.pop(consumer_id, None)
         if not self._consumers:
             logger.info('Stopping maintenance mode due to no consumers.')
@@ -107,6 +112,7 @@ class MaintenanceController(object):
     ##########
 
     def open_maintenace_socket(self):
+        # type: () -> int
         """
         Opens a TCP/SSL socket, connecting it with the maintenance service
         """
@@ -117,6 +123,7 @@ class MaintenanceController(object):
         return port
 
     def _run_socket_server(self, port):
+        # type: (int) -> None
         connection_timeout = MaintenanceController.SOCKET_TIMEOUT
         logger.info('Starting maintenance socket on port %s', port)
 
@@ -144,14 +151,16 @@ class MaintenanceController(object):
             sock.close()
 
     def _handle_connection(self):
+        # type: () -> None
         """
         Handles one incoming connection.
         """
+        assert self._connection is not None
         try:
             self._connection.settimeout(1)
-            self._connection.sendall('Activating maintenance mode, waiting for other actions to complete ...\n')
+            self._connection.sendall(b'Activating maintenance mode, waiting for other actions to complete ...\n')
             self._activate()
-            self._connection.sendall('Connected\n')
+            self._connection.sendall(b'Connected\n')
             while self._maintenance_communicator.is_active():
                 try:
                     try:
@@ -159,11 +168,11 @@ class MaintenanceController(object):
                         if not data:
                             logger.info('Stopping maintenance mode due to no data.')
                             break
-                        if data.startswith('exit'):
+                        if data.startswith(b'exit'):
                             logger.info('Stopping maintenance mode due to exit.')
                             break
 
-                        self._maintenance_communicator.write(data)
+                        self._maintenance_communicator.write(data.decode())
                     except Exception as exception:
                         if System.handle_socket_exception(self._connection, exception, logger):
                             continue
@@ -174,7 +183,7 @@ class MaintenanceController(object):
                     logger.exception('Exception in maintenance mode')
                     break
         except InMaintenanceModeException:
-            self._connection.sendall('Maintenance mode already active.\n')
+            self._connection.sendall(b'Maintenance mode already active.\n')
         finally:
             self._deactivate()
             logger.info('Maintenance mode deactivated')
@@ -186,4 +195,5 @@ class MaintenanceController(object):
     #######
 
     def write(self, message):
+        # type: (str) -> None
         self._maintenance_communicator.write(message)
