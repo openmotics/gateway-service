@@ -94,6 +94,7 @@ class ThermostatControllerGateway(ThermostatController):
     def stop(self):  # type: () -> None
         if not self._running:
             logger.warning('Stopping an already stopped thermostatcontroller.')
+        self._running = False
         if self._pid_loop_thread is not None:
             self._pid_loop_thread.stop()
         if self._update_pumps_thread is not None:
