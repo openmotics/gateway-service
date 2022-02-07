@@ -575,3 +575,19 @@ class ThermostatControllerMaster(ThermostatController):
         if setpoint == 5:
             return 'PARTY'
         return 'AUTO'
+
+    def _sync(self):
+        # This is not really a sync thread, but periodically force publishes status events
+        # 1. publish thermostat group status events
+        thermostats_status = self._thermostat_status.get_thermostats()
+        try:
+            self._thermostat_group_changed(thermostats_status)
+        except Exception:
+            logger.exception('Could not publish thermostat group')
+
+        # 2. publish thermostat unit status events
+        for status in thermostats_status['status']:
+            try:
+                self._thermostat_changed(status['id'], status)
+            except Exception:
+                logger.exception('Could not publish thermostat %s', status['id'])

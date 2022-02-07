@@ -236,3 +236,6 @@ class ThermostatPid(object):
     @kd.setter
     def kd(self, kd):  # type: (float) -> None
         self._pid.Kd = kd
+
+    def __repr__(self):
+        return 'Thermostat PID {0} ({1})'.format(self.thermostat.number, self.thermostat.name)

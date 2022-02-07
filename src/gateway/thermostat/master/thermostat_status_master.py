@@ -90,7 +90,6 @@ class ThermostatStatusMaster(object):
             self._thermostats = thermostats
 
     def get_thermostats(self):
-        """ Return the list of Outputs. """
         return self._thermostats
 
     def _report_change(self, thermostat_id, status):
