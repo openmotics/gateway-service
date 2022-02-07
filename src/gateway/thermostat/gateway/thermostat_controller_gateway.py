@@ -311,7 +311,7 @@ class ThermostatControllerGateway(ThermostatController):
             except ValueError:
                 logger.info('Output {0} state not yet available'.format(output_number))
                 return 0  # Output state is not yet cached (during startup)
-            if output.dimmer is None:
+            if output.status is False or output.dimmer is None:
                 status_ = output.status
                 output_level = 0 if status_ is None else int(status_) * 100
             else:
