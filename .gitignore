@@ -36,6 +36,9 @@ src/terms/
 # Venv folders
 venv/
 venv2.7/
+.direnv
+.env
+.envrc
 
 # Mypy files
 .mypy_cache/
