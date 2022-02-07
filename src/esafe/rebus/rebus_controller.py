@@ -98,7 +98,7 @@ class RebusController(RebusControllerInterface):
                 continue
             if is_lock_open != self.lock_status[lock_id]:
                 event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
-                lock_status_logger.debug("lock status changed, Sending event: {}".format(event))
+                lock_status_logger.info("lock status changed, Sending event: {}".format(event))
                 self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
             self.lock_status[lock_id] = is_lock_open
             lock_status_logger.debug("Updated lock [{}] to status: {}".format(lock_id, 'open' if self.lock_status[lock_id] else 'closed'))
@@ -159,7 +159,7 @@ class RebusController(RebusControllerInterface):
     # Generic Functions (parcelbox and mailbox)
 
     def open_box(self, rebus_id):
-        logger.info("Opening lock with rebus_id: {}".format(rebus_id))
+        logger.info("Opening lock with rebus_id: {} ...".format(rebus_id))
         device = self.devices.get(rebus_id)
         if device is None or not isinstance(device, RebusComponentEsafeLock):
             raise ValueError('Trying to open rebus device that is not a parcelbox of mailbox')
@@ -171,14 +171,18 @@ class RebusController(RebusControllerInterface):
             logger.debug("Sending event: {}".format(event))
             self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
             if device.type == EsafeBoxType.PARCELBOX:
+                logger.info("Opening lock with rebus_id: {} ... [DONE] => Parcelbox".format(rebus_id))
                 return self._rebus_parcelbox_to_dto(device, force_latest_status=True)
             elif device.type == EsafeBoxType.MAILBOX:
+                logger.info("Opening lock with rebus_id: {} ... [DONE] => Mailbox".format(rebus_id))
                 return self._rebus_mailbox_to_dto(device, force_latest_status=True)
+        logger.info("Opening lock with rebus_id: {} ... [DONE] => None".format(rebus_id))
         return None
 
     # Doorbells
 
     def get_doorbells(self):
+        logger.debug("Getting doorbells")
         doorbell_devices = [device for device in self.devices.values() if isinstance(device, RebusComponentEsafeEightChannelOutput)]
         doorbells = []
         for doorbell_device in doorbell_devices:
@@ -191,6 +195,7 @@ class RebusController(RebusControllerInterface):
 
     def ring_doorbell(self, doorbell_id):
         # type: (int) -> None
+        logger.info("Ringing doorbell %d ...", doorbell_id)
         doorbell_index = doorbell_id % 16
         rebus_id = doorbell_id - doorbell_index
         doorbell = self.devices.get(rebus_id)  # type: Optional[RebusComponentEsafeEightChannelOutput]
@@ -201,7 +206,7 @@ class RebusController(RebusControllerInterface):
             doorbell.set_output(doorbell_index, True)
             time.sleep(0.5)
             doorbell.set_output(doorbell_index, False)
-        return
+        logger.info("Ringing doorbell %d ... [DONE]", doorbell_id)
 
     ######################
     # HELPERS
@@ -247,7 +252,16 @@ class RebusController(RebusControllerInterface):
     def log_discovered_devices(self):
         logger.info("Rebus discovered devices:")
         for dev_id, device in self.devices.items():
-            logger.info(" * {} @ {}".format(dev_id, device.__class__.__name__))
+            base_string = " * {} => {}, Version: {}"\
+                .format(
+                    dev_id,
+                    device.__class__.__name__,
+                    device.mcu_id + ' [' + device.software_id + ']'
+                )
+            if isinstance(device, RebusComponentEsafeLock):
+                base_string = "{}, box type: {}, box size: {}"\
+                    .format(base_string, device.type, device.size)
+            logger.info(base_string)
 
     ######################
     # REBUS COMMANDS
