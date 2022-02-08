@@ -12,6 +12,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
+import logging
 from gateway.daemon_thread import DaemonThread
 
 if False:  # MYPY
@@ -24,7 +26,7 @@ if False:  # MYPY
 logger = logging.getLogger(__name__)
 
 
-class ThermostatController(BaseController):
+class ThermostatController(object):
     GLOBAL_THERMOSTAT = 0
     SYNC_CONFIG_INTERVAL = 900
 

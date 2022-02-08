@@ -176,15 +176,8 @@ class ThermostatControllerGateway(ThermostatController):
         # 2. publish thermostat unit status events
         for thermostat_pid in self.thermostat_pids.values():
             try:
-                self._thermostat_changed(thermostat_pid.number,
-                                         thermostat_pid.active_preset,
-                                         thermostat_pid.current_setpoint,
-                                         thermostat_pid.actual_temperature,
-                                         thermostat_pid.thermostat_pidpercentages,
-                                         thermostat_pid.steering_power,
-                                         thermostat_pid.room,
-                                         thermostat_pid.state,
-                                         thermostat_pid.mode)
+                status = thermostat_pid.get_status()
+                self._thermostat_changed(*status)
             except Exception:
                 logger.exception('Could not publish %s', thermostat_pid)
 
