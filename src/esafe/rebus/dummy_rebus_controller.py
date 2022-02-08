@@ -201,9 +201,9 @@ class DummyRebusController(RebusControllerInterface):
             logger.info("Found device: {}".format(json_device))
             dev_id = json_device['id']
             dev_type = json_device['type']
-            simulate_stuck = json_device.get('simulate_stuck', None)
+            simulate_stuck = json_device.get('simulate_stuck', False)
             non_auto_close = json_device.get('auto_close_after_open', True)
-            if simulate_stuck is not None:
+            if simulate_stuck is True:
                 self.stuck_devices.append(dev_id)
             if not non_auto_close:
                 self.non_auto_close_devices.append(dev_id)
