@@ -38,6 +38,7 @@ class PluginRuntime(object):
                                     'thermostat_status': [1],
                                     'thermostat_group_status': [1],
                                     'ventilation_status': [1],
+                                    'sensor_status': [1],
                                     'receive_events': [1],
                                     'background_task': [1],
                                     'on_remove': [1]}
@@ -53,6 +54,7 @@ class PluginRuntime(object):
                                    'thermostat_status': [],
                                    'thermostat_group_status': [],
                                    'ventilation_status': [],
+                                   'sensor_status': [],
                                    'receive_events': [],
                                    'background_task': [],
                                    'on_remove': []}  # type: Dict[str,List[Any]]
@@ -211,6 +213,8 @@ class PluginRuntime(object):
                         ret = self._handle_shutter_status(command['status'], data_type='status_dict')
                     else:
                         ret = self._handle_shutter_status(command['event'], data_type='event')
+                elif action == 'sensor_status':
+                    ret = self._handle_sensor_status(command['event'])
                 elif action == 'receive_events':
                     ret = self._handle_receive_events(command['code'])
                 elif action == 'get_metric_definitions':
@@ -323,6 +327,11 @@ class PluginRuntime(object):
                     self._writer.with_catch('shutter status', receiver, [data['status'], data['detail']])
                 elif decorator_version == 3 and event:
                     self._writer.with_catch('shutter status', receiver, [event.data])
+
+    def _handle_sensor_status(self, data):
+        event = GatewayEvent.deserialize(data)
+        for receiver in self._decorated_methods['sensor_status']:
+            self._writer.with_catch('sensor status', receiver, [event.data])
 
     def _handle_receive_events(self, code):
         for receiver in self._decorated_methods['receive_events']:
