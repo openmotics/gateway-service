@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 @Singleton
 class RfidController(object):
     @Inject
-    def __init__(self, system_config_controller=INJECTED):
+    def __init__(self, system_config_controller=INJECTED, rfid_reader_device=INJECTED):
         # type: (SystemConfigController) -> None
         logger.debug('Creating rfid_controller')
         self.system_config_controller = system_config_controller
@@ -62,11 +62,8 @@ class RfidController(object):
         logger.debug(' -> Result: {}'.format(rfid_device_file))
         logger.debug(' -> Creating rfid context')
         self.rfid_context = RfidContext(self)
-        self.rfid_device = None
-        if rfid_device_file is not None and os.path.exists(rfid_device_file):
-            logger.debug(' -> Creating rfid device')
-            self.rfid_device = IdTronicM890(rfid_device_file)
-            logger.debug(' -> Setting the callback')
+        self.rfid_device = rfid_reader_device
+        if self.rfid_device is not None:
             self.rfid_device.set_new_scan_callback(self.rfid_context.handle_rfid_scan)
 
     def start(self):
