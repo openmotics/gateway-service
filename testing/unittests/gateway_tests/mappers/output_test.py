@@ -104,16 +104,41 @@ class OutputMapperTest(unittest.TestCase):
                                    name='test',
                                    output_type=0,
                                    module_type='O'), dto)
+        config = OutputMapper.dto_to_orm(dto)
+        self.assertEqual({'id': 0,
+                          'locking': {'locked': True},
+                          'dali_mapping': {'dali_group_id': None, 'dali_output_id': None},
+                          'max_output_level': 255,
+                          'min_output_level': 255,
+                          'name': 'test',
+                          'output_groupaction_follow': 65535,
+                          'output_type': 0,
+                          'timer_type': OutputConfiguration.TimerType.PER_1_S,
+                          'timer_value': 123,
+                          'status': {'state': True}}, config.serialize())
+
         # In milliseconds
         dto = OutputMapper.orm_to_dto(OutputConfiguration.deserialize({'id': 0,
                                                                        'timer_type': OutputConfiguration.TimerType.PER_100_MS,
-                                                                       'timer_value': 123,
+                                                                       'timer_value': 20,
                                                                        'name': 'test',
                                                                        'output_type': 0,
                                                                        'module': {'id': 0,
                                                                                   'device_type': 'O'}}))
         self.assertEqual(OutputDTO(id=0,
-                                   timer=12,
+                                   timer=2,
                                    name='test',
                                    output_type=0,
                                    module_type='O'), dto)
+        config = OutputMapper.dto_to_orm(dto)
+        self.assertEqual({'id': 0,
+                          'locking': {'locked': True},
+                          'dali_mapping': {'dali_group_id': None, 'dali_output_id': None},
+                          'max_output_level': 255,
+                          'min_output_level': 255,
+                          'name': 'test',
+                          'output_groupaction_follow': 65535,
+                          'output_type': 0,
+                          'timer_type': OutputConfiguration.TimerType.PER_100_MS,
+                          'timer_value': 20,
+                          'status': {'state': True}}, config.serialize())
