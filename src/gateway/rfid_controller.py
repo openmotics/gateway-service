@@ -23,7 +23,7 @@ from gateway.mappers import RfidMapper
 from gateway.dto import RfidDTO, UserDTO
 from gateway.pubsub import PubSub
 from gateway.system_config_controller import SystemConfigController
-from esafe.rfid import IdTronicM890
+from esafe.rfid import IdTronicM890, RfidDevice
 from esafe.rfid import RfidException
 from ioc import INJECTED, Inject, Injectable, Singleton
 
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 class RfidController(object):
     @Inject
     def __init__(self, system_config_controller=INJECTED, rfid_reader_device=INJECTED):
-        # type: (SystemConfigController) -> None
+        # type: (SystemConfigController, Optional[RfidDevice]) -> None
         logger.debug('Creating rfid_controller')
         self.system_config_controller = system_config_controller
         logger.debug(' -> Reading out the config file')

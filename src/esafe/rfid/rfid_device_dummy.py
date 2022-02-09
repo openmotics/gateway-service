@@ -20,19 +20,21 @@ import logging
 import os
 from threading import Thread
 
+from esafe.rfid import RfidDevice
+
 if False:  # MyPy
     from typing import Optional, TextIO
 
 logger = logging.getLogger(__name__)
 
 
-class RfidDeviceDummy:
+class RfidDeviceDummy(RfidDevice):
 
     PIPE_END_MSG = 'PIPE_END_MSG'
     PIPE_NAME = 'RFID'
 
     def __init__(self, callback=None):
-        self.callback = callback
+        super().__init__(callback)
         self.reader_thread = Thread(target=self.reader_runner, name='reader-thread', daemon=False)
         self.running = False
 

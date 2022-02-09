@@ -35,7 +35,7 @@ from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 import gateway
 from bus.om_bus_client import MessageClient
-from esafe.rfid import RfidDeviceDummy
+from esafe.rfid import RfidDeviceDummy, RfidDevice
 from esafe.rfid.idtronic_M890 import IdTronicM890
 from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
 from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
@@ -208,7 +208,7 @@ def setup_target_platform(target_platform, message_client_name):
             pass
 
     # If the device exists, create the rfid device
-    rfid_device = None
+    rfid_device = None  # type: Optional[RfidDevice]
     if target_platform == Platform.Type.ESAFE:
         if rfid_device_file is not None and os.path.exists(rfid_device_file):
             rfid_device = IdTronicM890(rfid_device_file)
