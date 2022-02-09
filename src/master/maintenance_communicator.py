@@ -17,26 +17,36 @@ The maintenance module contains the MaintenanceService class.
 """
 from __future__ import absolute_import
 
+if False:  # MYPY
+    from typing import Any, Callable
+
 
 class MaintenanceCommunicator(object):
 
     def start(self):
+        # type: () -> None
         raise NotImplementedError()
 
     def stop(self):
+        # type: () -> None
         raise NotImplementedError()
 
     def set_receiver(self, callback):
+        # type: (Callable[[str],Any]) -> None
         raise NotImplementedError()
 
     def is_active(self):
+        # type: () -> bool
         raise NotImplementedError()
 
     def activate(self):
+        # type: () -> None
         raise NotImplementedError()
 
     def deactivate(self, join=True):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def write(self, message):
+        # type: (str) -> None
         raise NotImplementedError()

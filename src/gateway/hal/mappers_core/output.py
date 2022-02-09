@@ -65,6 +65,9 @@ class OutputMapper(object):
             if timer is None or timer <= 0 or timer == 65535:
                 data['timer_type'] = OutputConfiguration.TimerType.INACTIVE
                 data['timer_value'] = 0
+            elif timer <= 3:
+                data['timer_type'] = OutputConfiguration.TimerType.PER_100_MS
+                data['timer_value'] = timer * 10
             else:
                 data['timer_type'] = OutputConfiguration.TimerType.PER_1_S
                 data['timer_value'] = min(timer, 65534)
