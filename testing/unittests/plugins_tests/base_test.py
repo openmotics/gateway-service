@@ -252,6 +252,7 @@ class P1(OMPluginBase):
         self._input_data_version_2 = None
         self._output_data = None
         self._output_data_version_2 = None
+        self._sensor_data = None
         self._event_data = None
 
     @om_expose(auth=True)
@@ -265,6 +266,7 @@ class P1(OMPluginBase):
                 'input_data_version_2': self._input_data_version_2,
                 'output_data': self._output_data,
                 'output_data_version_2': self._output_data_version_2,
+                'sensor_data': self._sensor_data,
                 'event_data': self._event_data}
 
     @input_status
@@ -282,6 +284,10 @@ class P1(OMPluginBase):
     @output_status(version=2)
     def output_version_2(self, output_status_inst):
         self._output_data_version_2 = output_status_inst
+        
+    @sensor_status(version=1)
+    def sensor(self, sensor_status_inst):
+        self._sensor_data = sensor_status_inst
         
     @receive_events
     def recv_events(self, code):
@@ -318,9 +324,13 @@ class P1(OMPluginBase):
                                        'locked': True},
                             'location': {'room_id': 5}}
             controller.process_gateway_event(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE, data=output_event))
+            sensor_event = {'id': 1,
+                            'value': 21.5,
+                            'timestamp': 164434668.79582}
+            controller.process_gateway_event(GatewayEvent(event_type=GatewayEvent.Types.SENSOR_CHANGE, data=sensor_event))
             controller.process_event(1)
 
-            keys = ['input_data', 'input_data_version_2', 'output_data', 'output_data_version_2', 'event_data']
+            keys = ['input_data', 'input_data_version_2', 'output_data', 'output_data_version_2', 'sensor_data', 'event_data']
             start = time.time()
             while time.time() - start < 2:
                 kwargs = {'plugin_web_request': PluginWebRequest(method='html_index', version=1).serialize()}
@@ -334,6 +344,7 @@ class P1(OMPluginBase):
             self.assertEqual(response['input_data_version_2'], {'input_id': 2, 'status': False})
             self.assertEqual(response['output_data'],  [[1, 5]])
             self.assertEqual(response['output_data_version_2'], output_event)
+            self.assertEqual(response['sensor_data'], sensor_event)
             self.assertEqual(response['event_data'], 1)
         finally:
             if controller is not None:
