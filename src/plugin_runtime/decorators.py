@@ -159,7 +159,7 @@ def sensor_status(method=None, version=1):
     Decorator to indicate that the method should receive sensor status messages.
 
     The receiving method should accept sensor_event data, only the sensor that has changed will be sent
-    sample data:  {'id': 1, 'value': 20.5, 'location': {'room_id': 5}}
+    sample data:  {'id': 1, 'value': 20.5, 'timestamp': 164434668.79582}
 
     Important! This method should not block, as this will result in an unresponsive system.
     Please use a separate thread to perform complex actions on sensor status messages.
