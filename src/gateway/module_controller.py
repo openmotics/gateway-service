@@ -21,11 +21,12 @@ import six
 import time
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import ModuleDTO
-from gateway.enums import HardwareType, ModuleType, IndicateType
+from gateway.enums import ModuleType, IndicateType
 from gateway.exceptions import CommunicationFailure
 from gateway.base_controller import BaseController
 from gateway.models import Module, Sensor
 from gateway.mappers.module import ModuleMapper
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Any, Set
@@ -199,9 +200,6 @@ class ModuleController(BaseController):
 
     def master_restore(self, data):
         return self._master_controller.restore(data)
-
-    def sync_master_time(self):  # type: () -> None
-        self._master_controller.sync_time()
 
     def flash_leds(self, led_type, led_id):
         if led_type == IndicateType.SENSOR:

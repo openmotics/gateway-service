@@ -13,10 +13,10 @@ from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
 from gateway.models import Config
 from ioc import SetTestMode, SetUpTestInjections
-from vpn_service import CHECK_CONNECTIVITY_TIMEOUT, DEFAULT_SLEEP_TIME, \
-    REBOOT_TIMEOUT, CertificateFiles, Cloud, ConfigurationTask, \
+from vpn_service import DEFAULT_SLEEP_TIME, \
+    CertificateFiles, Cloud, ConfigurationTask, \
     ConnectivityTask, DataCollector, DebugDumpDataCollector, EventsTask, \
-    HeartbeatService, OpenVPNTask, RebootTask, TaskExecutor, UpdateCertsTask, \
+    HeartbeatService, OpenVPNTask, RebootTask, UpdateCertsTask, \
     Util
 
 
@@ -376,8 +376,8 @@ class VPNServiceTest(TestCase):
         with mock.patch.object(subprocess, 'check_output', return_value=''), \
              mock.patch.object(cloud, 'confirm_client_certs', side_effect=(False, True)), \
              mock.patch.object(cloud, 'issue_client_certs', return_value={'data': {}}) as issue, \
-             mock.patch.object(task, 'new_version', return_value='foo'), \
-             mock.patch.object(task, 'get_cert_files', return_value=files):
+             mock.patch.object(UpdateCertsTask, '_new_version', return_value='foo'), \
+             mock.patch.object(UpdateCertsTask, '_get_cert_files', return_value=files):
             context = {'cloud_enabled': True, 'heartbeat_success': True, 'update_certs': False}
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])
             cloud.issue_client_certs.assert_not_called()
@@ -399,8 +399,8 @@ class VPNServiceTest(TestCase):
              mock.patch.object(cloud, 'authenticate', side_effect=Exception('Invalid certificate')), \
              mock.patch.object(cloud, 'confirm_client_certs', side_effect=(False, True)), \
              mock.patch.object(cloud, 'issue_client_certs', return_value={'data': {}}) as issue, \
-             mock.patch.object(task, 'new_version', return_value='foo'), \
-             mock.patch.object(task, 'get_cert_files', return_value=files):
+             mock.patch.object(UpdateCertsTask, '_new_version', return_value='foo'), \
+             mock.patch.object(UpdateCertsTask, '_get_cert_files', return_value=files):
             context = {'cloud_enabled': True, 'heartbeat_success': True, 'update_certs': True}
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])
             files.activate.assert_called_with('foo')
@@ -416,8 +416,8 @@ class VPNServiceTest(TestCase):
                                side_effect=(False, False,
                                             False, Exception('Invalid certificate'))), \
              mock.patch.object(cloud, 'issue_client_certs', return_value={'data': {}}) as issue, \
-             mock.patch.object(task, 'new_version', return_value='foo'), \
-             mock.patch.object(task, 'get_cert_files', return_value=files):
+             mock.patch.object(UpdateCertsTask, '_new_version', return_value='foo'), \
+             mock.patch.object(UpdateCertsTask, '_get_cert_files', return_value=files):
             context = {'cloud_enabled': True, 'heartbeat_success': True, 'update_certs': True}
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])
             self.assertEqual(list(task.run(context)), [('CLIENT_CERTS_CHANGED', False)])

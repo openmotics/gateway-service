@@ -22,7 +22,7 @@ import logging
 from datetime import datetime
 from gateway.base_controller import BaseController
 from gateway.daemon_thread import DaemonThread
-from gateway.enums import HardwareType, ModuleType
+from gateway.enums import ModuleType
 from gateway.events import GatewayEvent
 from gateway.pubsub import PubSub
 from gateway.dto import RealtimeEnergyDTO, ModuleDTO, TotalEnergyDTO, EnergyModuleDTO
@@ -34,6 +34,7 @@ from gateway.energy.module_helper_energy import EnergyModuleHelper, PowerModuleH
 from gateway.energy.module_helper_p1c import P1ConcentratorHelper
 from gateway.energy.energy_api import DAY, NIGHT, EnergyAPI
 from peewee import prefetch
+from enums import HardwareType
 from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
 

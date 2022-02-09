@@ -145,7 +145,7 @@ class MemoryModelDefinition(object):
         self._loaded_fields.add(field_name)
         return getattr(self, '_{0}'.format(field_name))
 
-    def save(self, activate=True):  # type: (bool) -> None
+    def save(self, commit=True):  # type: (bool) -> None
         for field_name in self._loaded_fields:
             container = getattr(self, '_{0}'.format(field_name))  # type: Union[MemoryFieldContainer, CompositionContainer]
             if self._verbose:
@@ -155,8 +155,8 @@ class MemoryModelDefinition(object):
                     field_name
                 ))
             container.save()
-        if activate:
-            MemoryActivator.activate()
+        if commit:
+            MemoryCommitter.commit()
 
     @classmethod
     def deserialize(cls, data):  # type: (Dict[str, Any]) -> MemoryModelDefinition
@@ -244,12 +244,12 @@ class MemoryModelDefinition(object):
         return cache
 
 
-class MemoryActivator(object):
-    """ Holds a static method to activate memory """
+class MemoryCommitter(object):
+    """ Holds a static method to commit memory """
     @staticmethod
     @Inject
-    def activate(memory_file=INJECTED):  # type: (MemoryFile) -> None
-        memory_file.activate()
+    def commit(memory_file=INJECTED):  # type: (MemoryFile) -> None
+        memory_file.commit()
 
 
 class GlobalMemoryModelDefinition(MemoryModelDefinition):

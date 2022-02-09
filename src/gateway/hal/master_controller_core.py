@@ -22,28 +22,28 @@ import logging
 import struct
 import time
 from datetime import datetime
-from threading import Timer, Lock
+from threading import Lock, Timer
 
-from peewee import DoesNotExist
+from enums import HardwareType, OutputType
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
-    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
-    ShutterDTO, ShutterGroupDTO
-from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, HardwareType, ModuleType
-from gateway.exceptions import UnsupportedException
+    GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
+    OutputDTO, OutputStatusDTO, PulseCounterDTO, ShutterDTO, ShutterGroupDTO
+from gateway.enums import IndicateType, Leds, LedStates, ModuleType, \
+    ShutterEnums
+from gateway.exceptions import CommunicationFailure, UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
-from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from logs import Logs
 from master.core.basic_action import BasicAction
 from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
-from master.core.core_communicator import BackgroundConsumer, CoreCommunicator, \
-    CommunicationBlocker
+from master.core.core_communicator import BackgroundConsumer, \
+    CommunicationBlocker, CoreCommunicator
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.group_action import GroupActionController
@@ -52,14 +52,13 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration, UCanModuleConfiguration
-from master.core.memory_types import MemoryActivator, MemoryAddress
+from master.core.memory_types import MemoryCommitter, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.slave_updater import SlaveUpdater
-from master.core.system_value import Humidity, Temperature, Dimmer
+from master.core.system_value import Dimmer, Humidity, Temperature
 from master.core.system_value import Timer as SVTTimer
-from serial_utils import CommunicationStatus, CommunicationTimedOutException
 from platform_utils import Hardware
-from logs import Logs
+from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
@@ -95,14 +94,13 @@ class MasterCoreController(MasterController):
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
         self._shutter_status = {}  # type: Dict[int, Tuple[Optional[bool], Optional[bool]]]
-        self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
-        self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
         self._discovery_log = []  # type: List[Dict[str, Any]]
         self._discovery_log_lock = Lock()
         self._last_health_warning = 0
         self._last_health_warning_timestamp = 0.0
+        self._pulse_counter_values = {}  # type: Dict[int, Optional[int]]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
@@ -161,9 +159,7 @@ class MasterCoreController(MasterController):
     def _process_event(self, core_event):
         log_event = True
         try:
-            if core_event.type in [MasterCoreEvent.Types.LED_BLINK,
-                                   MasterCoreEvent.Types.LED_ON,
-                                   MasterCoreEvent.Types.BUTTON_PRESS]:
+            if core_event.type in [MasterCoreEvent.Types.BUTTON_PRESS]:
                 log_event = False
             if core_event.type == MasterCoreEvent.Types.OUTPUT:
                 output_id = core_event.data['output']
@@ -194,6 +190,8 @@ class MasterCoreController(MasterController):
                                                                                      'value': value['value']})
                     self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
                     self._sensor_states[sensor_id][value['type']] = value['value']
+            elif core_event.type == MasterCoreEvent.Types.PULSE_COUNTER:
+                self._pulse_counter_values[core_event.data['pulse_counter']] = core_event.data['value']
             elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
                 self._handle_execute_event(action=core_event.data['action'],
                                            device_nr=core_event.data['device_nr'],
@@ -226,7 +224,8 @@ class MasterCoreController(MasterController):
             elif core_event.type == MasterCoreEvent.Types.MODULE_NOT_RESPONDING:
                 log_event = False  # Don't log MODULE_NOT_RESPONDING separately
                 address = core_event.data['address']
-                if '.000.000.' in address:
+                device_type = chr(int(address.split('.')[0]))
+                if device_type != device_type.upper():  # Means virtual, internal or emulated
                     logger.info('Got firmware information: {0} (internal module)'.format(address))
                 else:
                     logger.info('Got firmware information: {0} (timeout)'.format(address))
@@ -300,8 +299,6 @@ class MasterCoreController(MasterController):
         # type: () -> None
         try:
             # Refresh if required
-            if self._time_last_updated + 300 < time.time():
-                self._check_master_time()
             if self._refresh_input_states():
                 self._set_master_state(True)
             if self._sensor_last_updated + self._sensor_interval < time.time():
@@ -339,46 +336,13 @@ class MasterCoreController(MasterController):
                                                             fields={})[module_type]
         return range(module_count * amount_per_module)
 
-    def _check_master_time(self):
-        # type: () -> None
-        date_time = self._master_communicator.do_command(command=CoreAPI.get_date_time(),
-                                                         fields={})
-        if date_time is None:
-            return
-        try:
-            core_value = datetime(2000 + date_time['year'], date_time['month'], date_time['day'],
-                                  date_time['hours'], date_time['minutes'], date_time['seconds'])
-            core_weekday = date_time['weekday']
-        except ValueError:
-            core_value = datetime(2000, 1, 1, 0, 0, 0)
-            core_weekday = 0
-
-        now = datetime.now()
-        expected_weekday = now.weekday() + 1
-        expected_value = now.replace(microsecond=0)
-
-        sync = False
-        if abs((core_value - expected_value).total_seconds()) > 180:  # Allow 3 minutes difference
-            sync = True
-        if core_weekday != expected_weekday:
-            sync = True
-
-        if sync is True:
-            if expected_value.hour == 0 and expected_value.minute < 15:
-                logger.info('Skip setting time between 00:00 and 00:15')
-            else:
-                logger.info('Time - core: {0} ({1}) - gateway: {2} ({3})'.format(
-                    core_value, core_weekday, expected_value, expected_weekday)
-                )
-                self.sync_time()
-        self._time_last_updated = time.time()
-
     #######################
     # Internal management #
     #######################
 
     def start(self):
         super(MasterCoreController, self).start()
+        self._memory_file.start()
         self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
                                                     interval=1, delay=10)
@@ -392,6 +356,7 @@ class MasterCoreController(MasterController):
         if self._synchronization_thread is not None:
             self._synchronization_thread.stop()
             self._synchronization_thread = None
+        self._memory_file.stop()
         super(MasterCoreController, self).stop()
 
     def set_plugin_controller(self, plugin_controller):
@@ -498,18 +463,25 @@ class MasterCoreController(MasterController):
         return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
+        # type: () -> Tuple[int,...]
         version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                        fields={})['version']
-        return tuple([int(x) for x in version.split('.')])
+        return tuple(map(int, version.split('.')))
 
-    def sync_time(self):
-        # type: () -> None
-        logger.info('Setting the time on the core.')
-        now = datetime.now()
+    def set_datetime(self, dt):
+        # type: (datetime) -> None
+        logger.info('Setting the datetime on the core to {0}'.format(dt.strftime('%Y-%m-%d %H:%M:%S')))
         self._master_communicator.do_command(command=CoreAPI.set_date_time(),
-                                             fields={'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
-                                                     'weekday': now.isoweekday(),
-                                                     'day': now.day, 'month': now.month, 'year': now.year % 100})
+                                             fields={'hours': dt.hour, 'minutes': dt.minute, 'seconds': dt.second,
+                                                     'weekday': dt.isoweekday(),
+                                                     'day': dt.day, 'month': dt.month, 'year': dt.year % 100})
+
+    def get_datetime(self):
+        # type: () -> datetime
+        response = self._master_communicator.do_command(command=CoreAPI.get_date_time(),
+                                                        fields={})
+        return datetime(year=2000 + response['year'], month=response['month'], day=response['day'],
+                        hour=response['hours'], minute=response['minutes'], second=response['seconds'])
 
     # Input
 
@@ -535,8 +507,8 @@ class MasterCoreController(MasterController):
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
         for input_dto in inputs:
             input_ = InputMapper.dto_to_orm(input_dto)
-            input_.save(activate=False)
-        MemoryActivator.activate()
+            input_.save(commit=False)
+        MemoryCommitter.commit()
 
     def _refresh_input_states(self):
         # type: () -> bool
@@ -588,7 +560,7 @@ class MasterCoreController(MasterController):
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
-            return OutputDTO(id=output.id)
+            return OutputDTO(id=output.id, output_type=OutputType.SHUTTER_RELAY)
         output_dto = OutputMapper.orm_to_dto(output)
         CANFeedbackController.load_output_led_feedback_configuration(output, output_dto)
         return output_dto
@@ -602,12 +574,18 @@ class MasterCoreController(MasterController):
     def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         for output_dto in outputs:
             output = OutputMapper.dto_to_orm(output_dto)
+            if output.output_type == OutputType.SHUTTER_RELAY and not output.is_shutter:
+                # Configure the output as a shutter
+                self._configure_output_shutter(output=output, is_shutter=True)
+            elif output.output_type != OutputType.SHUTTER_RELAY and output.is_shutter:
+                # Configure the output as output
+                self._configure_output_shutter(output=output, is_shutter=False)
             if output.is_shutter:
-                # Shutter outputs cannot be changed
+                # Any further configuration not required
                 continue
-            output.save(activate=False)
-            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
-        MemoryActivator.activate()
+            output.save(commit=False)
+            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, commit=False)
+        MemoryCommitter.commit()
 
     def load_output_status(self):
         # type: () -> List[OutputStatusDTO]
@@ -623,6 +601,29 @@ class MasterCoreController(MasterController):
                                                  dimmer=Dimmer.system_value_to_dimmer(data['dimmer']),
                                                  locked=output.locking.locked))
         return output_status
+
+    def _configure_output_shutter(self, output, is_shutter):  # type: (OutputConfiguration, bool) -> None
+        shutter = ShutterConfiguration(output.id // 2)
+        output_module = output.module
+        if is_shutter:
+            shutter.outputs.output_0 = shutter.id * 2
+            output_set = shutter.output_set
+            self._output_shutter_map[shutter.outputs.output_0] = shutter.id
+            self._output_shutter_map[shutter.outputs.output_1] = shutter.id
+            self.set_output(output_id=shutter.outputs.output_0, state=False)
+            self.set_output(output_id=shutter.outputs.output_1, state=False)
+            output.output_type = OutputType.SHUTTER_RELAY
+        else:
+            output_set = shutter.output_set  # Previous outputs need to be restored
+            self._output_shutter_map.pop(shutter.outputs.output_0, None)
+            self._output_shutter_map.pop(shutter.outputs.output_1, None)
+            shutter.outputs.output_0 = 255 * 2
+            if output.output_type == OutputType.SHUTTER_RELAY:
+                output.output_type = OutputType.OUTLET
+        setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
+        output.save(commit=False)
+        shutter.save(commit=False)
+        output_module.save(commit=False)
 
     # Shutters
 
@@ -673,28 +674,15 @@ class MasterCoreController(MasterController):
     def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
         for shutter_dto in shutters:
             # Validate whether output module exists
-            output_module = OutputConfiguration(shutter_dto.id * 2).module
+            output = OutputConfiguration(shutter_dto.id * 2)
+            if not output.is_shutter:
+                continue  # Not configured as a shutter
             # Configure shutter
+            output_module = output.module
             shutter = ShutterMapper.dto_to_orm(shutter_dto)
-            if shutter.timer_down not in [0, 65535] and shutter.timer_up not in [0, 65535]:
-                # Shutter is "configured"
-                shutter.outputs.output_0 = shutter.id * 2
-                output_set = shutter.output_set
-                self._output_shutter_map[shutter.outputs.output_0] = shutter.id
-                self._output_shutter_map[shutter.outputs.output_1] = shutter.id
-                is_configured = True
-            else:
-                output_set = shutter.output_set  # Previous outputs need to be restored
-                self._output_shutter_map.pop(shutter.outputs.output_0, None)
-                self._output_shutter_map.pop(shutter.outputs.output_1, None)
-                shutter.outputs.output_0 = 255 * 2
-                is_configured = False
-            shutter.save(activate=False)
-            # Mark related Outputs as "occupied by shutter"
-            setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
-            output_module.save(activate=False)
-        MemoryActivator.activate()
+            output_module.save(commit=False)
+        MemoryCommitter.commit()
 
     def _refresh_shutter_states(self):
         status_data = {x.id: x for x in self.load_output_status()}  # type: Dict[int, OutputStatusDTO]
@@ -779,7 +767,7 @@ class MasterCoreController(MasterController):
         return [global_feedbacks.get(i, GlobalFeedbackDTO(id=i)) for i in range(32)]
 
     def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
-        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, activate=True)
+        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, commit=True)
 
     # Sensors
 
@@ -829,8 +817,8 @@ class MasterCoreController(MasterController):
     def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         for sensor_dto in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto)
-            sensor.save(activate=False)
-        MemoryActivator.activate()
+            sensor.save(commit=False)
+        MemoryCommitter.commit()
 
     def _refresh_sensor_states(self):
         amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
@@ -881,56 +869,71 @@ class MasterCoreController(MasterController):
 
     # PulseCounters
 
-    def _load_pulse_counter_module_ids(self):
-        ids = []
-        for module_id in self._enumerate_io_modules('input', amount_per_module=1):
-            input_module_info = InputModuleConfiguration(module_id)
-            if input_module_info.device_type == 'b':
-                continue  # Skip emulated modules since they don't keep counts
-            if input_module_info.device_type == 'i' and '.000.000.' not in input_module_info.address:
-                continue  # Skip virtual modules
-            ids.append(module_id)
-        return ids
+    def _load_pulse_counter_input_mapping(self):
+        mapping = {}
+        for input_id in self._enumerate_io_modules('input', amount_per_module=8):
+            input_orm = InputConfiguration(input_id)
+            if input_orm.module.hardware_type not in [HardwareType.PHYSICAL, HardwareType.INTERNAL]:
+                continue  # Only physical & internal modules can count
+            if input_orm.pulse_counter_id < 32:
+                mapping[input_orm.pulse_counter_id] = input_id
+        return mapping
 
     @staticmethod
-    def _generate_pulse_counter_dto(pulse_counter_id):
+    def _generate_pulse_counter_dto(pulse_counter_id, input_id):
         return PulseCounterDTO(id=pulse_counter_id,
-                               name='PulseCounter Input {0}'.format(pulse_counter_id),
-                               input_id=None,
+                               name='PulseCounter {0}'.format(pulse_counter_id),
+                               input_id=input_id,
                                persistent=True)
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
-        _ = InputConfiguration(pulse_counter_id)
-        return MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id)
+        mapping = self._load_pulse_counter_input_mapping()
+        return MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id,
+                                                                input_id=mapping.get(pulse_counter_id))
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         pulse_counters = []
-        for module_id in self._load_pulse_counter_module_ids():
-            for i in range(8):
-                pulse_counter_id = module_id * 8 + i
-                pulse_counters.append(MasterCoreController._generate_pulse_counter_dto(pulse_counter_id))
+        mapping = self._load_pulse_counter_input_mapping()
+        for pulse_counter_id in range(self.get_amount_of_pulse_counters()):
+            pulse_counters.append(
+                MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id,
+                                                                 input_id=mapping.get(pulse_counter_id))
+            )
         return pulse_counters
 
     def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
-        # There are no real settings to pulse counters, so they cannot be saved
-        return
+        current_mapping = self._load_pulse_counter_input_mapping()
+        old_used_inputs = set(current_mapping.values())
+        new_mapping = copy.copy(current_mapping)
+        new_mapping.update({pc.id: pc.input_id for pc in pulse_counters if pc.id < 32})
+        new_used_inputs = set(new_mapping.values())
+        if len(new_mapping.values()) != len(new_used_inputs):
+            # Since .values() contains duplicate values, and the set `new_used_inputs` not, a difference
+            # in their length will indicate duplicates
+            raise RuntimeError('Duplicate mapping detected between PulseCounters and Inputs')
+        for removed_input_id in old_used_inputs - new_used_inputs:
+            input_orm = InputConfiguration(removed_input_id)
+            input_orm.pulse_counter_id = 255
+            input_orm.save(commit=False)
+        for pulse_counter_id, input_id in new_mapping.items():
+            input_orm = InputConfiguration(input_id)
+            input_orm.pulse_counter_id = pulse_counter_id
+            input_orm.save(commit=False)
+        MemoryCommitter.commit()
 
     def get_pulse_counter_values(self):  # type: () -> Dict[int, Optional[int]]
-        values = {i: None for i in range(self.get_amount_of_pulse_counters())}  # type: Dict[int, Optional[int]]
-        return values  # TODO: Re-enable below code once the firmware issues are fixed
-        # for module_id in self._load_pulse_counter_module_ids():
-        #     try:
-        #         counter_values = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
-        #                                                               fields={'input_nr': module_id * 8})
-        #         for input_id in range(8):
-        #             values[module_id * 8 + input_id] = counter_values['counter_{0}'.format(input_id)]
-        #     except Exception as ex:
-        #         logger.error('Could not request pulse counters for module {0}: {1}'.format(module_id, ex))
-        # return values
+        if len(self._pulse_counter_values) != self.get_amount_of_pulse_counters():
+            # Force refresh pulse counter values
+            for series in range(4):
+                result = self._master_communicator.do_command(command=CoreAPI.pulse_counter_values(),
+                                                              fields={'series': series})
+                for counter_id in range(8):
+                    self._pulse_counter_values[series * 8 + counter_id] = result['counter_{0}'.format(counter_id)]
+        return self._pulse_counter_values
 
     def get_amount_of_pulse_counters(self):  # type: () -> int
         _ = self
-        return 640
+        return 32
 
     # (Group)Actions
 
@@ -952,12 +955,12 @@ class MasterCoreController(MasterController):
     def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
         for group_action_dto in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto)
-            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, activate=False)
-        MemoryActivator.activate()
+            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, commit=False)
+        MemoryCommitter.commit()
 
     # Module management
 
-    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+    def drive_led(self, led, state):  # type: (str, str) -> None
         led_to_action = {Leds.EXPANSION: 0,
                          Leds.P1: 6,
                          Leds.LAN_GREEN: 7,
@@ -966,20 +969,14 @@ class MasterCoreController(MasterController):
         if led not in led_to_action:
             return
         action = led_to_action[led]
-        blinking_to_parameter = {LedStates.BLINKING_25: 25,
-                                 LedStates.BLINKING_50: 50,
-                                 LedStates.BLINKING_75: 75,
-                                 LedStates.SOLID: 100}
-        if mode not in blinking_to_parameter:
-            return
-        extra_parameter = blinking_to_parameter[mode]
-        state = self._led_drive_states.get(led)
-        if state != (on, mode):
-            self._do_basic_action(BasicAction(action_type=210,
-                                              action=action,
-                                              device_nr=1 if on else 0,
-                                              extra_parameter=extra_parameter))
-            self._led_drive_states[led] = on, mode
+        extra_parameter = {LedStates.BLINKING_25: 25,
+                           LedStates.BLINKING_50: 50,
+                           LedStates.BLINKING_75: 75,
+                           LedStates.SOLID: 100}.get(state, 100)
+        self._do_basic_action(BasicAction(action_type=210,
+                                          action=action,
+                                          device_nr=0 if state == LedStates.OFF else 1,
+                                          extra_parameter=extra_parameter))
 
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
@@ -1030,8 +1027,7 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            if output_module_info.address[4:15] in ['000.000.000', '000.000.001',
-                                                    '000.000.002', '000.000.003']:
+            if output_module_info.hardware_type == HardwareType.INTERNAL:
                 outputs.append({'o': 'P',
                                 'd': 'F'}.get(device_type, device_type))
             else:
@@ -1047,18 +1043,17 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            if device_type == 'i' and input_module_info.address.endswith('000.000.000'):
+            if input_module_info.hardware_type == HardwareType.INTERNAL:
                 inputs.append('J')  # Internal input module
-            elif device_type == 'b':
+            elif input_module_info.hardware_type == HardwareType.EMULATED:
                 can_inputs.append('I')  # uCAN input "module"
-            elif device_type in ['I', 'i']:
+            else:
                 inputs.append(device_type)  # Slave and virtual input module
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
-            device_type = sensor_module_info.device_type
-            if device_type == 'T':
+            if sensor_module_info.hardware_type == HardwareType.PHYSICAL:
                 inputs.append('T')
-            elif device_type == 's':
+            elif sensor_module_info.hardware_type == HardwareType.EMULATED:
                 can_inputs.append('T')  # uCAN sensor "module"
         for module_id in range(nr_of_can_controls):
             can_inputs.append('C')
@@ -1132,20 +1127,12 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if device_type == 'i':
-                if '.000.000.' in input_module_info.address:
-                    hardware_type = HardwareType.INTERNAL
-                else:
-                    hardware_type = HardwareType.VIRTUAL
-            elif device_type == 'b':
-                hardware_type = HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=input_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=input_module_info.hardware_type,
                             order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
+            if input_module_info.hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _get_version(input_module_info.address)
             information.append(dto)
 
@@ -1153,23 +1140,17 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            hardware_type = HardwareType.PHYSICAL
-            if device_type in ['l', 'o', 'd']:
-                if '.000.000.' in output_module_info.address:
-                    hardware_type = HardwareType.INTERNAL
-                else:
-                    hardware_type = HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
-                            hardware_type=hardware_type,
+                            hardware_type=output_module_info.hardware_type,
                             order=module_id)
             shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                                     address='114.{0}'.format(output_module_info.address[4:]),
                                     module_type=ModuleType.SHUTTER,
-                                    hardware_type=hardware_type,
+                                    hardware_type=output_module_info.hardware_type,
                                     order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
+            if output_module_info.hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _get_version(output_module_info.address)
                 shutter_dto.online = dto.online
                 shutter_dto.hardware_version = dto.hardware_version
@@ -1433,7 +1414,7 @@ class MasterCoreController(MasterController):
                 page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
                 self._memory_file.write({page_address: page_data})
             current_page -= 1
-        self._memory_file.activate()
+        self._memory_file.commit()
         self.cold_reset()  # Cold reset, enforcing a reload of all settings
 
     def factory_reset(self, can=False):
@@ -1517,14 +1498,6 @@ class MasterCoreController(MasterController):
         return False  # TODO: Implement
 
     # Legacy
-
-    def load_scheduled_actions(self):
-        # type: (Any) -> List[LegacyScheduleDTO]
-        return []
-
-    def load_startup_action(self):
-        # type: (Any) -> LegacyStartupActionDTO
-        return LegacyStartupActionDTO(actions=[])
 
     def load_dimmer_configuration(self):
         # type: () -> DimmerConfigurationDTO

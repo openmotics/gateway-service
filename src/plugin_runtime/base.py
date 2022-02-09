@@ -271,13 +271,14 @@ class PluginWebResponse(object):
     """
     VARIABLES_TO_SERIALIZE = ['status_code', 'body', 'headers', 'path', 'version']
 
-    def __init__(self, status_code=None, body=None, headers=None, path=None, version=2):
-        # type: (Optional[int], Optional[Any], Optional[Dict[str, str]], Optional[str], int) -> None
+    def __init__(self, status_code=200, body=None, headers=None, path=None, version=2):
+        # type: (int, Optional[Any], Optional[Dict[str, str]], Optional[str], int) -> None
         self.status_code = status_code
         self.body = body
         self.headers = headers or {}
         self.path = path
         self.version = version
+
     def serialize(self):
         # type: () -> str
         obj_dict = {}
@@ -320,6 +321,7 @@ class PluginWebResponse(object):
         )
         return '<PluginWebResponse>   {}'.format(vars_str)
 
+
 class PluginWebRequest(object):
     """
     Class that will hold the data for an api request to the plugin
@@ -344,7 +346,6 @@ class PluginWebRequest(object):
             else:
                 obj_dict[var] = getattr(self, var)
         return json.dumps(obj_dict)
-
 
     @staticmethod
     def deserialize(serial_str):

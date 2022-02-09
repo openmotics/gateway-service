@@ -35,6 +35,8 @@ from gateway.models import Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
+from platform_utils import Platform
+import gateway
 
 
 if False:  # MYPY
@@ -54,7 +56,6 @@ if False:  # MYPY
     from gateway.scheduling_controller import SchedulingController
     from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
-    from gateway.system_controller import SystemController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.ventilation_controller import VentilationController
     from gateway.webservice import WebInterface, WebService
@@ -152,7 +153,6 @@ class OpenmoticsService(object):
               pulse_counter_controller=INJECTED,  # type: PulseCounterController
               sensor_controller=INJECTED,  # type: SensorController
               shutter_controller=INJECTED,  # type: ShutterController
-              system_controller=INJECTED,  # type: SystemController
               group_action_controller=INJECTED,  # type: GroupActionController
               frontpanel_controller=INJECTED,  # type: FrontpanelController
               module_controller=INJECTED,  # type: ModuleController
@@ -167,7 +167,7 @@ class OpenmoticsService(object):
               update_controller=INJECTED  # type: UpdateController
               ):
         """ Main function. """
-        logger.info('Starting OM core service...')
+        logger.info('Starting OM core service (%s) [%s]... ', gateway.__version__, Platform.get_platform())
 
         # MasterController should be running
         master_controller.start()
@@ -222,7 +222,6 @@ class OpenmoticsService(object):
         pulse_counter_controller.start()
         sensor_controller.start()
         shutter_controller.start()
-        system_controller.start()
         group_action_controller.start()
         if uart_controller:
             uart_controller.start()
@@ -247,7 +246,6 @@ class OpenmoticsService(object):
             output_controller.stop()
             input_controller.stop()
             pulse_counter_controller.stop()
-            system_controller.stop()
             sensor_controller.stop()
             shutter_controller.stop()
             group_action_controller.stop()

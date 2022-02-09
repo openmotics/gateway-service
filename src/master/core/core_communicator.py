@@ -238,7 +238,7 @@ class CoreCommunicator(object):
 
             threshold = time.time() - self._debug_buffer_duration
             self._debug_buffer['write'][time.time()] = data
-            for t in self._debug_buffer['write'].keys():
+            for t in list(self._debug_buffer['write'].keys()):
                 if t < threshold:
                     del self._debug_buffer['write'][t]
 
@@ -433,7 +433,7 @@ class CoreCommunicator(object):
                 logger.debug('Reading from Core serial: %s', Printable(message))
                 threshold = time.time() - self._debug_buffer_duration
                 self._debug_buffer['read'][time.time()] = message
-                for t in self._debug_buffer['read'].keys():
+                for t in list(self._debug_buffer['read'].keys()):
                     if t < threshold:
                         del self._debug_buffer['read'][t]
 

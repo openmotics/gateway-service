@@ -70,6 +70,9 @@ class OutputModuleConfiguration(MemoryModelDefinition):
     firmware_version: str
     shutter_config: _ShutterComposition
 
+    @property
+    def hardware_type(self) -> str: ...
+
 
 class OutputConfiguration(MemoryModelDefinition):
     class TimerType(MemoryEnumDefinition):
@@ -111,6 +114,9 @@ class InputModuleConfiguration(MemoryModelDefinition):
     address: str
     firmware_version: str
 
+    @property
+    def hardware_type(self) -> str: ...
+
 
 class InputConfiguration(MemoryModelDefinition):
     class _InputConfigComposition(CompositeMemoryModelDefinition):
@@ -133,6 +139,7 @@ class InputConfiguration(MemoryModelDefinition):
     module: InputModuleConfiguration
     input_config: _InputConfigComposition
     dali_mapping: _DALIInputComposition
+    pulse_counter_id: int
     name: str
     input_link: _InputLink
     basic_action_press: BasicAction
@@ -153,6 +160,9 @@ class SensorModuleConfiguration(MemoryModelDefinition):
     device_type: str
     address: str
     firmware_version: str
+
+    @property
+    def hardware_type(self) -> str: ...
 
 
 class SensorConfiguration(MemoryModelDefinition):
@@ -209,6 +219,9 @@ class CanControlModuleConfiguration(MemoryModelDefinition):
     id: int
     device_type: str
     address: str
+
+    @property
+    def hardware_type(self) -> str: ...
 
 
 class UCanModuleConfiguration(MemoryModelDefinition):

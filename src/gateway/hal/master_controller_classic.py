@@ -27,26 +27,26 @@ from threading import Lock, Timer
 
 import six
 
+from enums import HardwareType
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GlobalRTD10DTO, GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, \
-    LegacyStartupActionDTO, MasterSensorDTO, ModuleDTO, OutputDTO, \
-    OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
-    ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
-    ThermostatGroupDTO
-from gateway.enums import ShutterEnums, HardwareType, ModuleType
-from gateway.exceptions import UnsupportedException
+    GlobalRTD10DTO, GroupActionDTO, InputDTO, InputStatusDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
+    PumpGroupDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
+    ThermostatDTO, ThermostatGroupDTO
+from gateway.enums import ModuleType, ShutterEnums
+from gateway.exceptions import CommunicationFailure, MasterUnavailable, \
+    UnsupportedException
 from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
     GlobalFeedbackMapper, GlobalRTD10Mapper, GroupActionMapper, InputMapper, \
-    LegacyScheduleMapper, LegacyStartupActionMapper, OutputMapper, \
-    PulseCounterMapper, PumpGroupMapper, RTD10Mapper, SensorMapper, \
-    ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
+    OutputMapper, PulseCounterMapper, PumpGroupMapper, RTD10Mapper, \
+    SensorMapper, ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
     ThermostatMapper
-from gateway.exceptions import CommunicationFailure, MasterUnavailable
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from logs import Logs
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
 from master.classic.eeprom_models import CoolingConfiguration, \
@@ -62,7 +62,6 @@ from master.classic.master_heartbeat import MasterHeartbeat
 from master.classic.slave_updater import SlaveUpdater
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
-from logs import Logs
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple, Set
@@ -97,7 +96,6 @@ class MasterClassicController(MasterController):
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
         self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
-        self._time_last_updated = 0.0
         self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
@@ -144,9 +142,6 @@ class MasterClassicController(MasterController):
                 self._master_version_last_updated = now
                 self._register_version_depending_background_consumers()
             # Validate communicator checks
-            if self._time_last_updated < now - 300:
-                self._check_master_time()
-                self._time_last_updated = now
             if self._settings_last_updated < now - 900:
                 self._check_master_settings()
                 self._settings_last_updated = now
@@ -184,34 +179,6 @@ class MasterClassicController(MasterController):
                                self._on_master_shutter_change)
         )
         self._background_consumers_registered = True
-
-    @communication_enabled
-    def _check_master_time(self):
-        # type: () -> None
-        """
-        Validates the master's time with the Gateway time
-        """
-        status = self._master_communicator.do_command(master_api.status())
-        master_time = datetime(1, 1, 1, status['hours'], status['minutes'], status['seconds'])
-
-        now = datetime.now()
-        expected_weekday = now.weekday() + 1
-        expected_time = now.replace(year=1, month=1, day=1, microsecond=0)
-
-        sync = False
-        if abs((master_time - expected_time).total_seconds()) > 180:  # Allow 3 minutes difference
-            sync = True
-        if status['weekday'] != expected_weekday:
-            sync = True
-
-        if sync is True:
-            logger.info('Time - master: {0} ({1}) - gateway: {2} ({3})'.format(
-                master_time, status['weekday'], expected_time, expected_weekday)
-            )
-            if expected_time.hour == 0 and expected_time.minute < 15:
-                logger.info('Skip setting time between 00:00 and 00:15')
-            else:
-                self.sync_time()
 
     @communication_enabled
     def _check_master_settings(self):
@@ -378,8 +345,7 @@ class MasterClassicController(MasterController):
 
     def get_master_online(self):
         # type: () -> bool
-        return self._time_last_updated > time.time() - 900 \
-            and self._heartbeat.is_online()
+        return self._heartbeat.is_online()
 
     def get_communicator_health(self):
         # type: () -> HEALTH
@@ -387,6 +353,7 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def get_firmware_version(self):
+        # type: () -> Tuple[int,...]
         out_dict = self._master_communicator.do_command(master_api.status())
         return int(out_dict['f1']), int(out_dict['f2']), int(out_dict['f3'])
 
@@ -464,7 +431,7 @@ class MasterClassicController(MasterController):
     def set_output(self, output_id, state, dimmer=None, timer=None):
         if output_id is None or output_id < 0 or output_id > 240:
             raise ValueError('Output ID {0} not in range 0 <= id <= 240'.format(output_id))
-        if dimmer is not None and dimmer < 0 or dimmer > 100:
+        if dimmer is not None and (dimmer < 0 or dimmer > 100):
             raise ValueError('Dimmer value {0} not in [0, 100]'.format(dimmer))
         if timer is not None and timer not in [150, 450, 900, 1500, 2220, 3120]:
             raise ValueError('Timer value {0} not in [150, 450, 900, 1500, 2220, 3120]'.format(timer))
@@ -1381,16 +1348,22 @@ class MasterClassicController(MasterController):
         return {'output': ret}
 
     @communication_enabled
-    def sync_time(self):
-        # type: () -> None
-        logger.info('Setting the time on the master.')
-        now = datetime.now()
+    def set_datetime(self, dt):
+        # type: (datetime) -> None
+        logger.info('Setting the datetime on the master to {0}'.format(dt.strftime('%Y-%m-%d %H:%M:%S')))
         self._master_communicator.do_command(
             master_api.set_time(),
-            {'sec': now.second, 'min': now.minute, 'hours': now.hour,
-             'weekday': now.isoweekday(), 'day': now.day, 'month': now.month,
-             'year': now.year % 100}
+            {'sec': dt.second, 'min': dt.minute, 'hours': dt.hour,
+             'weekday': dt.isoweekday(),
+             'day': dt.day, 'month': dt.month, 'year': dt.year % 100}
         )
+
+    @communication_enabled
+    def get_datetime(self):
+        # type: () -> datetime
+        response = self._master_communicator.do_command(master_api.get_time())
+        return datetime(year=2000 + response['year'], month=response['month'], day=response['day'],
+                        hour=response['hours'], minute=response['min'], second=response['sec'])
 
     def get_configuration_dirty_flag(self):
         # type: () -> bool
@@ -1432,7 +1405,7 @@ class MasterClassicController(MasterController):
         except Exception:
             logger.exception('Could not process initialization message')
 
-    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+    def drive_led(self, led, state):  # type: (str, str) -> None
         raise UnsupportedException()
 
     @communication_enabled
@@ -1568,35 +1541,6 @@ class MasterClassicController(MasterController):
         for group_action in group_actions:
             batch.append(GroupActionMapper.dto_to_orm(group_action))
         self._eeprom_controller.write_batch(batch)
-
-    # Schedules
-
-    @communication_enabled
-    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
-        classic_object = self._eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id)
-        return LegacyScheduleMapper.orm_to_dto(classic_object)
-
-    @communication_enabled
-    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
-        return [LegacyScheduleMapper.orm_to_dto(o)
-                for o in self._eeprom_controller.read_all(ScheduledActionConfiguration)]
-
-    @communication_enabled
-    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
-        batch = []
-        for schedule in scheduled_actions:
-            batch.append(LegacyScheduleMapper.dto_to_orm(schedule))
-        self._eeprom_controller.write_batch(batch)
-
-    @communication_enabled
-    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
-        classic_object = self._eeprom_controller.read(StartupActionConfiguration)
-        return LegacyStartupActionMapper.orm_to_dto(classic_object)
-
-    @communication_enabled
-    def save_startup_action(self, startup_action):
-        # type: (LegacyStartupActionDTO) -> None
-        self._eeprom_controller.write(LegacyStartupActionMapper.dto_to_orm(startup_action))
 
     # Dimmer functions
 

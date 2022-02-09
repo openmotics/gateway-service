@@ -22,7 +22,7 @@ import mock
 from datetime import datetime
 from peewee import SqliteDatabase
 from gateway.events import GatewayEvent
-from gateway.enums import EnergyEnums, HardwareType, ModuleType
+from gateway.enums import EnergyEnums, ModuleType
 from gateway.pubsub import PubSub
 from gateway.dto import ModuleDTO, EnergyModuleDTO, RealtimeEnergyDTO, TotalEnergyDTO
 from gateway.energy_module_controller import EnergyModuleController
@@ -32,6 +32,7 @@ from gateway.energy.energy_communicator import EnergyCommunicator
 from ioc import SetTestMode, SetUpTestInjections
 from serial_utils import RS485
 from serial_test import SerialMock, sin, sout
+from enums import HardwareType
 
 MODELS = [Module, EnergyModule, EnergyCT]
 

@@ -27,7 +27,7 @@ from master.maintenance_communicator import MaintenanceCommunicator
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Optional
+    from typing import Any, Callable, Optional
     from master.core.memory_file import MemoryFile
     from serial import Serial
 
@@ -43,36 +43,43 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
         self._memory_file = memory_file
         self._write_lock = Lock()
 
-        self._receiver_callback = None
+        self._receiver_callback = None  # type: Optional[Callable[[str],Any]]
         self._maintenance_active = False
         self._stopped = True
         self._read_data_thread = None  # type: Optional[BaseThread]
         self._active = False
 
     def start(self):
+        # type: () -> None
         self._stopped = False
         self._read_data_thread = BaseThread(name='maintenanceread', target=self._read_data)
         self._read_data_thread.daemon = True
         self._read_data_thread.start()
 
     def stop(self):
+        # type: () -> None
         self._stopped = True
 
     def is_active(self):
+        # type: () -> bool
         return self._active
 
     def activate(self):
+        # type: () -> None
         self._active = True  # Core has a separate serial port
 
     def deactivate(self, join=True):
+        # type: (bool) -> None
         _ = join
         self._active = False  # Core has a separate serial port
         self._memory_file.invalidate_cache(reason='maintenance exit')
 
     def set_receiver(self, callback):
+        # type: (Callable[[str],Any]) -> None
         self._receiver_callback = callback
 
     def _read_data(self):
+        # type: () -> None
         data = bytearray()
         previous_length = 0
         while not self._stopped:
@@ -107,6 +114,7 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
                     logger.exception('Unexpected exception during maintenance callback')
 
     def write(self, message):
+        # type: (str) -> None
         if message is None:
             return
         with self._write_lock:

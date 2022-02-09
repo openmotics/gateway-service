@@ -14,10 +14,10 @@ from six.moves.queue import Empty, Full, Queue
 from gateway.daemon_thread import BaseThread
 from toolbox import PluginIPCReader, PluginIPCWriter
 from plugin_runtime.base import PluginWebRequest, PluginWebResponse
+from gateway.webservice import WebInterface, log_access
 
 if False:  # MYPY
     from typing import Any, Dict, Callable, List, Optional, AnyStr
-    from gateway.webservice import WebInterface
 
 logger_ = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ class Service(object):
                 return self
         return None
 
+    @log_access
     @cherrypy.expose
     def index(self, method, plugin_web_request, *args, **kwargs):
         # type: (str, PluginWebRequest, Any, Any) -> Optional[AnyStr]
@@ -299,6 +300,14 @@ class PluginRunner(object):
             self._do_async(action='thermostat_group_status', payload=payload, should_filter=True, action_version=action_version)
         else:
             self.logger('Thermostat group status version {} not supported.'.format(action_version))
+
+    def process_sensor_status(self, data, action_version=1):
+        if action_version in [1]:
+            event_json = data.serialize()
+            payload = {'event': event_json}
+            self._do_async(action='sensor_status', payload=payload, should_filter=True, action_version=action_version)
+        else:
+            self.logger('Sensor status version {} not supported.'.format(action_version))
 
     def process_event(self, code):
         self._do_async('receive_events', {'code': code}, should_filter=True)

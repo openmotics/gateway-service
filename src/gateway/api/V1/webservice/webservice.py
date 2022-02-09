@@ -30,7 +30,7 @@ from gateway.exceptions import ItemDoesNotExistException, UnAuthorizedException,
     ForbiddenException, ParseException, WebServiceException, \
     InvalidOperationException, WrongInputParametersException, \
     TimeOutException, NotImplementedException, StateException
-from gateway.webservice import params_parser
+from gateway.webservice import params_parser, log_access
 from gateway.api.V1.webservice import ApiResponse, RestAPIEndpoint
 
 if False:  # MyPy
@@ -190,7 +190,7 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
         contents = ex.message
         cherrypy.response.body = contents.encode()
         # do not handle the request, just return the unauthorized message
-        request.handler = None
+        request.handler = None  # TODO: Use generic cherrypy event handler + @log_access
 
 
 def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
@@ -221,13 +221,13 @@ def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
         response.status = 400
         contents = ex.message
         response.body = contents.encode()
-        request.handler = None
+        request.handler = None  # TODO: Use generic cherrypy event handler + @log_access
         return
     except Exception:
         response.status = 406  # No Acceptable
         contents = 'Generic Error: invalid_body'
         response.body = contents.encode()
-        request.handler = None
+        request.handler = None  # TODO: Use generic cherrypy event handler + @log_access
         return
     try:
         params_parser(request.params, kwargs)
@@ -236,13 +236,13 @@ def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
         contents = WrongInputParametersException.DESC
         contents += ': {}'.format(ex)
         response.body = contents.encode()
-        request.handler = None
+        request.handler = None  # TODO: Use generic cherrypy event handler + @log_access
     if check_for_missing and not set(kwargs).issubset(set(request.params)):
         response.status = 400
         contents = WrongInputParametersException.DESC
         contents += ': Missing parameters'
         response.body = contents.encode()
-        request.handler = None
+        request.handler = None  # TODO: Use generic cherrypy event handler + @log_access
 
 
 # Assign the v1 authentication handler
@@ -252,8 +252,8 @@ cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler_v1)
 
 # Decorator to be used in the RestAPIEndpoint subclasses for defining how the api is exposed
 def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=False, auth_level=AuthenticationLevel.NONE, pass_token=False, pass_role=False,
-                      allowed_user_roles=None, expect_body_type=None, pass_security_level=False):
-    # type: (Callable[..., Any], Dict[Any, Any], bool, bool, AuthenticationLevel, bool, bool, List[Any], Optional[str], bool) -> Callable[..., Any]
+                      allowed_user_roles=None, expect_body_type=None, pass_security_level=False, mask=None):
+    # type: (Callable[..., Any], Dict[Any, Any], bool, bool, AuthenticationLevel, bool, bool, List[Any], Optional[str], bool, Optional[List[str]]) -> Callable[..., Any]
     def decorator_openmotics_api_v1(func):
         # First layer decorator: Error handling
         func = _openmotics_api_v1(func)
@@ -275,6 +275,7 @@ def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=Fals
         else:
             _check = {'expect_body_type': expect_body_type, 'check_for_missing': False}  # default check_for_missing to false when there is nothing to check
         func = cherrypy.tools.params_v1(**(check or _check))(func)
+        func = log_access(func, mask)
 
         return func
 

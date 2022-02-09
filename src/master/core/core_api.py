@@ -216,9 +216,11 @@ class CoreAPI(object):
     def pulse_counter_values():  # type: () -> CoreCommandSpec
         """ Receives pulse counter values for a given module """
         return CoreCommandSpec(instruction='PC',
-                               request_fields=[WordField('input_nr'), LiteralBytesField(1)],
-                               response_fields=[WordField('input_nr'), PaddingField(1)] +
-                                               [UInt32Field('counter_{0}'.format(i), crc16=True) for i in range(8)])
+                               request_fields=[ByteField('series'), LiteralBytesField(0)],
+                               response_fields=[ByteField('series'), PaddingField(1),
+                                                UInt32Field('counter_0'), UInt32Field('counter_1'), UInt32Field('counter_2'), UInt32Field('counter_3'),
+                                                UInt32Field('counter_4'), UInt32Field('counter_5'), UInt32Field('counter_6'), UInt32Field('counter_7'),
+                                                WordField('crc16')])
 
     # Memory (EEPROM/FRAM) actions
 

@@ -37,7 +37,8 @@ from gateway.dto import ModuleDTO
 from gateway.daemon_thread import DaemonThread
 from gateway.models import Config, EnergyModule, Module
 from platform_utils import Platform, System
-from gateway.enums import EnergyEnums, ModuleType, UpdateEnums, HardwareType
+from gateway.enums import EnergyEnums, ModuleType, UpdateEnums
+from enums import HardwareType
 
 if False:  # MYPY
     from typing import Any, List, Union, Optional, Tuple, Dict, Set
@@ -110,16 +111,16 @@ class UpdateController(object):
     # Below order of services are important, this is the order in which the updates will be performed
     SUPPORTED_FIRMWARES = {Platform.Type.CORE: ['gateway_service', 'gateway_frontend',
                                                 'master_coreplus',
-                                                'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan',
-                                                'energy', 'p1_concentrator'],
+                                                'energy', 'p1_concentrator',
+                                                'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan'],
                            Platform.Type.CORE_PLUS: ['gateway_service', 'gateway_frontend',
                                                      'master_coreplus',
-                                                     'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan',
-                                                     'energy', 'p1_concentrator'],
+                                                     'energy', 'p1_concentrator',
+                                                     'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan'],
                            Platform.Type.CLASSIC: ['gateway_service', 'gateway_frontend',
                                                    'master_classic',
-                                                   'input', 'output', 'dimmer', 'can',
-                                                   'energy', 'p1_concentrator'],
+                                                   'energy', 'p1_concentrator',
+                                                   'input', 'output', 'dimmer', 'can'],
                            Platform.Type.ESAFE: ['gateway_service']}
 
     if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
@@ -304,8 +305,8 @@ class UpdateController(object):
         # type: (str, Logger) -> None
         """ Executed from within a separate process """
         logger.info('Stopping services')
-        System.run_service_action('stop', 'openmotics')
-        System.run_service_action('stop', 'vpn_service')
+        System.run_service_action('stop', 'openmotics').wait()
+        System.run_service_action('stop', 'vpn_service').wait()
 
         old_version_folder = ''
         running_marker = ''
@@ -404,8 +405,8 @@ class UpdateController(object):
 
             # Startup
             logger.info('Starting services')
-            System.run_service_action('start', 'openmotics')
-            System.run_service_action('start', 'vpn_service')
+            System.run_service_action('start', 'openmotics').wait()
+            System.run_service_action('start', 'vpn_service').wait()
 
             # Health-check
             logger.info('Checking health')
@@ -414,8 +415,8 @@ class UpdateController(object):
             # Rollback to old version
             if not update_successful:
                 logger.info('Update failed, restoring')
-                System.run_service_action('stop', 'openmotics')
-                System.run_service_action('stop', 'vpn_service')
+                System.run_service_action('stop', 'openmotics').wait()
+                System.run_service_action('stop', 'vpn_service').wait()
                 os.unlink(UpdateController.SERVICE_CURRENT)
                 os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
                 # Raise with actual reason
@@ -433,8 +434,8 @@ class UpdateController(object):
             if old_version_folder and not os.path.exists(UpdateController.SERVICE_CURRENT):
                 os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
             # Start services again
-            System.run_service_action('start', 'openmotics')
-            System.run_service_action('start', 'vpn_service')
+            System.run_service_action('start', 'openmotics').wait()
+            System.run_service_action('start', 'vpn_service').wait()
             raise
         finally:
             if running_marker and os.path.exists(running_marker):
@@ -1056,7 +1057,7 @@ class UpdateController(object):
         if metadata is None:
             logger.info('Downloading firmware metadata for {0} {1}'.format(firmware_type, version))
             response = requests.get(self._get_update_firmware_metadata_url(firmware_type, version),
-                                    timeout=2,
+                                    timeout=5,
                                     verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             if response.status_code != 200:
                 raise ValueError('Failed to get firmware metadata for {0} {1}'.format(firmware_type, version))

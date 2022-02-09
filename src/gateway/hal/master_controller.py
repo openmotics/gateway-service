@@ -18,17 +18,14 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GroupActionDTO, InputDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
-    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
-    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
-    OutputStatusDTO, LegacyStartupActionDTO, LegacyScheduleDTO, \
-    DimmerConfigurationDTO, InputStatusDTO
-
+    GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
+    OutputDTO, OutputStatusDTO, PulseCounterDTO, SensorDTO, ShutterDTO, \
+    ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
+    ThermostatGroupDTO
 
 if False:  # MYPY
+    from datetime import datetime
     from typing import Any, Dict, List, Literal, Optional, Tuple, Set
-    from master.core.basic_action import BasicAction
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
@@ -81,6 +78,7 @@ class MasterController(object):
         raise NotImplementedError()
 
     def get_firmware_version(self):
+        # type: () -> Tuple[int,...]
         raise NotImplementedError()
 
     # Input
@@ -438,8 +436,12 @@ class MasterController(object):
         # type: (bool) -> None
         raise NotImplementedError()
 
-    def sync_time(self):
-        # type: () -> None
+    def set_datetime(self, dt):
+        # type: (datetime) -> None
+        raise NotImplementedError()
+
+    def get_datetime(self):
+        # type: () -> datetime
         raise NotImplementedError()
 
     def get_configuration_dirty_flag(self):
@@ -448,7 +450,7 @@ class MasterController(object):
 
     # Module functions
 
-    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+    def drive_led(self, led, state):  # type: (str, str) -> None
         raise NotImplementedError()
 
     def module_discover_start(self, timeout):  # type: (int) -> None
@@ -493,23 +495,6 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
-        raise NotImplementedError()
-
-    # Schedule
-
-    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
-        raise NotImplementedError()
-
-    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
-        raise NotImplementedError()
-
-    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
-        raise NotImplementedError()
-
-    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
-        raise NotImplementedError()
-
-    def save_startup_action(self, startup_action):  # type: (LegacyStartupActionDTO) -> None
         raise NotImplementedError()
 
     # Dimmer functions

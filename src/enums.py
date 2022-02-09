@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenMotics BV
+# Copyright (C) 2022 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,6 +12,28 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-""" Module containing the functionality provided by the gateway. """
+"""
+Generic module that houses various enums
+"""
 
-__version__ = '2.22.0'
+
+class HardwareType(object):
+    VIRTUAL = 'virtual'
+    PHYSICAL = 'physical'
+    EMULATED = 'emulated'
+    INTERNAL = 'internal'
+
+
+class OutputType(object):
+    OUTLET = 0
+    VALVE = 1
+    ALARM = 2
+    APPLIANCE = 3
+    PUMP = 4
+    HVAC = 5
+    GENERIC = 6
+    MOTOR = 7
+    VENTILATION = 8
+    HEATER = 9
+    SHUTTER_RELAY = 127
+    LIGHT = 255

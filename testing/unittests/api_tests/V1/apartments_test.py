@@ -165,11 +165,11 @@ class ApiApartmentsTests(BaseCherryPyUnitTester):
 
     def test_create_apartment_empty_list(self):
         apartment_to_create = []
-        with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
+        with mock.patch.object(self.apartment_controller, 'save_apartments') as save_apartment_func:
             exception_message = 'TEST_EXCEPTION'
             save_apartment_func.side_effect = ValueError(exception_message)
             status, headers, body = self.POST('/api/v1/apartments/list', login_user=self.admin_user, body=json.dumps(apartment_to_create))
-            self.assertEqual(b'[]', body)
+            self.assertTrue(bytes(exception_message.encode('utf-8')) in body)
 
     def test_create_apartment_no_body(self):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
