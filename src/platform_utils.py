@@ -361,10 +361,11 @@ class System(object):
         else:
             import select
             import ssl
+            import socket
             if isinstance(exception, ssl.SSLEOFError):
                 logger.info('Got SSLEOFError, aborting due to lost connection')
                 return False  # break
-            elif isinstance(exception, ssl.SSLError):
+            elif isinstance(exception, ssl.SSLError) or isinstance(exception, socket.timeout):
                 if 'The read operation timed out' in str(exception):
                     # Got read timeout, just wait for data to arrive
                     return True  # continue
