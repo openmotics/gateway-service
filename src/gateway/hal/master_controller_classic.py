@@ -431,7 +431,7 @@ class MasterClassicController(MasterController):
     def set_output(self, output_id, state, dimmer=None, timer=None):
         if output_id is None or output_id < 0 or output_id > 240:
             raise ValueError('Output ID {0} not in range 0 <= id <= 240'.format(output_id))
-        if dimmer is not None and dimmer < 0 or dimmer > 100:
+        if dimmer is not None and (dimmer < 0 or dimmer > 100):
             raise ValueError('Dimmer value {0} not in [0, 100]'.format(dimmer))
         if timer is not None and timer not in [150, 450, 900, 1500, 2220, 3120]:
             raise ValueError('Timer value {0} not in [150, 450, 900, 1500, 2220, 3120]'.format(timer))

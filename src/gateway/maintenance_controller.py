@@ -74,7 +74,10 @@ class MaintenanceController(object):
                 self._connection.sendall('{0}\n'.format(message.rstrip()))
         except Exception:
             logger.exception('Exception forwarding maintenance data to socket connection.')
-        for consumer_id, callback in self._consumers.items():
+        for consumer_id in self._consumers.keys():
+            callback = self._consumers.get(consumer_id)
+            if callback is None:
+                continue
             try:
                 callback(message.rstrip())
             except Exception:
@@ -186,4 +189,4 @@ class MaintenanceController(object):
     #######
 
     def write(self, message):
-        self._maintenance_communicator.write(message)
+        self._maintenance_communicator.write(message.decode())
