@@ -43,7 +43,7 @@ from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_controller_dummy import MasterDummyController
 from gateway.hal.master_controller_core_dummy import MasterCoreDummyController
-from gateway.models import Database, Feature
+from gateway.models import Feature
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
 from gateway.thermostat.master.thermostat_controller_master import \
@@ -106,14 +106,13 @@ def lock_file(file):
 
 def apply_migrations():
     # type: () -> None
-    from peewee_migrate import Router
     logger.info('Applying migrations')
     # Run all unapplied migrations
-    db = Database.get_db()
+    from alembic.config import Config
+    from alembic import command
     gateway_src = os.path.abspath(os.path.join(__file__, '..'))
-    from peewee_migrate import Router
-    router = Router(db, migrate_dir=os.path.join(gateway_src, 'migrations/orm'))
-    router.run()
+    alembic_cfg = Config("{}/alembic.ini".format(gateway_src))
+    command.upgrade(alembic_cfg, "head")
 
 
 @Inject

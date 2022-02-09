@@ -6,32 +6,20 @@ coverage.xml
 testing/gw-unit-reports
 testing/gw-unit-reports-3
 pytest.ini
-run-tests.sh
-
-# IDE artifacts
-.idea/
-
-# OSX artifacts
-.DS_Store/
-**/.DS_Store
 
 # Python bytecode files
+*.egg-info
 *.pyc
 
-# VS code artifacts
+# Mypy files
+.mypy_cache/
+
+# Editor artifacts
+.idea/
 .vscode/
 
-# Artifacts for running gateway locally
-etc/
-etc**
-static/
-**.db
-**.db_BACKUP
-versions**
-versions/
-
-# Terms
-src/terms/
+# OSX artifacts
+.DS_Store
 
 # Venv folders
 venv/
@@ -40,16 +28,8 @@ venv2.7/
 .env
 .envrc
 
-# Mypy files
-.mypy_cache/
-.dmypy.json
-
-# Package artifacts
-*.egg-info
-
-# Local scripts (makes it possible to add local bash scripts for easier development)
-**ignore.sh
-**ignore.py
-
-# env file
-.env_dev2_as_DUT
+# Artifacts for running gateway locally
+/etc/
+/static/
+/versions/
+/src/terms/

@@ -25,13 +25,13 @@ from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
-from gateway.models import BaseModel
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
     from typing import Any, Callable, List, Optional, Type
     from gateway.maintenance_controller import MaintenanceController
+    from gateway.models import BaseModel
 
 logger = logging.getLogger(__name__)
 

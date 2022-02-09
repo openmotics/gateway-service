@@ -24,7 +24,7 @@ from peewee import DoesNotExist
 
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.models import DaySchedule, Output, Preset, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, ValveToThermostat
+    Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
 
 if False:  # MYPY
     from typing import List, Optional, Dict, Any, Literal, Tuple
