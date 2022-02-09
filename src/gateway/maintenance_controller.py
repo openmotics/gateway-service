@@ -27,7 +27,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
 
 if False:  # MYPY
-    from typing import Dict, Optional, Callable, Any
+    from typing import Dict, Optional, Callable, Any, ByteString
     from master.maintenance_communicator import MaintenanceCommunicator
 
 logger = logging.getLogger(__name__)
@@ -198,5 +198,5 @@ class MaintenanceController(object):
     #######
 
     def write(self, message):
-        # type: (str) -> None
-        self._maintenance_communicator.write(message.decode())
+        # type: (bytes) -> None
+        self._maintenance_communicator.write(str(message.decode()))
