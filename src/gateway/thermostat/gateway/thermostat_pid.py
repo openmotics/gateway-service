@@ -16,6 +16,8 @@
 import logging
 from threading import Lock
 from simple_pid import PID
+
+from gateway.dto import ThermostatStatusDTO
 from ioc import Inject, INJECTED
 from serial_utils import CommunicationTimedOutException
 from gateway.models import ThermostatGroup, Thermostat
@@ -123,11 +125,15 @@ class ThermostatPid(object):
 
     def report_state_change(self):  # type: () -> None
         # TODO: Only invoke callback if change occurred
-        room_number = 255 if self._thermostat.room is None else self._thermostat.room.number
+        status = self.get_status()
         for callback in self._report_state_callbacks:
-            callback(self.number, self._active_preset.type, self.setpoint, self._current_temperature,
-                     self.get_active_valves_percentage(), self._current_steering_power or 0,
-                     room_number, self._state, self._mode)
+            callback(*status)
+
+    def get_status(self):
+        room_number = 255 if self._thermostat.room is None else self._thermostat.room.number
+        return (self.number, self._active_preset.type, self.setpoint, self._current_temperature,
+                self.get_active_valves_percentage(), self._current_steering_power or 0,
+                room_number, self._state, self._mode)
 
     def _get_current_temperature_value(self):
         # in the future we might combine multiple sensors, for now we only support one sensor per thermostat
@@ -236,3 +242,6 @@ class ThermostatPid(object):
     @kd.setter
     def kd(self, kd):  # type: (float) -> None
         self._pid.Kd = kd
+
+    def __repr__(self):
+        return 'Thermostat PID {0} ({1})'.format(self.thermostat.number, self.thermostat.name)

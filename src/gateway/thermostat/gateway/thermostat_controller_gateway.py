@@ -51,7 +51,6 @@ class ThermostatControllerGateway(ThermostatController):
 
     THERMOSTAT_PID_UPDATE_INTERVAL = 60
     PUMP_UPDATE_INTERVAL = 30
-    SYNC_CONFIG_INTERVAL = 900
 
     @Inject
     def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED):
@@ -64,7 +63,6 @@ class ThermostatControllerGateway(ThermostatController):
         self._sync_auto_setpoints = True
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
         self._update_pumps_thread = None  # type: Optional[DaemonThread]
-        self._sync_thread = None  # type: Optional[DaemonThread]
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
 
@@ -79,7 +77,6 @@ class ThermostatControllerGateway(ThermostatController):
         logger.info('Starting gateway thermostatcontroller...')
         if not self._running:
             self._running = True
-
             self._pid_loop_thread = DaemonThread(name='thermostatpid',
                                                  target=self._pid_tick,
                                                  interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
@@ -89,25 +86,20 @@ class ThermostatControllerGateway(ThermostatController):
                                                      target=self._update_pumps,
                                                      interval=self.PUMP_UPDATE_INTERVAL)
             self._update_pumps_thread.start()
-
-            self._sync_thread = DaemonThread(name='thermostatsync',
-                                             target=self._sync,
-                                             interval=self.SYNC_CONFIG_INTERVAL)
-            self._sync_thread.start()
+            super(ThermostatControllerGateway, self).start()
             logger.info('Starting gateway thermostatcontroller... Done')
         else:
             raise RuntimeError('GatewayThermostatController already running. Please stop it first.')
 
     def stop(self):  # type: () -> None
         if not self._running:
-            logger.warning('Stopping an already stopped GatewayThermostatController.')
+            logger.warning('Stopping an already stopped thermostatcontroller.')
         self._running = False
         if self._pid_loop_thread is not None:
             self._pid_loop_thread.stop()
         if self._update_pumps_thread is not None:
             self._update_pumps_thread.stop()
-        if self._sync_thread is not None:
-            self._sync_thread.stop()
+        super(ThermostatControllerGateway, self).stop()
 
     def _pid_tick(self):  # type: () -> None
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
@@ -164,10 +156,30 @@ class ThermostatControllerGateway(ThermostatController):
             logger.exception('Could not update pumps.')
 
     def _sync(self):  # type: () -> None
+        # refresh the config from the database
         try:
             self.refresh_config_from_db()
         except Exception:
             logger.exception('Could not get thermostat config.')
+
+        # use the same sync thread for periodically pushing out thermostat status events
+        self._publish_states()
+
+    def _publish_states(self):
+        # 1. publish thermostat group status events
+        for thermostat_group in ThermostatGroup.select():
+            try:
+                self._thermostat_group_changed(thermostat_group)
+            except Exception:
+                logger.exception('Could not publish thermostat group %s', thermostat_group)
+
+        # 2. publish thermostat unit status events
+        for thermostat_pid in self.thermostat_pids.values():
+            try:
+                status = thermostat_pid.get_status()
+                self._thermostat_changed(*status)
+            except Exception:
+                logger.exception('Could not publish %s', thermostat_pid)
 
     def _sync_auto_presets(self):
         # type: () -> None
