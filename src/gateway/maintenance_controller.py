@@ -27,7 +27,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
 
 if False:  # MYPY
-    from typing import Dict, Optional, Callable, Any
+    from typing import Dict, Optional, Callable, Any, ByteString
     from master.maintenance_communicator import MaintenanceCommunicator
 
 logger = logging.getLogger(__name__)
@@ -75,7 +75,10 @@ class MaintenanceController(object):
                 self._connection.sendall(bytearray(message.rstrip().encode()) + bytearray(b'\n'))
         except Exception:
             logger.exception('Exception forwarding maintenance data to socket connection.')
-        for consumer_id, callback in self._consumers.items():
+        for consumer_id in self._consumers.keys():
+            callback = self._consumers.get(consumer_id)
+            if callback is None:
+                continue
             try:
                 callback(message.rstrip())
             except Exception:
@@ -195,5 +198,5 @@ class MaintenanceController(object):
     #######
 
     def write(self, message):
-        # type: (str) -> None
-        self._maintenance_communicator.write(message)
+        # type: (bytes) -> None
+        self._maintenance_communicator.write(str(message.decode()))

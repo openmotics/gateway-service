@@ -43,7 +43,7 @@ def per_module(module_size, func):
     :param func: function that takes two ids (module id, offset id) and returns an address.
     :returns: function that takes an id and returns an address (page, offset).
     """
-    return lambda iid: func(iid / module_size, iid % module_size)
+    return lambda iid: func(iid // module_size, iid % module_size)
 
 
 def gen_address(start_page, ids_per_page, extra_offset):
@@ -52,8 +52,8 @@ def gen_address(start_page, ids_per_page, extra_offset):
     the given start_page, has a fixed number of ids_per_page. The extra_offset is added to the
     offset calculated using the ids_per_page.
     """
-    page_offset = 256 / ids_per_page
-    return lambda mid: (start_page + (mid / ids_per_page), (mid % ids_per_page) * page_offset + extra_offset)
+    page_offset = 256 // ids_per_page
+    return lambda mid: (start_page + (mid // ids_per_page), (mid % ids_per_page) * page_offset + extra_offset)
 
 
 def get_led_functions():
@@ -72,7 +72,7 @@ class OutputConfiguration(EepromModel):
     outputs is 8 times the number of output modules (eeprom address 0, 2).
     """
     id = EepromId(240, address=EepromAddress(0, 2, 1), multiplier=8)
-    module_type = EepromString(1, lambda mid: (33 + mid / 8, 0), read_only=True, shared=True)
+    module_type = EepromString(1, lambda mid: (33 + mid // 8, 0), read_only=True, shared=True)
     name = EepromString(16, page_per_module(8, 33, 20, 16))
     timer = EepromWord(page_per_module(8, 33, 4, 2))
     type = EepromByte(page_per_module(8, 33, 149, 1))
@@ -93,12 +93,12 @@ class InputConfiguration(EepromModel):
     inputs is 8 times the number of input modules (eeprom address 0, 1).
     """
     id = EepromId(240, address=EepromAddress(0, 1, 1), multiplier=8)
-    module_type = EepromString(1, lambda mid: (2 + mid / 8, 0), read_only=True, shared=True)
-    name = EepromString(8, per_module(8, lambda mid, iid: (115 + (mid / 4), 64 * (mid % 4) + 8 * iid)))
+    module_type = EepromString(1, lambda mid: (2 + mid // 8, 0), read_only=True, shared=True)
+    name = EepromString(8, per_module(8, lambda mid, iid: (115 + (mid // 4), 64 * (mid % 4) + 8 * iid)))
     action = EepromByte(page_per_module(8, 2, 4, 1))
     basic_actions = EepromActions(15, page_per_module(8, 2, 12, 30))
     invert = EepromByte(lambda mid: (32, mid))
-    can = EepromString(1, lambda mid: (2 + mid / 8, 252), read_only=True, shared=True)
+    can = EepromString(1, lambda mid: (2 + mid // 8, 252), read_only=True, shared=True)
 
 
 class CanLedConfiguration(EepromModel):
@@ -145,7 +145,7 @@ class ShutterGroupConfiguration(EepromModel):
 class ThermostatConfiguration(EepromModel):
     """ Models a thermostat. The maximum number of thermostats is 32. """
     id = EepromId(32)
-    name = EepromString(16, lambda mid: (187 + (mid / 16), 16 * (mid % 16)))
+    name = EepromString(16, lambda mid: (187 + (mid // 16), 16 * (mid % 16)))
     setp0 = EepromTemp(lambda mid: (142, 32 + mid))
     setp1 = EepromTemp(lambda mid: (142, 64 + mid))
     setp2 = EepromTemp(lambda mid: (142, 96 + mid))
@@ -237,7 +237,7 @@ class PumpGroupConfiguration(EepromModel):
 class CoolingConfiguration(EepromModel):
     """ Models a thermostat in cooling mode. The maximum number of thermostats is 32. """
     id = EepromId(32)
-    name = EepromString(16, lambda mid: (204 + (mid / 16), 16 * (mid % 16)))
+    name = EepromString(16, lambda mid: (204 + (mid // 16), 16 * (mid % 16)))
     setp0 = EepromTemp(lambda mid: (201, 32 + mid))
     setp1 = EepromTemp(lambda mid: (201, 64 + mid))
     setp2 = EepromTemp(lambda mid: (201, 96 + mid))
@@ -395,7 +395,7 @@ class GlobalRTD10Configuration(EepromModel):
 class SensorConfiguration(EepromModel):
     """ Models a sensor. The maximum number of sensors is 32. """
     id = EepromId(32)
-    name = EepromString(16, lambda mid: (193 + (mid / 16), (mid % 16) * 16))
+    name = EepromString(16, lambda mid: (193 + (mid // 16), (mid % 16) * 16))
     offset = EepromSignedTemp(lambda mid: (0, 60 + mid))
     virtual = EepromIBool(lambda mid: (195, mid))
 
@@ -403,25 +403,25 @@ class SensorConfiguration(EepromModel):
 class GroupActionConfiguration(EepromModel):
     """ Models a group action. The maximum number of inputs is 160. """
     id = EepromId(160)
-    name = EepromString(16, lambda mid: (158 + (mid / 16), 16 * (mid % 16)))
-    actions = EepromActions(16, lambda mid: (67 + (mid / 8), 32 * (mid % 8)))
+    name = EepromString(16, lambda mid: (158 + (mid // 16), 16 * (mid % 16)))
+    actions = EepromActions(16, lambda mid: (67 + (mid // 8), 32 * (mid % 8)))
 
 
 class ScheduledActionConfiguration(EepromModel):
     """ Models the scheduled actions. The maximum number of scheduled actions is 102. """
     id = EepromId(102)
-    hour = EepromByte(lambda mid: (113 + (mid / 51), 5 * (mid % 51) + 0))
-    minute = EepromByte(lambda mid: (113 + (mid / 51), 5 * (mid % 51) + 1))
-    day = EepromByte(lambda mid: (113 + (mid / 51), 5 * (mid % 51) + 2))
+    hour = EepromByte(lambda mid: (113 + (mid // 51), 5 * (mid % 51) + 0))
+    minute = EepromByte(lambda mid: (113 + (mid // 51), 5 * (mid % 51) + 1))
+    day = EepromByte(lambda mid: (113 + (mid // 51), 5 * (mid % 51) + 2))
     # day's 8th byte -> one time or reschedule
-    action = EepromActions(1, lambda mid: (113 + (mid / 51), 5 * (mid % 51) + 3))
+    action = EepromActions(1, lambda mid: (113 + (mid // 51), 5 * (mid % 51) + 3))
     # 24:00 -> execute every minute, 24:05 -> execute every 5 minutes
 
 
 class PulseCounterConfiguration(EepromModel):
     """ Models a pulse counter. The maximum number of pulse counters is 24. """
     id = EepromId(24)
-    name = EepromString(16, lambda mid: (98 + (mid / 16), 16 * (mid % 16)))
+    name = EepromString(16, lambda mid: (98 + (mid // 16), 16 * (mid % 16)))
     input = EepromByte(lambda mid: (0, 160+mid))
 
 

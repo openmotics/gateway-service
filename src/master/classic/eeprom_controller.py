@@ -986,7 +986,7 @@ class EepromEnum(EepromDataType):
     def decode(self, data):
         # type: (bytearray) -> str
         index = data[0]
-        if index in self._enum_values.keys():
+        if index in self._enum_values:
             return self._enum_values[index]
         return 'UNKNOWN'
 
