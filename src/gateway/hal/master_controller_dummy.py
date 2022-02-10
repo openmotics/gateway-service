@@ -18,241 +18,149 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 import logging
+import json
 
-from datetime import datetime
-from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
-    OutputDTO, OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
-    ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO
-from gateway.exceptions import UnsupportedException
-from gateway.hal.master_controller import MasterController
+from gateway.hal.master_controller_core import MasterCoreController
+from master.core.core_communicator import CoreCommunicator
+from master.core.memory_models import GlobalConfiguration
+from ioc import Inject, INJECTED
+from constants import OPENMOTICS_PREFIX
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple, Set
-    from plugins.base import PluginController
+    from typing import List, Dict, Any, Union, Optional, TypeVar
+    from master.core.memory_file import MemoryAddress
+    from master.core.core_command import CoreCommandSpec
+    T_co = TypeVar('T_co', bound=None, covariant=True)
 
 logger = logging.getLogger(__name__)
 
 
-class MasterCommunicator(object):
+class DummyMemoryFile(object):
+    def __init__(self):
+        self._memory = {}  # type: Dict[int, Dict[int, int]]
+
     def start(self):
-        # type: () -> None
         pass
 
     def stop(self):
-        # type: () -> None
+        pass
+
+    def read(self, addresses, read_through=False):  # type: (List[MemoryAddress], bool) -> Dict[MemoryAddress, bytearray]
+        response = {}  # type: Dict[MemoryAddress, bytearray]
+        for address in addresses:
+            data = bytearray()
+            page_memory = self._memory.setdefault(address.page, {})
+            for position in range(address.offset, address.offset + address.length):
+                data.append(page_memory.get(position, 255))
+            response[address] = data
+        return response
+
+    def write(self, data_map):  # type: (Dict[MemoryAddress, bytearray]) -> None
+        for address, data in data_map.items():
+            page_memory = self._memory.setdefault(address.page, {})
+            for index, position in enumerate(range(address.offset, address.offset + address.length)):
+                page_memory[position] = data[index]
+
+    def commit(self):
         pass
 
 
-class DummyEepromObject(object):
-    def __init__(self):
+class DummyCommunicator(object):
+    @Inject
+    def __init__(self, memory_file=INJECTED):
+        self._memory_file = memory_file
+
+    def start(self):
         pass
 
-    def return_none(self, *args, **kwargs):
-        """ Ignore all calls and return None"""
-        _ = args
-        _ = kwargs
-        return None
-
-    def return_iter(self, *args, **kwargs):
-        _ = args
-        _ = kwargs
-        return iter([])
-
-    def __getattr__(self, item):
-        """ Return a function that will return none on every call """
-        if item in ['read_all', 'read_batch']:
-            return self.return_iter
-        else:
-            return self.return_none
-
-
-class MasterDummyController(MasterController):
-    def __init__(self):
-        # type: () -> None
-        super(MasterDummyController, self).__init__(MasterCommunicator())
-        self._eeprom_controller = DummyEepromObject()
-
-    def get_features(self):  # type: () -> Set[str]
-        return set()
-
-    def get_master_online(self):  # type: () -> bool
-        return True
-
-    def set_plugin_controller(self, plugin_controller):
-        # type: (PluginController) -> None
+    def stop(self):
         pass
 
-    def get_communicator_health(self):
-        # type: () -> Literal['success']
-        return 'success'
+    def __getattr__(self, attribute):
+        if callable(getattr(CoreCommunicator, attribute)):
+            def implementation(*args, **kwargs):
+                logger.info('Got {0}({1}, {2})'.format(
+                    attribute,
+                    ', '.join(str(a) for a in args),
+                    ', '.join('{0}={1}'.format(key, value) for key, value in kwargs.items()))
+                )
+                return {}
+            return implementation
 
-    def module_discover_status(self):
-        # type: () -> bool
-        return False
+    def get_communication_statistics(self):
+        return {'calls_succeeded': [], 'calls_timedout': [],
+                'bytes_written': 0, 'bytes_read': 0}
 
-    def get_firmware_version(self):
-        # type: () -> Tuple[int, int, int]
-        return (0, 0, 0)
+    def do_command(self, command, fields, timeout=2, bypass_blockers=None):
+        # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int], Optional[List]) -> Union[T_co, Dict[str, Any]]
+        def _default_if_255(value, default):
+            return value if value != 255 else default
 
-    def get_status(self):
-        # type: () -> Dict[str,Any]
-        return {'time': '%02d:%02d' % (0, 0),
-                'date': '%02d/%02d/%d' % (1, 1, 1970),
-                'mode': 76,
-                'version': '%d.%d.%d' % (0, 0, 0),
-                'hw_version': 0}
+        if command.instruction == 'GC':
+            if command.request_fields[0]._data == bytearray([0]):
+                global_configuration = GlobalConfiguration()
+                return {'type': 0,
+                        'output': _default_if_255(global_configuration.number_of_output_modules, 0),
+                        'input': _default_if_255(global_configuration.number_of_input_modules, 0),
+                        'sensor': _default_if_255(global_configuration.number_of_sensor_modules, 0),
+                        'ucan': _default_if_255(global_configuration.number_of_ucan_modules, 0),
+                        'ucan_input': _default_if_255(global_configuration.number_of_can_inputs, 0),
+                        'ucan_sensor': _default_if_255(global_configuration.number_of_can_sensors, 0),
+                        'power_rs485': 1, 'power_can': 1}
+        if command.instruction == 'PC':
+            return {'series': fields['series'],
+                    'counter_0': 0, 'counter_1': 0, 'counter_2': 0, 'counter_3': 0,
+                    'counter_4': 0, 'counter_5': 0, 'counter_6': 0, 'counter_7': 0,
+                    'crc126': 0}
+        if command.instruction == 'ST':
+            if command.request_fields[0]._data == bytearray([2]):
+                global_configuration = GlobalConfiguration()
+                return {'info_type': 2,
+                        'amount_output_modules': _default_if_255(global_configuration.number_of_output_modules, 0),
+                        'amount_input_modules': _default_if_255(global_configuration.number_of_input_modules, 0),
+                        'amount_sensor_modules': _default_if_255(global_configuration.number_of_sensor_modules, 0),
+                        'amount_can_control_modules': _default_if_255(global_configuration.number_of_can_control_modules, 0)}
+        if command.instruction == 'CD':
+            if command.request_fields[0]._data == bytearray([0]):
+                return {'amount_of_ucans': 0}
+        if command.instruction == 'DL':
+            global_configuration = GlobalConfiguration()
+            if command.request_fields[0]._data == bytearray([0]):
+                return {'type': 0, 'information': [0 for _ in range(_default_if_255(global_configuration.number_of_output_modules, 0))]}
+            if command.request_fields[0]._data == bytearray([1]):
+                return {'type': 1, 'information': [0 for _ in range(_default_if_255(global_configuration.number_of_input_modules, 0))]}
+        if command.instruction == 'OD':
+            return {'device_nr': fields['device_nr'],
+                    'status': 0, 'dimmer': 0, 'dimmer_min': 0, 'dimmer_max': 255,
+                    'timer_type': 0, 'timer_type_standard': 0, 'timer': 0, 'timer_standard': 0,
+                    'group_action': 255, 'dali_output': 255, 'output_lock': 0}
 
-    def set_datetime(self, dt):
-        # type: (datetime) -> None
-        pass
-
-    def get_datetime(self):
-        # type: () -> datetime
-        return datetime.now()
-
-    def get_modules(self):
-        # type: () -> Dict[str,List[Any]]
-        return {'outputs': [], 'inputs': [], 'shutters': [], 'can_inputs': []}
-
-    def get_modules_information(self, address=None):
-        # type: (Optional[str]) -> List[ModuleDTO]
-        if address:
-            raise NotImplementedError()
-        else:
-            return []
-
-    def load_inputs(self):
-        # type: () -> List[InputDTO]
-        return []
-
-    def load_global_feedbacks(self):
-        # type: () -> List[GlobalFeedbackDTO]
-        return []
-
-    def load_input_status(self):
-        # type: () -> List[InputStatusDTO]
-        return []
-
-    def load_outputs(self):  # type: () -> List[OutputDTO]
-        return []
-
-    def load_output_status(self):
-        # type: () -> List[OutputStatusDTO]
-        return []
-
-    def load_shutters(self):
-        # type: () -> List[ShutterDTO]
-        return []
-
-    def load_shutter_groups(self):
-        # type: () -> List[ShutterGroupDTO]
-        return []
-
-    def get_thermostats(self):
-        # type: () -> Dict[str,Any]
-        raise UnsupportedException()
-
-    def get_thermostat_modes(self):
-        # type: () -> Dict[str,Any]
-        raise UnsupportedException()
-
-    def get_global_thermostat_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str,Any]
+        logger.info('Got do_command({0}, {1}, {2}, {3})'.format(command, fields, timeout, bypass_blockers))
         return {}
 
-    def load_cooling_thermostats(self):
-        # type: () -> List[ThermostatDTO]
-        return []
 
-    def load_cooling_thermostat(self, thermostat_id):
-        # type: (int) -> ThermostatDTO
-        return ThermostatDTO(0)
+class MasterDummyController(MasterCoreController):
+    @Inject
+    def __init__(self):  # type: () -> None
+        super(MasterDummyController, self).__init__()
 
-    def load_cooling_pump_group(self, pump_group_id):
-        # type: (int) -> PumpGroupDTO
-        return PumpGroupDTO(0)
+    @staticmethod
+    def _import_class(name):
+        components = name.split('.')
+        mod = __import__(components[0])
+        for comp in components[1:]:
+            mod = getattr(mod, comp)
+        return mod
 
-    def load_cooling_pump_groups(self):
-        # type: () -> List[PumpGroupDTO]
-        return []
-
-    def load_heating_thermostats(self):
-        # type: () -> List[ThermostatDTO]
-        return []
-
-    def read_airco_status_bits(self):
-        # type: () -> Dict[str,Any]
-        return {}
-
-    def get_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        return []
-
-    def get_cooling_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        return []
-
-    def load_sensors(self):
-        # type: () -> List[MasterSensorDTO]
-        return []
-
-    def get_sensors_temperature(self):
-        # type: () -> List[Optional[float]]
-        return []
-
-    def get_sensors_humidity(self):
-        # type: () -> List[Optional[float]]
-        return []
-
-    def get_sensors_brightness(self):
-        # type: () -> List[Optional[float]]
-        return []
-
-    def load_pulse_counters(self):
-        # type: () -> List[PulseCounterDTO]
-        return []
-
-    def get_pulse_counter_values(self):
-        # type: () -> Dict[int, Optional[int]]
-        return {}
-
-    def load_group_actions(self):
-        # type: () -> List[GroupActionDTO]
-        return []
-
-    # Error functions
-
-    def error_list(self):
-        # type: () -> List[Tuple[str,int]]
-        return []
-
-    def last_success(self):
-        # type: () -> int
-        return 0
-
-    def clear_error_list(self):
-        # type: () -> bool
-        return True
-
-    def set_status_leds(self, status):
-        # type: (bool) -> None
-        return
-
-    def cold_reset(self, power_on=True):  # type: (bool) -> None
-        return None
-
-    def update_master(self, hex_filename, version):  # type: (str, str) -> None
-        return None
-
-    def update_slave_module(self, firmware_type, address, hex_filename, version):
-        # type: (str, str, str, str) -> Optional[str]
-        return None
-
-    def load_airco_status(self):
-        # type: () -> ThermostatAircoStatusDTO
-        return ThermostatAircoStatusDTO({})
-
-    def load_dimmer_configuration(self):
-        # type: () -> DimmerConfigurationDTO
-        return DimmerConfigurationDTO()  # All default values
+    def start(self):
+        fixtures_path = '{0}/etc/master_fixture.json'.format(OPENMOTICS_PREFIX)
+        logger.info('Loading fixtures {0}'.format(fixtures_path))
+        with open(fixtures_path, 'r') as fp:
+            fixture = json.load(fp)
+        for model_name, entries in fixture.items():
+            klass = MasterDummyController._import_class('master.core.memory_models.{0}'.format(model_name))
+            for entry in entries:
+                logger.info('* Creating {0}.deserialize(**{1})'.format(klass.__name__, entry))
+                instance = klass.deserialize(entry)
+                instance.save()
+        super(MasterDummyController, self).start()
