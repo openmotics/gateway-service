@@ -451,7 +451,22 @@ class UpdateController(object):
         # This code will execute after the new version is in place and before the
         # services are started. It runs the new code, has the new imports
         # available, ...
+
+        # Certificates
         UpdateController._move_openvpn_certificates(logger)
+
+        # Migrations of `openmotics.conf`
+        from six.moves.configparser import ConfigParser
+        openmotics_conf_path = constants.get_config_file()
+        openmotics_conf_path_new = '{0}.new'.format(openmotics_conf_path)
+        config = ConfigParser()
+        config.read(openmotics_conf_path)
+        if config.has_option('OpenMotics', 'version'):
+            config.remove_option('OpenMotics', 'version')
+        with open(openmotics_conf_path_new, 'w') as fp:
+            config.write(fp)
+        os.rename(openmotics_conf_path_new, openmotics_conf_path)
+
         logger.info('Preparation for first startup completed')
 
     def _execute_pending_updates(self):
