@@ -458,12 +458,14 @@ class UpdateController(object):
         # Migrations of `openmotics.conf`
         from six.moves.configparser import ConfigParser
         openmotics_conf_path = constants.get_config_file()
+        openmotics_conf_path_new = '{0}.new'.format(openmotics_conf_path)
         config = ConfigParser()
         config.read(openmotics_conf_path)
         if config.has_option('OpenMotics', 'version'):
             config.remove_option('OpenMotics', 'version')
-        with open(openmotics_conf_path, 'w') as fp:
+        with open(openmotics_conf_path_new, 'w') as fp:
             config.write(fp)
+        os.rename(openmotics_conf_path_new, openmotics_conf_path)
 
         logger.info('Preparation for first startup completed')
 
