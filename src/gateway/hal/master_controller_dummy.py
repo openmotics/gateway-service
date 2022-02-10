@@ -19,11 +19,13 @@ from __future__ import absolute_import
 
 import logging
 import json
+import os
+from datetime import datetime
 
 from gateway.hal.master_controller_core import MasterCoreController
 from master.core.core_communicator import CoreCommunicator
 from master.core.memory_models import GlobalConfiguration
-from ioc import Inject, INJECTED
+from ioc import Inject, INJECTED, Singleton
 from constants import OPENMOTICS_PREFIX
 
 if False:  # MYPY
@@ -35,9 +37,14 @@ if False:  # MYPY
 logger = logging.getLogger(__name__)
 
 
+@Singleton
 class DummyMemoryFile(object):
     def __init__(self):
+        self._eeprom_path = '{0}/etc/master_eeprom.json'.format(OPENMOTICS_PREFIX)
         self._memory = {}  # type: Dict[int, Dict[int, int]]
+        if os.path.exists(self._eeprom_path):
+            with open(self._eeprom_path, 'r') as fp:
+                self._memory = json.load(fp)
 
     def start(self):
         pass
@@ -49,26 +56,29 @@ class DummyMemoryFile(object):
         response = {}  # type: Dict[MemoryAddress, bytearray]
         for address in addresses:
             data = bytearray()
-            page_memory = self._memory.setdefault(address.page, {})
+            page_memory = self._memory.setdefault(str(address.page), {})
             for position in range(address.offset, address.offset + address.length):
-                data.append(page_memory.get(position, 255))
+                data.append(page_memory.get(str(position), 255))
             response[address] = data
         return response
 
     def write(self, data_map):  # type: (Dict[MemoryAddress, bytearray]) -> None
         for address, data in data_map.items():
-            page_memory = self._memory.setdefault(address.page, {})
+            page_memory = self._memory.setdefault(str(address.page), {})
             for index, position in enumerate(range(address.offset, address.offset + address.length)):
-                page_memory[position] = data[index]
+                page_memory[str(position)] = data[index]
 
     def commit(self):
-        pass
+        with open(self._eeprom_path, 'w') as fp:
+            json.dump(self._memory, fp, sort_keys=True, indent=4)
 
 
+@Singleton
 class DummyCommunicator(object):
     @Inject
     def __init__(self, memory_file=INJECTED):
         self._memory_file = memory_file
+        self._output_states = {}
 
     def start(self):
         pass
@@ -112,7 +122,20 @@ class DummyCommunicator(object):
                     'counter_0': 0, 'counter_1': 0, 'counter_2': 0, 'counter_3': 0,
                     'counter_4': 0, 'counter_5': 0, 'counter_6': 0, 'counter_7': 0,
                     'crc126': 0}
+        if command.instruction == 'TR':
+            now = datetime.now()
+            return {'info_type': 0,
+                    'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
+                    'weekday': now.isoweekday(),
+                    'day': now.day, 'month': now.month, 'year': now.year - 2000}
         if command.instruction == 'ST':
+            if command.request_fields[0]._data == bytearray([0]):
+                return {'info_type': 0,
+                        'rs485_mode': 0,
+                        'ba_debug_mode': 0}
+            if command.request_fields[0]._data == bytearray([1]):
+                return {'info_type': 1,
+                        'version': '0.1.0'}
             if command.request_fields[0]._data == bytearray([2]):
                 global_configuration = GlobalConfiguration()
                 return {'info_type': 2,
