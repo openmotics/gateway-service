@@ -1,0 +1,15 @@
+{
+    "GlobalConfiguration": [
+        {
+            "id": null,
+            "number_of_output_modules": 1,
+            "number_of_input_modules": 1
+        }
+    ],
+    "OutputConfiguration": [
+        {
+            "id": 0,
+            "name": "Default output"
+        }
+    ]
+}
