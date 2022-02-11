@@ -309,10 +309,10 @@ class DummyCommunicator(object):
                 consumer.consume(event_payload)
 
 
-class MasterDummyCoreController(MasterCoreController):
+class MasterCoreDummyController(MasterCoreController):
     @Inject
     def __init__(self):  # type: () -> None
-        super(MasterDummyCoreController, self).__init__()
+        super(MasterCoreDummyController, self).__init__()
 
     @staticmethod
     def _import_class(name):
@@ -347,11 +347,11 @@ class MasterDummyCoreController(MasterCoreController):
                         continue
                 elif priority != 2:
                     continue
-                klass = MasterDummyCoreController._import_class('master.core.memory_models.{0}'.format(model_name))
+                klass = MasterCoreDummyController._import_class('master.core.memory_models.{0}'.format(model_name))
                 for field_type in klass._get_field_dict().values():
                     field_type._read_only = False
                 for entry in entries:
                     logger.info('* Creating {0}.deserialize(**{1})'.format(klass.__name__, entry))
                     instance = klass.deserialize(entry)
                     instance.save()
-        super(MasterDummyCoreController, self).start()
+        super(MasterCoreDummyController, self).start()
