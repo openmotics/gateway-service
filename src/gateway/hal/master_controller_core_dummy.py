@@ -330,28 +330,29 @@ class MasterCoreDummyController(MasterCoreController):
         """
 
         fixtures_path = '{0}/etc/master_fixture.json'.format(OPENMOTICS_PREFIX)
-        logger.info('Loading fixtures {0}'.format(fixtures_path))
-        with open(fixtures_path, 'r') as fp:
-            fixture = json.load(fp)
-        for priority in [0, 1, 2]:
-            # The fixtures are a dictionary. However, the order of import is important:
-            # 0: GlobalConfiguration (sets for example the amount of modules)
-            # 1: The module configurations (defines the module metadata)
-            # 2: The rest of the configurations
-            for model_name, entries in fixture.items():
-                if model_name == 'GlobalConfiguration':
-                    if priority != 0:
+        if os.path.exists(fixtures_path):
+            logger.info('Loading fixtures {0}'.format(fixtures_path))
+            with open(fixtures_path, 'r') as fp:
+                fixture = json.load(fp)
+            for priority in [0, 1, 2]:
+                # The fixtures are a dictionary. However, the order of import is important:
+                # 0: GlobalConfiguration (sets for example the amount of modules)
+                # 1: The module configurations (defines the module metadata)
+                # 2: The rest of the configurations
+                for model_name, entries in fixture.items():
+                    if model_name == 'GlobalConfiguration':
+                        if priority != 0:
+                            continue
+                    elif 'ModuleConfiguration' in model_name:
+                        if priority != 1:
+                            continue
+                    elif priority != 2:
                         continue
-                elif 'ModuleConfiguration' in model_name:
-                    if priority != 1:
-                        continue
-                elif priority != 2:
-                    continue
-                klass = MasterCoreDummyController._import_class('master.core.memory_models.{0}'.format(model_name))
-                for field_type in klass._get_field_dict().values():
-                    field_type._read_only = False
-                for entry in entries:
-                    logger.info('* Creating {0}.deserialize(**{1})'.format(klass.__name__, entry))
-                    instance = klass.deserialize(entry)
-                    instance.save()
+                    klass = MasterCoreDummyController._import_class('master.core.memory_models.{0}'.format(model_name))
+                    for field_type in klass._get_field_dict().values():
+                        field_type._read_only = False
+                    for entry in entries:
+                        logger.info('* Creating {0}.deserialize(**{1})'.format(klass.__name__, entry))
+                        instance = klass.deserialize(entry)
+                        instance.save()
         super(MasterCoreDummyController, self).start()

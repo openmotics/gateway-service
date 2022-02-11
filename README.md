@@ -9,30 +9,39 @@ It is the glue between the OpenMotics Master (microcontroller) and the rest of t
 
 Some parts of the code can be run locally using a dummy master implementation.
 
-The openmotics service loads a config file from `$OPENMOTICS_PREFIX/etc`,
-where settings like the platform and ports can be overridden. You can specify the env variables in a .env file:
+### Environment
+
+The openmotics service loads a config file from `$OPENMOTICS_PREFIX/etc`
+where settings like the platform and ports can be overridden. This means that this environment variable
+must be set before starting the service.
+
 ```
 OPENMOTICS_PREFIX=/some/directory/pointing/to/openmotics/gateway
 ```
 
-Using the following .envrc direnv can be used to setup all the dependencies in your shell. (equivalent to nix-shell + creating and activating a virtualenv)
+**Tip**: Put this in a `.env` file and load it with `dotenv`.
+
+**Tip**: You also use `direnv` and `nix` to setup everything for you automatically. Use the following `.envrc` file. (equivalent to nix-shell + creating and activating a virtualenv)
 ```
 dotenv
 use nix
 layout python python3
 ```
 
-Installing python dependencies is done as normal
+Don't forget to installing the python dependencies the first time:
 ```
 pip install -r requirements-py3.txt
 ```
 
-Copy the configuration files and generate self signed certificates
+Copy the configuration/fixture files and generate self-signed certificates:
+
 ```sh
 mkdir -p etc static
 cd etc
 # copy the example config file, it can be further customized
-cp ../example/openmotics.conf etc
+cp ../example/openmotics.conf .
+# Copy the fixtures, they can be further customized
+cp ../example/master_fixture.json .
 # generate self signed certificate
 openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout https.key -out https.crt -subj '/CN=om-developer'
 ```
@@ -42,9 +51,29 @@ Starting the necessary services using foreman
 foreman start
 ```
 
-**[OPTIONAL]** 
+### Dummy master
 
-Extracting the [frontend build](https://github.com/openmotics/frontend/releases/download/v1.13.5/gateway-frontend_1.13.5.tgz) to `./static` also gives access to the local protal interface.
+The local running gateway will use a dummy master. The example master fixtures make a virtual input, relay and 0/1-10V module available for futher configuration.
+
+While it behaves like a Brain(+) master, only a very limited set of features is available. The goal is not to
+emulate a real device, but give a user at least something to start with. The implemented features:
+* Some status calls can be executed (e.g. it will report a version & a time)
+* Everything can be configured just as normal (the full configuration space is available)
+* It is possible to link an input to an output
+* It is possible to turn on/off, toggle & dim outputs
+* It is possible to configure group actions. The only supported actions are turning on/off, toggling & dimming outputs
+* It is possible to configure an input to execute a group action on press and/or release
+
+The configuration state is stored inside `etc/master_eeprom.json` which enables a persistent configuration between restarts.
+This is a raw-format file and is not meant for manual manipulation. After this (optional) state file is loaded (if the file is absent it
+starts with a fresh state), the fixtures inside `master_fixture.json` are loaded if this file is present. These fixtures
+represent the master ORM data format, and is designed to be manually specified. Note however that fixtures are applied on
+every start, so (temporarily) remove the fixture file if you don't want the contents to overwrite the settings.
+
+
+### Local frontend (optional) 
+
+Extracting the [frontend build](https://github.com/openmotics/frontend/releases/download/v1.13.5/gateway-frontend_1.13.5.tgz) to `./static` also gives access to the local portal interface.
 
 
 ## License
