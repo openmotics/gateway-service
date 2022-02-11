@@ -40,6 +40,7 @@ from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_controller_dummy import MasterDummyController
+from gateway.hal.master_controller_core_dummy import MasterCoreDummyController
 from gateway.models import Database, Feature
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
@@ -297,13 +298,16 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
 
     if target_platform in Platform.DummyTypes + Platform.EsafeTypes:
-        from gateway.hal.master_controller_dummy import DummyCommunicator, DummyMemoryFile
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
-        Injectable.value(core_updater=None)
-        Injectable.value(memory_file=DummyMemoryFile())
-        Injectable.value(master_communicator=DummyCommunicator())
-        Injectable.value(master_controller=MasterDummyController())
+        if target_platform == Platform.Type.CORE_DUMMY:
+            from gateway.hal.master_controller_core_dummy import DummyCommunicator, DummyMemoryFile
+            Injectable.value(core_updater=None)
+            Injectable.value(memory_file=DummyMemoryFile())
+            Injectable.value(master_communicator=DummyCommunicator())
+            Injectable.value(master_controller=MasterCoreDummyController())
+        else:
+            Injectable.value(master_controller=MasterDummyController())
         Injectable.value(eeprom_db=None)
         try:
             esafe_rebus_device = config.get('OpenMotics', 'rebus_device')
@@ -404,6 +408,13 @@ def setup_minimal_master_platform(port):
     if platform == Platform.Type.DUMMY:
         Injectable.value(maintenance_communicator=None)
         Injectable.value(master_controller=MasterDummyController())
+    elif platform == Platform.Type.CORE_DUMMY:
+        from gateway.hal.master_controller_core_dummy import DummyCommunicator, DummyMemoryFile
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(core_updater=None)
+        Injectable.value(memory_file=DummyMemoryFile())
+        Injectable.value(master_communicator=DummyCommunicator())
+        Injectable.value(master_controller=MasterCoreDummyController())
     elif platform in Platform.CoreTypes:
         from master.core import ucan_communicator, slave_communicator, core_updater
         _ = ucan_communicator, slave_communicator, core_updater
