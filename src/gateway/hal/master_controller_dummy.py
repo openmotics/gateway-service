@@ -52,7 +52,7 @@ class DummyMemoryFile(object):
 
     def __init__(self):
         self._eeprom_path = '{0}/etc/master_eeprom.json'.format(OPENMOTICS_PREFIX)
-        self._memory = {}  # type: Dict[int, Dict[int, int]]
+        self._memory = {}  # type: Dict[str, Dict[str, int]]
         if os.path.exists(self._eeprom_path):
             with open(self._eeprom_path, 'r') as fp:
                 self._memory = json.load(fp)
@@ -135,8 +135,8 @@ class DummyCommunicator(object):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        if command.instruction == 'GC':
-            if command.request_fields[0]._data == bytearray([0]):
+        if command.instruction == b'GC':
+            if command.request_fields[0]._data == bytearray([0]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 global_configuration = GlobalConfiguration()
                 return {'type': 0,
                         'output': _default_if_255(global_configuration.number_of_output_modules, 0),
@@ -146,44 +146,44 @@ class DummyCommunicator(object):
                         'ucan_input': _default_if_255(global_configuration.number_of_can_inputs, 0),
                         'ucan_sensor': _default_if_255(global_configuration.number_of_can_sensors, 0),
                         'power_rs485': 1, 'power_can': 1}
-        if command.instruction == 'BA':
+        if command.instruction == b'BA':
             basic_action = BasicAction(action_type=fields['type'], action=fields['action'],
                                        device_nr=fields['device_nr'], extra_parameter=fields['extra_parameter'])
             self._process_basic_action(basic_action)
             return {'type': basic_action.action_type, 'action': basic_action.action,
                     'device_nr': basic_action.device_nr, 'extra_parameter': basic_action.extra_parameter}
-        if command.instruction == 'PC':
+        if command.instruction == b'PC':
             return {'series': fields['series'],
                     'counter_0': 0, 'counter_1': 0, 'counter_2': 0, 'counter_3': 0,
                     'counter_4': 0, 'counter_5': 0, 'counter_6': 0, 'counter_7': 0,
                     'crc126': 0}
-        if command.instruction == 'TR':
+        if command.instruction == b'TR':
             now = datetime.now()
             return {'info_type': 0,
                     'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
                     'weekday': now.isoweekday(),
                     'day': now.day, 'month': now.month, 'year': now.year - 2000}
-        if command.instruction == 'ST':
-            if command.request_fields[0]._data == bytearray([0]):
+        if command.instruction == b'ST':
+            if command.request_fields[0]._data == bytearray([0]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 return {'info_type': 0,
                         'rs485_mode': 0,
                         'ba_debug_mode': 0}
-            if command.request_fields[0]._data == bytearray([1]):
+            if command.request_fields[0]._data == bytearray([1]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 return {'info_type': 1,
                         'version': '0.1.0'}
-            if command.request_fields[0]._data == bytearray([2]):
+            if command.request_fields[0]._data == bytearray([2]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 global_configuration = GlobalConfiguration()
                 return {'info_type': 2,
                         'amount_output_modules': _default_if_255(global_configuration.number_of_output_modules, 0),
                         'amount_input_modules': _default_if_255(global_configuration.number_of_input_modules, 0),
                         'amount_sensor_modules': _default_if_255(global_configuration.number_of_sensor_modules, 0),
                         'amount_can_control_modules': _default_if_255(global_configuration.number_of_can_control_modules, 0)}
-        if command.instruction == 'CD':
-            if command.request_fields[0]._data == bytearray([0]):
+        if command.instruction == b'CD':
+            if command.request_fields[0]._data == bytearray([0]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 return {'amount_of_ucans': 0}
-        if command.instruction == 'DL':
+        if command.instruction == b'DL':
             global_configuration = GlobalConfiguration()
-            if command.request_fields[0]._data == bytearray([0]):
+            if command.request_fields[0]._data == bytearray([0]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 information = []
                 for module_id in range(_default_if_255(global_configuration.number_of_output_modules, 0)):
                     output_byte = 0
@@ -194,7 +194,7 @@ class DummyCommunicator(object):
                             output_byte |= (1 << entry_id)
                     information.append(output_byte)
                 return {'type': 0, 'information': information}
-            if command.request_fields[0]._data == bytearray([1]):
+            if command.request_fields[0]._data == bytearray([1]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 information = []
                 for module_id in range(_default_if_255(global_configuration.number_of_input_modules, 0)):
                     input_byte = 0
@@ -204,7 +204,7 @@ class DummyCommunicator(object):
                             input_byte |= (1 << entry_id)
                     information.append(input_byte)
                 return {'type': 1, 'information': information}
-        if command.instruction == 'OD':
+        if command.instruction == b'OD':
             output_id = fields['device_nr']
             output_state = self._output_states.get(output_id, {})
             return {'device_nr': output_id,
