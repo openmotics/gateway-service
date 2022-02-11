@@ -2,14 +2,30 @@
     "GlobalConfiguration": [
         {
             "id": null,
-            "number_of_output_modules": 1,
+            "number_of_output_modules": 2,
             "number_of_input_modules": 1
+        }
+    ],
+    "OutputModuleConfiguration": [
+        {
+            "id": 0,
+            "address": "111.123.123.001"
+        },
+        {
+            "id": 1,
+            "address": "100.123.123.001"
         }
     ],
     "OutputConfiguration": [
         {
             "id": 0,
             "name": "Default output"
+        }
+    ],
+    "InputModuleConfiguration": [
+        {
+            "id": 0,
+            "address": "105.123.123.001"
         }
     ]
 }
