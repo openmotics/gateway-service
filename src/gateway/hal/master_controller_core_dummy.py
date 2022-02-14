@@ -21,7 +21,9 @@ import logging
 import json
 import os
 from datetime import datetime
+from six.moves.configparser import ConfigParser
 
+import constants
 from gateway.hal.master_controller_core import MasterCoreController
 from master.core.core_communicator import CoreCommunicator
 from master.core.memory_models import GlobalConfiguration, InputConfiguration
@@ -30,7 +32,6 @@ from master.core.fields import WordField, ByteField
 from master.core.core_api import CoreAPI
 from master.core.group_action import GroupActionController
 from ioc import Inject, INJECTED, Singleton
-from constants import OPENMOTICS_PREFIX
 
 if False:  # MYPY
     from typing import List, Dict, Any, Union, Optional, TypeVar
@@ -51,9 +52,14 @@ class DummyMemoryFile(object):
     """
 
     def __init__(self):
-        self._eeprom_path = '{0}/etc/master_eeprom.json'.format(OPENMOTICS_PREFIX)
+        self._eeprom_path = '{0}/etc/master_eeprom.json'.format(constants.OPENMOTICS_PREFIX)
         self._memory = {}  # type: Dict[str, Dict[str, int]]
-        if os.path.exists(self._eeprom_path):
+
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        self._persistent_eeprom = (config.has_option('OpenMotics', 'dummy_eeprom_persistence') and
+                                   config.getboolean('OpenMotics', 'dummy_eeprom_persistence'))
+        if self._persistent_eeprom and os.path.exists(self._eeprom_path):
             with open(self._eeprom_path, 'r') as fp:
                 self._memory = json.load(fp)
 
@@ -80,8 +86,9 @@ class DummyMemoryFile(object):
                 page_memory[str(position)] = data[index]
 
     def commit(self):
-        with open(self._eeprom_path, 'w') as fp:
-            json.dump(self._memory, fp, sort_keys=True, indent=4)
+        if self._persistent_eeprom:
+            with open(self._eeprom_path, 'w') as fp:
+                json.dump(self._memory, fp, sort_keys=True, indent=4)
 
 
 @Singleton
@@ -329,7 +336,7 @@ class MasterCoreDummyController(MasterCoreController):
               the persistent buffer.
         """
 
-        fixtures_path = '{0}/etc/master_fixture.json'.format(OPENMOTICS_PREFIX)
+        fixtures_path = '{0}/etc/master_fixture.json'.format(constants.OPENMOTICS_PREFIX)
         if os.path.exists(fixtures_path):
             logger.info('Loading fixtures {0}'.format(fixtures_path))
             with open(fixtures_path, 'r') as fp:

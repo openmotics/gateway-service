@@ -64,11 +64,13 @@ emulate a real device, but give a user at least something to start with. The imp
 * It is possible to configure group actions. The only supported actions are turning on/off, toggling & dimming outputs
 * It is possible to configure an input to execute a group action on press and/or release
 
-The configuration state is stored inside `etc/master_eeprom.json` which enables a persistent configuration between restarts.
-This is a raw-format file and is not meant for manual manipulation. After this (optional) state file is loaded (if the file is absent it
-starts with a fresh state), the fixtures inside `master_fixture.json` are loaded if this file is present. These fixtures
-represent the master ORM data format, and is designed to be manually specified. Note however that fixtures are applied on
-every start, so (temporarily) remove the fixture file if you don't want the contents to overwrite the settings.
+The implementation supports a persistent eeprom state (by default only the fixtures will be available when the service is (re)started).
+To enable this, add `dummy_eeprom_persistence = true` under the `OpenMotics` section in `openmotics.conf`. When enabled, the configuration
+state is stored inside `etc/master_eeprom.json`. This is a raw-format file and is not meant for manual manipulation. 
+
+
+On startup, and after the optional eeprom state is restored, he fixtures inside `master_fixture.json` are loaded if this file is present. 
+These fixtures represent the master ORM data format, and are designed to be manually specified.
 
 
 ### Local frontend (optional) 
