@@ -399,9 +399,10 @@ class Platform(object):
         CLASSIC = 'CLASSIC'
         CORE_PLUS = 'CORE_PLUS'
         CORE = 'CORE'
+        CORE_DUMMY = 'CORE_DUMMY'
         ESAFE = 'ESAFE'
 
-    DummyTypes = [Type.DUMMY, Type.ESAFE_DUMMY]
+    DummyTypes = [Type.DUMMY, Type.ESAFE_DUMMY, Type.CORE_DUMMY]
     ClassicTypes = [Type.CLASSIC]
     CoreTypes = [Type.CORE, Type.CORE_PLUS]
     EsafeTypes = [Type.ESAFE]
