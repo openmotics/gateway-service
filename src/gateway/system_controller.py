@@ -72,6 +72,7 @@ class SystemController(object):
 
     def set_timezone(self, timezone):
         _ = self  # Not static for consistency
+        time_before = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         timezone_file_path = '/usr/share/zoneinfo/' + timezone
         if not os.path.isfile(timezone_file_path):
             raise RuntimeError('Could not find timezone \'' + timezone + '\'')
@@ -80,6 +81,8 @@ class SystemController(object):
         os.symlink(timezone_file_path, constants.get_timezone_file())
         # Make sure python refreshes the timezone information
         time.tzset()
+        time_after = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        logger.info('Timezone changed to {0}. Time went from {1} to {2}'.format(timezone, time_before, time_after))
         if self._message_client is not None:
             self._message_client.send_event(OMBusEvents.TIME_CHANGED, {})
         # Trigger time sync code

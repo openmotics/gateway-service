@@ -139,6 +139,7 @@ class PulseCounterControllerTest(unittest.TestCase):
         master_controller_mock = Mock()
         master_controller_mock.get_amount_of_pulse_counters = lambda: 24
         master_controller_mock.load_pulse_counter = lambda pulse_counter_id: master_pulse_counters[pulse_counter_id]
+        master_controller_mock.load_pulse_counters = lambda: master_pulse_counters.values()
         master_controller_mock.save_pulse_counters = _save_pulse_counters
 
         SetUpTestInjections(master_controller=master_controller_mock,

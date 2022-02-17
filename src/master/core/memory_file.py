@@ -240,7 +240,7 @@ class MemoryFile(object):
                 logger.info('MEMORY: Activate requested')
                 self._needs_activation.set()
             else:
-                logger.info('MEMORY: No activation requred')
+                logger.info('MEMORY: No activation required')
 
     def _activate(self):  # type: () -> None
         with self._activate_lock, self._commit_lock:
