@@ -680,6 +680,7 @@ class MasterCoreController(MasterController):
             # Configure shutter
             output_module = output.module
             shutter = ShutterMapper.dto_to_orm(shutter_dto)
+            shutter.save(commit=False)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
             output_module.save(commit=False)
         MemoryCommitter.commit()
