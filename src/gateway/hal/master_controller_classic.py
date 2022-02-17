@@ -1361,9 +1361,16 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def get_datetime(self):
         # type: () -> datetime
+        def _limit(value, minimum, maximum):
+            return max(min(value, maximum), minimum)
+
         response = self._master_communicator.do_command(master_api.get_time())
-        return datetime(year=2000 + response['year'], month=response['month'], day=response['day'],
-                        hour=response['hours'], minute=response['min'], second=response['sec'])
+        return datetime(year=2000 + _limit(response['year'], 0, 99),
+                        month=_limit(response['month'], 1, 12),
+                        day=_limit(response['day'], 1, 31),
+                        hour=_limit(response['hours'], 0, 23),
+                        minute=_limit(response['min'], 0, 59),
+                        second=_limit(response['sec'], 0, 59))
 
     def get_configuration_dirty_flag(self):
         # type: () -> bool
