@@ -89,10 +89,14 @@ class PulseCounterController(BaseController):
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         pulse_counter_dtos = []
+        master_pulse_counters = {pc.id: pc for pc in self._master_controller.load_pulse_counters()}
         for pulse_counter in list(PulseCounter.select(PulseCounter, Room)
                                               .join_from(PulseCounter, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             if pulse_counter.source == 'master':
-                pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter.number)
+                pulse_counter_dto = master_pulse_counters.get(pulse_counter.number)
+                if pulse_counter_dto is None:
+                    logger.warning('The ORM contains outdated PulseCounters')
+                    continue
                 pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
                 pulse_counter_dto.name = pulse_counter.name  # Use longer ORM name
             else:
