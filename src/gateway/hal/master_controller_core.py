@@ -478,10 +478,17 @@ class MasterCoreController(MasterController):
 
     def get_datetime(self):
         # type: () -> datetime
+        def _limit(value, minimum, maximum):
+            return max(min(value, maximum), minimum)
+
         response = self._master_communicator.do_command(command=CoreAPI.get_date_time(),
                                                         fields={})
-        return datetime(year=2000 + response['year'], month=response['month'], day=response['day'],
-                        hour=response['hours'], minute=response['minutes'], second=response['seconds'])
+        return datetime(year=2000 + _limit(response['year'], 0, 99),
+                        month=_limit(response['month'], 1, 12),
+                        day=_limit(response['day'], 1, 31),
+                        hour=_limit(response['hours'], 0, 23),
+                        minute=_limit(response['minutes'], 0, 59),
+                        second=_limit(response['seconds'], 0, 59))
 
     # Input
 
