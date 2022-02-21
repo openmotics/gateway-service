@@ -463,27 +463,35 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _save_thermostat_configurations(self, thermostats, mode):  # type: (List[ThermostatDTO], str) -> None
         for thermostat_dto in thermostats:
+            logger.debug('Updating thermostat %s', thermostat_dto)
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto)
             thermostat.save()
             update, remove = ThermostatMapper.get_valve_links(thermostat_dto, mode)
             for valve_to_thermostat in remove:
-                valve_to_thermostat.delete()
+                logger.debug('Removing valve %s of %s', valve_to_thermostat.valve, thermostat)
+                valve_to_thermostat.valve.delete().execute()
             for valve_to_thermostat in update:
+                logger.debug('Updating valve %s of %s', valve_to_thermostat.valve, thermostat)
                 valve_to_thermostat.valve.save()
                 valve_to_thermostat.save()
             if thermostat.sensor is None and thermostat.valves == []:
-                thermostat.delete()
+                logger.debug('Unconfigured thermostat %s', thermostat)
+                thermostat.delete().execute()
             else:
                 update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, mode)
                 for day_schedule in remove:
-                    day_schedule.delete()
+                    logger.debug('Removing schedule %s of %s', day_schedule, thermostat)
+                    day_schedule.delete().execute()
                 for day_schedule in update:
+                    logger.debug('Updating schedule %s of %s', day_schedule, thermostat)
                     day_schedule.save()
                 # TODO: trigger update for schedules
                 update, remove = ThermostatMapper.get_preset_links(thermostat_dto, mode)
                 for preset in remove:
-                    preset.delete()
+                    logger.debug('Removing preset %s of %s', preset, thermostat)
+                    preset.delete().execute()
                 for preset in update:
+                    logger.debug('Updating preset %s of %s', preset, thermostat)
                     preset.save()
         self._thermostat_config_changed()
         if self._sync_thread:

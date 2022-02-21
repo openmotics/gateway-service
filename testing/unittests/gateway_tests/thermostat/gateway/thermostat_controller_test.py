@@ -83,7 +83,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 
-    def test_update_thermostat(self):
+    def test_unconfigure(self):
         Room.create(number=2, name='Room 2')
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,
@@ -96,18 +96,14 @@ class ThermostatControllerTest(unittest.TestCase):
                                        pid_cooling_i=100,
                                        pid_cooling_d=50,
                                        automatic=True,
-                                       room=None,
                                        start=0,
                                        valve_config='equal',
                                        thermostat_group=self._thermostat_group)
         self.controller.save_heating_thermostats([
-            ThermostatDTO(id=thermostat.id, sensor=None, room=2)
+            ThermostatDTO(id=thermostat.id, sensor=None)
         ])
         thermostats = self.controller.load_heating_thermostats()
-        self.assertEqual(len(thermostats), 1)
-        self.assertEqual(thermostats[0].name, 'thermostat 1')
-        self.assertEqual(thermostats[0].sensor, None)
-        self.assertEqual(thermostats[0].room, 2)
+        self.assertEqual(len(thermostats), 0)
 
     def test_update_schedules(self):
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
