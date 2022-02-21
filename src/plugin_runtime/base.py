@@ -396,15 +396,15 @@ class PluginWebBody():
             return None
         if self.obj_type == 'str':
             content_bytes = self.content.encode('utf-8')  # type: bytes
-            encoded = base64.b64encode(content_bytes).decode()
+            encoded = base64.b64encode(content_bytes)
         elif self.obj_type == 'dict':
             json_dump = json.dumps(self.content).encode('utf-8')  # type: bytes
-            encoded = base64.b64encode(json_dump).decode()
+            encoded = base64.b64encode(json_dump)
         else:  # if bytes (py3 only)
-            encoded = base64.b64encode(self.content).decode()
+            encoded = base64.b64encode(self.content)
         obj_dict = {
             'type': self.obj_type,
-            'data': encoded
+            'data': encoded.decode('utf-8')
         }
         return json.dumps(obj_dict)
 
@@ -420,16 +420,16 @@ class PluginWebBody():
             raise AttributeError('Could not deserialize serial data of type: {}'.format(type(serial)))
         content = None
         if data is not None:
-            content = base64.b64decode(data).decode(encoding='utf-8')
+            content = base64.b64decode(data)
         if content is not None:
             if obj_type == 'dict':
                 try:
                     content_json = json.loads(content)
                     return content_json
                 except Exception:
-                    return content
+                    return content.decode(encoding='utf-8')
             elif obj_type == 'str':
-                return content
+                return content.decode(encoding='utf-8')
             else:  # bytes string
                 return content
         return None
