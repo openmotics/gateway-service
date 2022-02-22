@@ -404,7 +404,7 @@ class PluginWebBody():
             encoded = base64.b64encode(self.content)
         obj_dict = {
             'type': self.obj_type,
-            'data': encoded
+            'data': encoded.decode('utf-8')
         }
         return json.dumps(obj_dict)
 
@@ -415,7 +415,7 @@ class PluginWebBody():
             return None
         obj_dict = json.loads(serial)
         obj_type = obj_dict['type']
-        data = obj_dict['data']
+        data = obj_dict['data'].encode(encoding='utf-8')
         if obj_type not in ['str', 'bytes', 'dict', 'NoneType', 'unicode']:
             raise AttributeError('Could not deserialize serial data of type: {}'.format(type(serial)))
         content = None
