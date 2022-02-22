@@ -129,7 +129,9 @@ class ThermostatControllerGateway(ThermostatController):
 
     def refresh_thermostats_from_db(self):  # type: () -> None
         self._sync_auto_presets()
+        removed_thermostats = set(self.thermostat_pids.keys())
         for thermostat in list(Thermostat.select()):
+            removed_thermostats.discard(thermostat.id)
             thermostat_pid = self.thermostat_pids.get(thermostat.number)
             if thermostat_pid is None:
                 thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
@@ -138,6 +140,8 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
+        for thermostat_id in removed_thermostats:
+            self.thermostat_pids.pop(thermostat_id, None)
         # FIXME: remove invalid pumps, database should cascade instead.
         Pump.delete().where(Pump.output.is_null()) \
             .execute()
@@ -463,27 +467,36 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _save_thermostat_configurations(self, thermostats, mode):  # type: (List[ThermostatDTO], str) -> None
         for thermostat_dto in thermostats:
+            logger.debug('Updating thermostat %s', thermostat_dto)
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto)
             thermostat.save()
             update, remove = ThermostatMapper.get_valve_links(thermostat_dto, mode)
             for valve_to_thermostat in remove:
-                valve_to_thermostat.delete()
+                logger.debug('Removing valve %s of %s', valve_to_thermostat.valve, thermostat)
+                valve_to_thermostat.valve.delete().execute()
             for valve_to_thermostat in update:
+                logger.debug('Updating valve %s of %s', valve_to_thermostat.valve, thermostat)
                 valve_to_thermostat.valve.save()
                 valve_to_thermostat.save()
             if thermostat.sensor is None and thermostat.valves == []:
-                thermostat.delete()
+                logger.debug('Unconfigured thermostat %s', thermostat)
+                self.thermostat_pids.pop(thermostat.id, None)
+                thermostat.delete().execute()
             else:
                 update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, mode)
                 for day_schedule in remove:
-                    day_schedule.delete()
+                    logger.debug('Removing schedule %s of %s', day_schedule, thermostat)
+                    day_schedule.delete().execute()
                 for day_schedule in update:
+                    logger.debug('Updating schedule %s of %s', day_schedule, thermostat)
                     day_schedule.save()
                 # TODO: trigger update for schedules
                 update, remove = ThermostatMapper.get_preset_links(thermostat_dto, mode)
                 for preset in remove:
-                    preset.delete()
+                    logger.debug('Removing preset %s of %s', preset, thermostat)
+                    preset.delete().execute()
                 for preset in update:
+                    logger.debug('Updating preset %s of %s', preset, thermostat)
                     preset.save()
         self._thermostat_config_changed()
         if self._sync_thread:
@@ -632,6 +645,9 @@ class ThermostatControllerGateway(ThermostatController):
         self._thermostat_config_changed()
 
     def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+        thermostats = Thermostat.select().where(Thermostat.thermostat_group_id << thermostat_group_ids)
+        if thermostats.exists():
+            raise ValueError('Refusing to delete a group that contains configured units: %s' % list(thermostats))
         ThermostatGroup.delete().where(ThermostatGroup.number << thermostat_group_ids) \
             .execute()
 
