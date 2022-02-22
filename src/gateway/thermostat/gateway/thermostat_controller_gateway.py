@@ -129,7 +129,9 @@ class ThermostatControllerGateway(ThermostatController):
 
     def refresh_thermostats_from_db(self):  # type: () -> None
         self._sync_auto_presets()
+        removed_thermostats = set(self.thermostat_pids.keys())
         for thermostat in list(Thermostat.select()):
+            removed_thermostats.discard(thermostat.id)
             thermostat_pid = self.thermostat_pids.get(thermostat.number)
             if thermostat_pid is None:
                 thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
@@ -138,6 +140,8 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
+        for thermostat_id in removed_thermostats:
+            self.thermostat_pids.pop(thermostat_id, None)
         # FIXME: remove invalid pumps, database should cascade instead.
         Pump.delete().where(Pump.output.is_null()) \
             .execute()
@@ -476,6 +480,7 @@ class ThermostatControllerGateway(ThermostatController):
                 valve_to_thermostat.save()
             if thermostat.sensor is None and thermostat.valves == []:
                 logger.debug('Unconfigured thermostat %s', thermostat)
+                self.thermostat_pids.pop(thermostat.id, None)
                 thermostat.delete().execute()
             else:
                 update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, mode)
