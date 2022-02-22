@@ -20,7 +20,6 @@ from __future__ import absolute_import
 import logging
 import os
 import time
-from collections import deque
 from six.moves.queue import Queue, Empty
 
 from intelhex import IntelHex
@@ -34,8 +33,8 @@ from logs import Logs
 from platform_utils import Hardware
 
 if False:  # MYPY
-    from typing import Optional, Deque
-    from serial import Serial
+    from typing import Optional, List
+    from serial.serialposix import Serial
 
 # Different name to reduce confusion between multiple used loggers
 global_logger = logging.getLogger(__name__)
@@ -63,7 +62,7 @@ class CoreUpdater(object):
     BLOCK_WRITE_FAILURE_DELAY = 1.5
     GLOBAL_RETRY_DELAY = 5.0
     TRACE_SIZE = 15
-    BOOTLOADER_MARKER = 'DS30HexLoader'
+    BOOTLOADER_MARKER = '30HexLoader'  # Should have been `DS30HexLoader`, but there are often framing errors on the `D`
 
     ENTER_BOOTLOADER_TRIES = 3
     BLOCK_WRITE_TRIES = 5
@@ -83,7 +82,7 @@ class CoreUpdater(object):
         self._master_started.set()
         self._read_queue = Queue()  # type: Queue[str]
         self._stop_reading = False
-        self._communications_trace = []  # deque(maxlen=CoreUpdater.TRACE_SIZE)
+        self._communications_trace = []  # type: List[str]
 
     def _handle_event(self, data):
         core_event = MasterCoreEvent(data)
@@ -98,7 +97,7 @@ class CoreUpdater(object):
         component_logger.info('Updating Core')
         start_time = time.time()
 
-        self._communications_trace = []  # .clear()
+        self._communications_trace = []
         if self._master_communicator is not None and not self._master_communicator.is_running():
             self._master_communicator.start()
 
@@ -130,6 +129,7 @@ class CoreUpdater(object):
         read_thread = Thread(name='cupdateread', target=self._read)
         read_thread.start()
 
+        failure = False
         try:
             global_tries = CoreUpdater.GLOBAL_TRIES
             completed = False
@@ -141,10 +141,13 @@ class CoreUpdater(object):
                     enter_bootloader_tries = CoreUpdater.ENTER_BOOTLOADER_TRIES
                     while True:
                         try:
+                            Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, False)
+                            time.sleep(CoreUpdater.POWER_CYCLE_DELAY / 2)
                             self._cli_serial.flushInput()
                             self._cli_serial.flushOutput()
                             self._clear_read_queue()
-                            Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
+                            time.sleep(CoreUpdater.POWER_CYCLE_DELAY / 2)
+                            Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, True)
                             response = self._read_line()
                             if response is None or CoreUpdater.BOOTLOADER_MARKER not in response:
                                 raise RuntimeError('Did not receive bootloader marker in time: {0}'.format(response))
@@ -217,9 +220,17 @@ class CoreUpdater(object):
                     component_logger.warning('Global failure bootloading, trying again')
                     time.sleep(CoreUpdater.GLOBAL_RETRY_DELAY)
             component_logger.info('Flashing... Done')
+        except Exception:
+            failure = True
+            raise
         finally:
             self._stop_reading = True
             read_thread.join()
+            if failure:
+                # If there is a failure, write down the communications trace
+                # after the read thread is stopped.
+                with open('/tmp/bootloader.trace', 'w') as f:
+                    f.write('\n'.join(self._communications_trace))
 
         component_logger.info('Post-flash power cycle')
         time.sleep(CoreUpdater.POST_BOOTLOAD_DELAY)
@@ -253,8 +264,6 @@ class CoreUpdater(object):
             ))
 
         component_logger.info('Update completed. Took {0:.1f}s'.format(time.time() - start_time))
-        with open('/tmp/bootloader.trace', 'w') as f:
-            f.write('\n'.join(self._communications_trace))
 
     def _verify_bootloader(self):  # type: () -> Optional[str]
         while True:
@@ -283,11 +292,14 @@ class CoreUpdater(object):
             return None
 
     def _read(self):
-        line_buffer = b''
+        line_buffer = ''
         while not self._stop_reading:
             bytes_waiting = self._cli_serial.inWaiting()
             if bytes_waiting:
-                line_buffer += bytearray(self._cli_serial.read(bytes_waiting)).decode()
+                try:
+                    line_buffer += bytearray(self._cli_serial.read(bytes_waiting)).decode()
+                except UnicodeDecodeError:
+                    pass  # Is expected when (re)booting
             while '\n' in line_buffer:
                 message, line_buffer = line_buffer.split('\n', 1)
                 self._communications_trace.append('{0:.3f} < {1}'.format(time.time(), message))
@@ -298,7 +310,7 @@ class CoreUpdater(object):
 
     def _clear_read_queue(self):
         try:
-            while self._read_queue.get(False):
-                pass
+            while True:
+                self._read_queue.get(False)
         except Empty:
             pass

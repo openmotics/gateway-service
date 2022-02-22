@@ -98,7 +98,7 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
 
             message, data = data.split(b'\n', 1)
 
-            if b'DS30HexLoader' in message:
+            if b'30HexLoader' in message:
                 logger.critical('Detected master boot/reset')
 
             if self._receiver_callback is not None:
