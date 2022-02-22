@@ -63,7 +63,7 @@ class CoreCommunicator(object):
     END_OF_REPLY = bytearray(b'\r\n')
 
     BLOCKER_TIMEOUTS = {CommunicationBlocker.RESTART: 15.0,
-                        CommunicationBlocker.UPDATE: 600.0,
+                        CommunicationBlocker.UPDATE: 1800.0,
                         CommunicationBlocker.VERSION_SCAN: 5.0,
                         CommunicationBlocker.FACTORY_RESET: 600.0}
     BLOCKER_ABORT = [CommunicationBlocker.UPDATE,
