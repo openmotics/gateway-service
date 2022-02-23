@@ -528,8 +528,10 @@ class MasterCoreController(MasterController):
                     self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         return refresh
 
-    def set_input(self, input_id, state):
-        raise NotImplementedError()
+    def set_input(self, input_id, state):  # type: (int, bool) -> None
+        self._do_basic_action(BasicAction(action_type=1,
+                                          action=0 if state else 1,  # 0 means "press", 1 means "release"
+                                          device_nr=input_id))
 
     # Outputs
 
