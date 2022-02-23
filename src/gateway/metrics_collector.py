@@ -566,7 +566,6 @@ class MetricsCollector(object):
                                   'output1': convert_float(thermostat.output_1_level),
                                   'steering_power': convert_float(thermostat.steering_power),
                                   'state': thermostat.state,
-                                  'mode': int(thermostat.mode),
                                   'automatic': thermostat.automatic,
                                   'current_setpoint': convert_float(thermostat.setpoint_temperature)}
                         if thermostat.outside_temperature is not None:

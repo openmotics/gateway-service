@@ -380,7 +380,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                                 actual_temperature=actual_temperature,
                                                                 setpoint_temperature=setpoint_temperature,
                                                                 outside_temperature=outside_temperature,
-                                                                mode=0,  # TODO: Need to be fixed
+                                                                mode=thermostat_group.mode,
                                                                 state=thermostat.state,
                                                                 automatic=active_preset.type == Preset.Types.AUTO,
                                                                 setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
