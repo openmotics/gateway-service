@@ -88,7 +88,7 @@ class ThermostatGroupDTO(BaseDTO):
 class ThermostatStatusDTO(BaseDTO):
     def __init__(self, id, actual_temperature, setpoint_temperature, automatic, setpoint, mode, state, preset,
                  outside_temperature=None, output_0_level=None, output_1_level=None, steering_power=None):
-        # type: (int, Optional[float], float, bool, int, int, str, str, Optional[float], Optional[int], Optional[int], Optional[int]) -> None
+        # type: (int, Optional[float], float, bool, int, str, str, str, Optional[float], Optional[int], Optional[int], Optional[int]) -> None
         self.id = id
         self.actual_temperature = actual_temperature
         self.setpoint_temperature = setpoint_temperature
