@@ -190,14 +190,6 @@ class DeliveryController(object):
 
         delivery_dto.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
 
-        # first send the event to get the return_pickup_code if needed
-        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
-            'id': delivery_id,
-            'action': 'PICKUP',
-            'delivery': DeliverySerializer.serialize(delivery_dto),
-        })
-        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
-
         # if applicable, delete the courier user in case it is an return
         # else, just save the delivery
         if delivery_dto.type == Delivery.DeliveryType.RETURN:
@@ -206,6 +198,14 @@ class DeliveryController(object):
             self.user_controller.remove_user(pickup_user_dto)
         else:
             delivery_dto_saved = self.save_delivery(delivery_dto)
+
+        # first send the event to get the return_pickup_code if needed
+        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+            'id': delivery_id,
+            'action': 'PICKUP',
+            'delivery': DeliverySerializer.serialize(delivery_dto),
+        })
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
 
         return delivery_dto_saved
 

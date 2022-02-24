@@ -35,6 +35,8 @@ from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 import gateway
 from bus.om_bus_client import MessageClient
+from esafe.rfid import RfidDeviceDummy, RfidDevice
+from esafe.rfid.idtronic_M890 import IdTronicM890
 from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
 from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
 from gateway.hal.master_controller_classic import MasterClassicController
@@ -192,6 +194,30 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(http_port=http_port)
     Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
     Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
+
+    # Rfid Device
+    logger.info('Checking if rfid device needs to be created')
+    rfid_device_file = None
+    if target_platform in Platform.EsafeTypes + [Platform.Type.ESAFE_DUMMY]:
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        try:
+            rfid_device_file = config.get('OpenMotics', 'rfid_device')
+        except NoOptionError:
+            pass
+        except NoSectionError:  # This needs to be here for testing on Jenkins, there will be no config file
+            pass
+
+    # If the device exists, create the rfid device
+    rfid_device = None  # type: Optional[RfidDevice]
+    if target_platform == Platform.Type.ESAFE:
+        if rfid_device_file is not None and os.path.exists(rfid_device_file):
+            rfid_device = IdTronicM890(rfid_device_file)
+    elif target_platform == Platform.Type.ESAFE_DUMMY:
+        # Create an dummy rfid device
+        rfid_device = RfidDeviceDummy()
+    Injectable.value(rfid_reader_device=rfid_device)
+
 
     # TODO: Clean up dependencies more to reduce complexity
 
