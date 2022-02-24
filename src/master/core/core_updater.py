@@ -147,9 +147,9 @@ class CoreUpdater(object):
                         match = re.match(r'.*?V([0-9]+\.[0-9]+) .*?Library V([0-9]+\.[0-9]+\.[0-9]+).*', response)
                         if match is None:
                             raise RuntimeError()
-                        version, library_version = match.groups()
-                        version = '.'.join(str(int(i)) for i in version.split('.'))  # Remove padding zeros
-                        component_logger.info('Entered bootloader v{0} (library v{1})'.format(version, library_version))
+                        bootloader_version, library_version = match.groups()
+                        bootloader_version = '.'.join(str(int(i)) for i in bootloader_version.split('.'))  # Remove padding zeros
+                        component_logger.info('Entered bootloader v{0} (library v{1})'.format(bootloader_version, library_version))
                     except Exception:
                         component_logger.warning('Could not parse bootloader version')
                     break  # The marker was received
