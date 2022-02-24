@@ -643,6 +643,8 @@ class ThermostatControllerGateway(ThermostatController):
                         valve.delay = thermostat_group_dto.pump_delay
                         valve.save()
         self._thermostat_config_changed()
+        if self._sync_thread:
+            self._sync_thread.request_single_run()
 
     def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
         thermostats = Thermostat.select().where(Thermostat.thermostat_group_id << thermostat_group_ids)
