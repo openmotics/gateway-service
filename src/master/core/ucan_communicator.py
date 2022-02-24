@@ -57,11 +57,12 @@ class UCANCommunicator(object):
         self._background_consumer = BackgroundConsumer(CoreAPI.ucan_rx_transport_message(), 1, self._process_transport_message)
         self._communicator.register_consumer(self._background_consumer)
 
-    def is_ucan_in_bootloader(self, cc_address, ucan_address):  # type: (str, str) -> bool
+    def is_ucan_in_bootloader(self, cc_address, ucan_address, tries=2):  # type: (str, str, int) -> bool
         """
         Figures out whether a uCAN is in bootloader or application mode. This can be a rather slow call since it might rely on a communication timeout
         :param cc_address: The address of the CAN Control
         :param ucan_address:  The address of the uCAN
+        :param tries: Amount of times a ping is issued
         :return: Boolean, indicating whether the uCAN is in bootloader or not
         """
         try:
@@ -69,7 +70,7 @@ class UCANCommunicator(object):
                             command=UCANAPI.ping(SID.NORMAL_COMMAND),
                             identity=ucan_address,
                             fields={'data': 1},
-                            tries=2,
+                            tries=tries,
                             warn=False)
             return False
         except CommunicationTimedOutException:
@@ -77,7 +78,7 @@ class UCANCommunicator(object):
                             command=UCANAPI.ping(SID.BOOTLOADER_COMMAND),
                             identity=ucan_address,
                             fields={'data': 1},
-                            tries=2,
+                            tries=tries,
                             warn=False)
             return True
 

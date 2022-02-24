@@ -645,6 +645,9 @@ class ThermostatControllerGateway(ThermostatController):
         self._thermostat_config_changed()
 
     def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+        thermostats = Thermostat.select().where(Thermostat.thermostat_group_id << thermostat_group_ids)
+        if thermostats.exists():
+            raise ValueError('Refusing to delete a group that contains configured units: %s' % list(thermostats))
         ThermostatGroup.delete().where(ThermostatGroup.number << thermostat_group_ids) \
             .execute()
 
