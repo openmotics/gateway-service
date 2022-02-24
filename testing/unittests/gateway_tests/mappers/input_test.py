@@ -91,6 +91,7 @@ class InputCoreMapperTest(unittest.TestCase):
     def test_actions_delayed_press(self):
         orm = InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[207, 1])
         self._validate_orm(orm,
+                           output_id=0,
                            in_use=True,
                            enable_2s_press=True,
                            basic_action_2s_press=True)
@@ -106,6 +107,7 @@ class InputCoreMapperTest(unittest.TestCase):
     def test_actions_press(self):
         orm = InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[2, 1])
         self._validate_orm(orm,
+                           output_id=0,
                            in_use=True,
                            enable_press_and_release=True,
                            basic_action_press=True)
@@ -121,6 +123,7 @@ class InputCoreMapperTest(unittest.TestCase):
     def test_actions_release(self):
         orm = InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[236, 0, 2, 1, 236, 255])
         self._validate_orm(orm,
+                           output_id=0,
                            in_use=True,
                            enable_press_and_release=True,
                            basic_action_release=True)
@@ -136,6 +139,7 @@ class InputCoreMapperTest(unittest.TestCase):
     def test_actions_press_release(self):
         orm = InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[2, 1, 236, 0, 2, 2, 236, 255])
         self._validate_orm(orm,
+                           output_id=0,
                            in_use=True,
                            enable_press_and_release=True,
                            basic_action_press=True,
@@ -154,9 +158,10 @@ class InputCoreMapperTest(unittest.TestCase):
     def test_actions_short_long_press(self):
         orm = InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[207, 1, 236, 0, 2, 2, 236, 255])
         self._validate_orm(orm,
+                           output_id=0,
                            in_use=True,
                            enable_2s_press=True,
-                           enable_press_and_release=True,
+                           enable_press_and_release=False,
                            basic_action_2s_press=True,
                            basic_action_release=True)
         self.assertEqual(BasicAction(action_type=19, action=0, device_nr=1), orm.basic_action_2s_press)
