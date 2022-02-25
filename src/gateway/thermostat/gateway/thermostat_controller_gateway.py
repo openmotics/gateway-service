@@ -473,7 +473,7 @@ class ThermostatControllerGateway(ThermostatController):
             update, remove = ThermostatMapper.get_valve_links(thermostat_dto, mode)
             for valve_to_thermostat in remove:
                 logger.debug('Removing valve %s of %s', valve_to_thermostat.valve, thermostat)
-                valve_to_thermostat.valve.delete().execute()
+                valve_to_thermostat.valve.delete_instance()
             for valve_to_thermostat in update:
                 logger.debug('Updating valve %s of %s', valve_to_thermostat.valve, thermostat)
                 valve_to_thermostat.valve.save()
@@ -481,12 +481,12 @@ class ThermostatControllerGateway(ThermostatController):
             if thermostat.sensor is None and thermostat.valves == []:
                 logger.debug('Unconfigured thermostat %s', thermostat)
                 self.thermostat_pids.pop(thermostat.id, None)
-                thermostat.delete().execute()
+                thermostat.delete_instance()
             else:
                 update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, mode)
                 for day_schedule in remove:
                     logger.debug('Removing schedule %s of %s', day_schedule, thermostat)
-                    day_schedule.delete().execute()
+                    day_schedule.delete_instance()
                 for day_schedule in update:
                     logger.debug('Updating schedule %s of %s', day_schedule, thermostat)
                     day_schedule.save()
@@ -494,7 +494,7 @@ class ThermostatControllerGateway(ThermostatController):
                 update, remove = ThermostatMapper.get_preset_links(thermostat_dto, mode)
                 for preset in remove:
                     logger.debug('Removing preset %s of %s', preset, thermostat)
-                    preset.delete().execute()
+                    preset.delete_instance()
                 for preset in update:
                     logger.debug('Updating preset %s of %s', preset, thermostat)
                     preset.save()
