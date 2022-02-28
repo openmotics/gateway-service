@@ -879,7 +879,7 @@ class MasterCoreController(MasterController):
 
     # PulseCounters
 
-    def _load_pulse_counter_input_mapping(self):
+    def _load_pulse_counter_input_mapping(self):  # type: () -> Dict[int, int]
         mapping = {}
         for input_id in self._enumerate_io_modules('input', amount_per_module=8):
             input_orm = InputConfiguration(input_id)
@@ -913,9 +913,13 @@ class MasterCoreController(MasterController):
 
     def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
         current_mapping = self._load_pulse_counter_input_mapping()
-        old_used_inputs = set(current_mapping.values())
         new_mapping = copy.copy(current_mapping)
-        new_mapping.update({pc.id: pc.input_id for pc in pulse_counters if pc.id < 32})
+        for pc in pulse_counters:
+            if pc.id >= 32 or pc.input_id is None:
+                new_mapping.pop(pc.id, None)
+            else:
+                new_mapping[pc.id] = pc.input_id
+        old_used_inputs = set(current_mapping.values())
         new_used_inputs = set(new_mapping.values())
         if len(new_mapping.values()) != len(new_used_inputs):
             # Since .values() contains duplicate values, and the set `new_used_inputs` not, a difference

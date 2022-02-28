@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import copy
 import time
 import unittest
 
@@ -8,7 +9,7 @@ from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.dto import InputDTO, OutputStatusDTO, OutputDTO
+from gateway.dto import InputDTO, OutputStatusDTO, OutputDTO, PulseCounterDTO
 from gateway.dto.input import InputStatusDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
@@ -278,6 +279,25 @@ class MasterCoreControllerTest(unittest.TestCase):
         with mock.patch.object(CANFeedbackController, 'save_output_led_feedback_configuration') as call:
             self.controller.save_outputs([OutputDTO(id=0)])
             call.assert_called_once()
+
+    def test_save_pulse_counters(self):
+        self.return_data['GC'] = {'input': 1}
+        module = InputModuleConfiguration(0)
+        module.device_type = 'I'
+        module.save()
+        expected_pulse_counters = [PulseCounterDTO(id=0, input_id=4, persistent=True, name='PulseCounter 0'),
+                                   PulseCounterDTO(id=1, input_id=5, persistent=True, name='PulseCounter 1'),
+                                   PulseCounterDTO(id=20, input_id=7, persistent=True, name='PulseCounter 20')]
+        modules_to_save = copy.deepcopy(expected_pulse_counters)
+        self.controller.save_pulse_counters(modules_to_save)
+        self.assertEqual(expected_pulse_counters, [pc for pc in self.controller.load_pulse_counters()
+                                                   if pc.id in [0, 1, 20]])
+        expected_pulse_counters[1].input_id = None  # Remove Input ID - should clear the PC
+        modules_to_save = copy.deepcopy(expected_pulse_counters)
+        modules_to_save.pop(0)  # Remove first one to make sure PCs that are not passed in are not removed
+        self.controller.save_pulse_counters(modules_to_save)
+        self.assertEqual(expected_pulse_counters, [pc for pc in self.controller.load_pulse_counters()
+                                                   if pc.id in [0, 1, 20]])
 
 
 class MasterInputState(unittest.TestCase):
