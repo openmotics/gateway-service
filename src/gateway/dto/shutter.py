@@ -17,6 +17,7 @@
 Shutter DTO
 """
 from gateway.dto.base import BaseDTO
+from gateway.dto.module import ModuleDTO
 
 if False:  # MYPY
     from typing import Optional
@@ -24,7 +25,7 @@ if False:  # MYPY
 
 class ShutterDTO(BaseDTO):
     def __init__(self, id, name='', timer_up=None, timer_down=None, up_down_config=None,
-                 group_1=None, group_2=None, room=None, steps=None):
+                 group_1=None, group_2=None, room=None, steps=None, module=None):
         self.id = id  # type: int
         self.name = name  # type: str
         self.timer_up = timer_up  # type: Optional[int]
@@ -34,3 +35,4 @@ class ShutterDTO(BaseDTO):
         self.group_2 = group_2  # type: Optional[int]
         self.room = room  # type: Optional[int]
         self.steps = steps  # type: Optional[int]
+        self.module = module  # type: Optional[ModuleDTO]

@@ -115,12 +115,8 @@ class MasterDummyController(MasterController):
         # type: () -> Dict[str,List[Any]]
         return {'outputs': [], 'inputs': [], 'shutters': [], 'can_inputs': []}
 
-    def get_modules_information(self, address=None):
-        # type: (Optional[str]) -> List[ModuleDTO]
-        if address:
-            raise NotImplementedError()
-        else:
-            return []
+    def get_modules_information(self):  # type: () -> List[ModuleDTO]
+        raise NotImplementedError()
 
     def load_inputs(self):
         # type: () -> List[InputDTO]

@@ -40,6 +40,10 @@ class ShutterSerializer(object):
                 'group_2': Toolbox.denonify(shutter_dto.group_2, ShutterSerializer.BYTE_MAX),
                 'room': Toolbox.denonify(shutter_dto.room, ShutterSerializer.BYTE_MAX),
                 'steps': Toolbox.denonify(shutter_dto.steps, ShutterSerializer.WORD_MAX)}
+        if shutter_dto.module is not None:
+            data.update({'hardware_type': shutter_dto.module.hardware_type,
+                         'hardware_module': shutter_dto.module.module_type,
+                         'module_id': shutter_dto.module.order})
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

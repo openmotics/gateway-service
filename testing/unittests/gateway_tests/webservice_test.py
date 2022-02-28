@@ -412,7 +412,8 @@ class WebInterfaceTest(unittest.TestCase):
                 set_status.reset_mock()
 
     def test_get_modules_information(self):
-        master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
+        master_modules = [ModuleDTO(id=0,
+                                    source=ModuleDTO.Source.MASTER,
                                     module_type=ModuleType.OUTPUT,
                                     address='079.000.000.001',
                                     hardware_type=HardwareType.INTERNAL,
@@ -420,7 +421,8 @@ class WebInterfaceTest(unittest.TestCase):
                                     hardware_version='4',
                                     order=0,
                                     online=True)]
-        energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+        energy_modules = [ModuleDTO(id=0,
+                                    source=ModuleDTO.Source.GATEWAY,
                                     module_type=ModuleType.ENERGY,
                                     address='2',
                                     hardware_type=HardwareType.PHYSICAL,

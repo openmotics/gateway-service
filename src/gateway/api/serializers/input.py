@@ -41,6 +41,10 @@ class InputSerializer(object):
                 'room': Toolbox.denonify(input_dto.room, InputSerializer.BYTE_MAX),
                 'can': 'C' if input_dto.can else ' ',
                 'event_enabled': input_dto.event_enabled}
+        if input_dto.module is not None:
+            data.update({'hardware_type': input_dto.module.hardware_type,
+                         'hardware_module': input_dto.module.module_type,
+                         'module_id': input_dto.module.order})
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
