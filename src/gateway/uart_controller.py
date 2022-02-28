@@ -172,71 +172,49 @@ class UARTController(object):
         # type: (int, int, Union[float, int], int, int, bool) -> None
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
-            try:
-                client.write_register(registeraddress=registeraddress,
-                                      value=value,
-                                      number_of_decimals=number_of_decimals,
-                                      functioncode=functioncode,
-                                      signed=signed)
-            except Exception as ex:
-                logger.warning('Modbus write error: {0}'.format(ex))
-                time.sleep(0.1)
-                client.write_register(registeraddress=registeraddress,
-                                      value=value,
-                                      number_of_decimals=number_of_decimals,
-                                      functioncode=functioncode,
-                                      signed=signed)
-            self._last_activity = time.time()
+            self._execute_modbus(client.write_register,
+                                 registeraddress=registeraddress,
+                                 value=value,
+                                 number_of_decimals=number_of_decimals,
+                                 functioncode=functioncode,
+                                 signed=signed)
 
     @require_mode(Mode.MODBUS)
     def write_registers(self, slaveaddress, registeraddress, values):
         # type: (int, int, list) -> None
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
-            try:
-                client.write_registers(registeraddress=registeraddress,
-                                       values=values)
-            except Exception as ex:
-                logger.warning('Modbus write error: {0}'.format(ex))
-                time.sleep(0.1)
-                client.write_registers(registeraddress=registeraddress,
-                                       values=values)
-            self._last_activity = time.time()
+            self._execute_modbus(client.write_registers,
+                                 registeraddress=registeraddress,
+                                 values=values)
 
     @require_mode(Mode.MODBUS)
     def read_register(self, slaveaddress, registeraddress, number_of_decimals=0, functioncode=3, signed=False):
         # type: (int, int, int, int, bool) -> Union[float, int, list]
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
-            try:
-                return client.read_register(registeraddress=registeraddress,
-                                            number_of_decimals=number_of_decimals,
-                                            functioncode=functioncode,
-                                            signed=signed)
-            except Exception as ex:
-                logger.warning('Modbus read error: {0}'.format(ex))
-                time.sleep(0.1)
-                return client.read_register(registeraddress=registeraddress,
-                                            number_of_decimals=number_of_decimals,
-                                            functioncode=functioncode,
-                                            signed=signed)
-            finally:
-                self._last_activity = time.time()
+            return self._execute_modbus(action=client.read_registers,
+                                        registeraddress=registeraddress,
+                                        number_of_decimals=number_of_decimals,
+                                        functioncode=functioncode,
+                                        signed=signed)
 
     @require_mode(Mode.MODBUS)
     def read_registers(self, slaveaddress, registeraddress, number_of_registers=1, functioncode=3):
         # type: (int, int, int, int) -> Union[float, int, list]
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
-            try:
-                return client.read_registers(registeraddress=registeraddress,
-                                             number_of_registers=number_of_registers,
-                                             functioncode=functioncode)
-            except Exception as ex:
-                logger.warning('Modbus read error: {0}'.format(ex))
-                time.sleep(0.1)
-                return client.read_registers(registeraddress=registeraddress,
-                                             number_of_registers=number_of_registers,
-                                             functioncode=functioncode)
-            finally:
-                self._last_activity = time.time()
+            return self._execute_modbus(action=client.read_registers,
+                                        registeraddress=registeraddress,
+                                        number_of_registers=number_of_registers,
+                                        functioncode=functioncode)
+
+    def _execute_modbus(self, action, **kwargs):
+        try:
+            return action(**kwargs)
+        except Exception as ex:
+            logger.warning('Modbus read/write error: {0}'.format(ex))
+            time.sleep(0.1)
+            return action(**kwargs)
+        finally:
+            self._last_activity=time.time()
