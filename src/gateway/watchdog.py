@@ -91,9 +91,10 @@ class Watchdog(object):
         # type: (str, Union[EnergyCommunicator,MasterController], Callable[[],None]) -> None
         status = controller.get_communicator_health()
         if status == CommunicationStatus.SUCCESS:
-            Config.remove_entry('communication_recovery_{0}'.format(name))
-            # Cleanup legacy
-            Config.remove_entry('communication_recovery')
+            amount = Config.remove_entry('communication_recovery_{0}'.format(name))
+            amount += Config.remove_entry('communication_recovery')
+            if amount:
+                logger.info('Communication with {0} recovered'.format(name))
         elif status != CommunicationStatus.UNSTABLE:
             reset_action = Watchdog._get_reset_action(name, controller)
             if reset_action is not None:
