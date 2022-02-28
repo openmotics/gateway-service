@@ -207,7 +207,7 @@ class UARTController(object):
                                                 number_of_decimals=number_of_decimals,
                                                 functioncode=functioncode,
                                                 signed=signed)
-                elif number_of_registers > 1:
+                else:
                     return client.read_registers(registeraddress=registeraddress,
                                                  number_of_registers=number_of_registers,
                                                  functioncode=functioncode)
@@ -219,7 +219,7 @@ class UARTController(object):
                                                 number_of_decimals=number_of_decimals,
                                                 functioncode=functioncode,
                                                 signed=signed)
-                elif number_of_registers > 1:
+                else:
                     return client.read_registers(registeraddress=registeraddress,
                                                  number_of_registers=number_of_registers,
                                                  functioncode=functioncode)
