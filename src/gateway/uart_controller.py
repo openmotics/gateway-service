@@ -173,21 +173,34 @@ class UARTController(object):
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
             try:
-                if isinstance(value, float):
-                    client.write_register(registeraddress=registeraddress,
-                                          value=value,
-                                          number_of_decimals=number_of_decimals,
-                                          functioncode=functioncode,
-                                          signed=signed)
+                client.write_register(registeraddress=registeraddress,
+                                      value=value,
+                                      number_of_decimals=number_of_decimals,
+                                      functioncode=functioncode,
+                                      signed=signed)
             except Exception as ex:
                 logger.warning('Modbus write error: {0}'.format(ex))
                 time.sleep(0.1)
-                if isinstance(value, float):
-                    client.write_register(registeraddress=registeraddress,
-                                          value=value,
-                                          number_of_decimals=number_of_decimals,
-                                          functioncode=functioncode,
-                                          signed=signed)
+                client.write_register(registeraddress=registeraddress,
+                                      value=value,
+                                      number_of_decimals=number_of_decimals,
+                                      functioncode=functioncode,
+                                      signed=signed)
+            self._last_activity = time.time()
+
+    @require_mode(Mode.MODBUS)
+    def write_registers(self, slaveaddress, registeraddress, values):
+        # type: (int, int, list) -> None
+        with self._modbus_lock:
+            client = self._get_modbus_client(slaveaddress)
+            try:
+                client.write_registers(registeraddress=registeraddress,
+                                       values=values)
+            except Exception as ex:
+                logger.warning('Modbus write error: {0}'.format(ex))
+                time.sleep(0.1)
+                client.write_registers(registeraddress=registeraddress,
+                                       values=values)
             self._last_activity = time.time()
 
     @require_mode(Mode.MODBUS)
@@ -207,5 +220,23 @@ class UARTController(object):
                                             number_of_decimals=number_of_decimals,
                                             functioncode=functioncode,
                                             signed=signed)
+            finally:
+                self._last_activity = time.time()
+
+    @require_mode(Mode.MODBUS)
+    def read_registers(self, slaveaddress, registeraddress, number_of_registers=1, functioncode=3):
+        # type: (int, int, int, int) -> Union[float, int, list]
+        with self._modbus_lock:
+            client = self._get_modbus_client(slaveaddress)
+            try:
+                return client.read_registers(registeraddress=registeraddress,
+                                             number_of_registers=number_of_registers,
+                                             functioncode=functioncode)
+            except Exception as ex:
+                logger.warning('Modbus read error: {0}'.format(ex))
+                time.sleep(0.1)
+                return client.read_registers(registeraddress=registeraddress,
+                                             number_of_registers=number_of_registers,
+                                             functioncode=functioncode)
             finally:
                 self._last_activity = time.time()
