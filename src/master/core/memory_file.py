@@ -22,9 +22,10 @@ import time
 import threading
 from threading import Lock, Event as ThreadingEvent
 
+from gateway.daemon_thread import BaseThread
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
-from ioc import INJECTED, Inject
+from ioc import INJECTED, Inject, Singleton
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event
@@ -41,11 +42,13 @@ class MemoryTypes(object):
     EEPROM = 'E'
 
 
+@Singleton
 class MemoryFile(object):
 
     WRITE_TIMEOUT = 5
     READ_TIMEOUT = 5
     ACTIVATE_TIMEOUT = 5
+    ACTIVATION_HOLD_TIME = 1
     FRAM_TIMEOUT = 5
     WRITE_CHUNK_SIZE = 32
     SIZES = {MemoryTypes.EEPROM: (512, 256),
@@ -66,19 +69,46 @@ class MemoryFile(object):
         self._eeprom_cache = {}  # type: Dict[int, bytearray]
         self._fram_cache = {}  # type: Dict[int, Tuple[float, bytearray]]
 
-        # The write cache is a per-thread/per-type cache of all changes that need to be written that has the page
+        # The write-cache is a per-thread/per-type cache of all changes that need to be written that has the page
         # as key, and a list of tuples as value, where the tuples holds the start byte and contents
         self._write_cache = {}  # type: Dict[int, Dict[str, Dict[int, Dict[int, int]]]]
         self._write_cache_lock = {}  # type: Dict[int, Lock]
         self._select_write_cache_lock = Lock()
+        self._commit_lock = Lock()
+
+        self._stop = False
         self._activate_lock = Lock()
+        self._activator_thread = None  # type: Optional[BaseThread]
+        self._activation_event = ThreadingEvent()
+        self._needs_activation = ThreadingEvent()
 
         self._eeprom_change_callback = None  # type: Optional[Callable[[], None]]
-        self._activation_event = ThreadingEvent()
 
         self._core_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
         )
+
+    def start(self):
+        self._stop = False
+        self._activator_thread = BaseThread(name='memoryfile', target=self._activator)
+        self._activator_thread.setDaemon(True)
+        self._activator_thread.start()
+
+    def stop(self):
+        self._stop = True
+        if self._activator_thread is not None:
+            self._activator_thread.join()
+
+    def _activator(self):
+        while not self._stop:
+            try:
+                if self._needs_activation.wait(timeout=0.25):
+                    time.sleep(MemoryFile.ACTIVATION_HOLD_TIME)  # Allow multiple commits in a single activation
+                    self._needs_activation.clear()
+                    self._activate()
+            except Exception:
+                logger.exception('Unexpected error while activating')
+                time.sleep(5)
 
     def _handle_event(self, data):  # type: (Dict[str, Any]) -> None
         core_event = Event(data)
@@ -199,25 +229,31 @@ class MemoryFile(object):
                                 self._eeprom_cache[page][start + index] = data_byte
         return data_written
 
-    def activate(self):  # type: () -> None
-        with self._activate_lock:
+    def commit(self):  # type: () -> None
+        with self._commit_lock:
             logger.info('MEMORY: Writing')
             write_cache, write_lock = self._get_write_cache()
             with write_lock:
                 data_written = self._store_data(write_cache)
                 self._clear_write_cache()
             if data_written:
-                logger.info('MEMORY: Activating')
-                self._activation_event.clear()
-                self._core_communicator.do_command(
-                    command=CoreAPI.basic_action(),
-                    fields={'type': 200, 'action': 1, 'device_nr': 0, 'extra_parameter': 0},
-                    timeout=MemoryFile.ACTIVATE_TIMEOUT
-                )
-                self._activation_event.wait(timeout=60.0)
-                self._notify_eeprom_changed()
+                logger.info('MEMORY: Activate requested')
+                self._needs_activation.set()
             else:
-                logger.info('MEMORY: No activation requred')
+                logger.info('MEMORY: No activation required')
+
+    def _activate(self):  # type: () -> None
+        with self._activate_lock, self._commit_lock:
+            logger.info('MEMORY: Activating')
+            self._activation_event.clear()
+            self._core_communicator.do_command(
+                command=CoreAPI.basic_action(),
+                fields={'type': 200, 'action': 1, 'device_nr': 0, 'extra_parameter': 0},
+                timeout=MemoryFile.ACTIVATE_TIMEOUT
+            )
+            self._activation_event.wait(timeout=60.0)
+            logger.info('MEMORY: Activated')
+            self._notify_eeprom_changed()
 
     def invalidate_cache(self, reason):  # type: (str) -> None
         for page in range(MemoryFile.SIZES[MemoryTypes.EEPROM][0]):

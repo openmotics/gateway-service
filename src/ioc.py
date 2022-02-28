@@ -102,12 +102,8 @@ class _Scope(object):
         _ResetInjectionScopeMap()
         injected = _Inject(f)
         if name:
-            # logging.debug('%r injectable added as %r to scope %r.',
-            #               injected.name, name, self.name)
             pass
         else:
-            # logging.debug('%r injectable added to scope %r.',
-            #               injected.name, self.name)
             name = injected.name
         injectable = injected.injectable_wrapper
         self._gob[name] = injectable
@@ -125,10 +121,8 @@ class _Scope(object):
         return iter(self._gob)
 
     def Warmup(self):
-        # logging.debug('Warming up: %s', self.name)
         for eager in self._eagers:
             eager()
-        # logging.debug('Hot: %s', self.name)
 
     def __str__(self):
         a = ['Scope %r:' % self.name]
@@ -193,7 +187,7 @@ def _GetCurrentInjectionInfo():
     return _DATA.injection_scope_map
 
 
-def _FillInInjections(injections, arguments):
+def _FillInInjections(injections, arguments, name=None):
     injection_scope_map = _GetCurrentInjectionInfo()
 
     for injection in injections:
@@ -209,7 +203,7 @@ def _FillInInjections(injections, arguments):
                 arguments[injection] = injection_scope_map[injection].callable()
         except KeyError:
             raise InjectionMissingError(
-                'The injectable named %r was not found.' % injection)
+                'The injectable named %r was not found for %s' % (injection, name))
 
 
 def _CalculateScopeDep(injections):
@@ -255,8 +249,7 @@ def _CreateInjectWrapper(f, injections):
 
     @functools.wraps(f)
     def _Wrapper(*args, **kwargs):
-        # logging.debug('Injecting %r with %r - %r', f.__name__, injections, kwargs)
-        _FillInInjections(injections, kwargs)
+        _FillInInjections(injections, kwargs, name=repr(f))
         return f(*args, **kwargs)
 
     Wrapper = _Wrapper  # type: Any
@@ -267,8 +260,6 @@ def _CreateInjectWrapper(f, injections):
 def _CreateSingletonInjectableWrapper(f, injections):
     @functools.wraps(f)
     def _Wrapper(*args, **kwargs):
-        # logging.debug(
-        #    'Injecting singleton %r with %r - %r', f.__name__, injections, kwargs)
         for scope in _MyScopes():
             if f.__name__ in scope.singletons:
                 return scope.singletons[f.__name__]
@@ -276,8 +267,6 @@ def _CreateSingletonInjectableWrapper(f, injections):
         # Couldn't find it in current scope tree.
         dep_scope = _CalculateScopeDep(injections)
         dep_scope.singletons[f.__name__] = f(*args, **kwargs)
-        # logging.debug(
-        #    'Attaching singleton %r to scope %s', f.__name__, dep_scope.name)
         return dep_scope.singletons[f.__name__]
 
     Wrapper = _Wrapper  # type: Any
@@ -388,7 +377,6 @@ def _Inject(f):
       ValueError: If the argument is not a callable or is already injected.
     """
     inject = _InjectClass(f) if inspect.isclass(f) else _InjectFunction(f)
-    # logging.debug('Set up %r for injection', inject.name)
     return inject
 
 
@@ -497,10 +485,8 @@ Singleton.eager = _EagerSingleton
 
 def Warmup():
     """Instantiates all the eager singleton injectables."""
-    # logging.debug('Warming up ALL')
     for scope in _MyScopes():
         scope.Warmup()
-    # logging.debug('Hot ALL')
 
 
 def DumpInjectionStack():

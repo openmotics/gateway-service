@@ -20,73 +20,85 @@ import xmlrunner
 from mock import Mock
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from gateway.enums import LedStates, SerialPorts, Leds
+from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
 
 
 class FrontpanelControllerCoreTest(unittest.TestCase):
     """ Tests for FrontpanelCoreController. """
-
-    LED_STATE = {}
-
     @classmethod
     def setUpClass(cls):
         SetTestMode()
 
+    def setUp(self):
+        self._controller = FrontpanelControllerCoreTest._get_controller()
+
     def test_serial_activity(self):
-        controller = FrontpanelControllerCoreTest._get_controller()
-        controller._report_serial_activity(SerialPorts.P1, False)
-        self.assertLed(Leds.P1, True, LedStates.SOLID)
-        controller._report_serial_activity(SerialPorts.P1, True)
-        self.assertLed(Leds.P1, True, LedStates.BLINKING_50)
+        self._controller._report_serial_activity(SerialPorts.P1, False)
+        self.assertLed(Leds.P1, LedStates.SOLID)
+        self._controller._report_serial_activity(SerialPorts.P1, True)
+        self.assertLed(Leds.P1, LedStates.BLINKING_50)
 
     def test_report_carrier(self):
-        controller = FrontpanelControllerCoreTest._get_controller()
-        controller._report_carrier(False)
-        controller._report_connectivity(False)
-        self.assertLed(Leds.LAN_RED, True, LedStates.SOLID)
-        self.assertLed(Leds.LAN_GREEN, False, LedStates.SOLID)
-        controller._report_carrier(True)
-        controller._report_connectivity(False)
-        self.assertLed(Leds.LAN_RED, True, LedStates.BLINKING_50)
-        self.assertLed(Leds.LAN_GREEN, False, LedStates.SOLID)
-        controller._report_carrier(True)
-        controller._report_connectivity(True)
-        self.assertLed(Leds.LAN_RED, False, LedStates.SOLID)
-        self.assertLed(Leds.LAN_GREEN, True, LedStates.SOLID)
+        self._controller._report_carrier(False)
+        self._controller._report_connectivity(False)
+        self.assertLed(Leds.LAN_RED, LedStates.SOLID)
+        self.assertLed(Leds.LAN_GREEN, LedStates.OFF)
+        self._controller._report_carrier(True)
+        self._controller._report_connectivity(False)
+        self.assertLed(Leds.LAN_RED, LedStates.BLINKING_50)
+        self.assertLed(Leds.LAN_GREEN, LedStates.OFF)
+        self._controller._report_carrier(True)
+        self._controller._report_connectivity(True)
+        self.assertLed(Leds.LAN_RED, LedStates.OFF)
+        self.assertLed(Leds.LAN_GREEN, LedStates.SOLID)
 
     def test_report_network_activity(self):
-        controller = FrontpanelControllerCoreTest._get_controller()
-        controller._carrier = True
-        controller._connectivity = True
-        controller._report_network_activity(False)
-        self.assertLed(Leds.LAN_GREEN, True, LedStates.SOLID)
-        controller._report_network_activity(True)
-        self.assertLed(Leds.LAN_GREEN, True, LedStates.BLINKING_50)
+        self._controller._carrier = True
+        self._controller._connectivity = True
+        self._controller._report_network_activity(False)
+        self.assertLed(Leds.LAN_GREEN, LedStates.SOLID)
+        self._controller._report_network_activity(True)
+        self.assertLed(Leds.LAN_GREEN, LedStates.BLINKING_50)
 
     def test_report_cloud_vpn(self):
-        controller = FrontpanelControllerCoreTest._get_controller()
-        controller._report_cloud_reachable(False)
-        controller._report_vpn_open(False)
-        self.assertLed(Leds.CLOUD, False, LedStates.SOLID)
-        controller._report_cloud_reachable(True)
-        controller._report_vpn_open(False)
-        self.assertLed(Leds.CLOUD, True, LedStates.BLINKING_50)
-        controller._report_cloud_reachable(False)
-        controller._report_vpn_open(True)
-        self.assertLed(Leds.CLOUD, True, LedStates.BLINKING_50)
-        controller._report_cloud_reachable(True)
-        controller._report_vpn_open(True)
-        self.assertLed(Leds.CLOUD, True, LedStates.SOLID)
+        self._controller._report_cloud_reachable(False)
+        self._controller._report_vpn_open(False)
+        self.assertLed(Leds.CLOUD, LedStates.OFF)
+        self._controller._report_cloud_reachable(True)
+        self._controller._report_vpn_open(False)
+        self.assertLed(Leds.CLOUD, LedStates.BLINKING_50)
+        self._controller._report_cloud_reachable(False)
+        self._controller._report_vpn_open(True)
+        self.assertLed(Leds.CLOUD, LedStates.BLINKING_50)
+        self._controller._report_cloud_reachable(True)
+        self._controller._report_vpn_open(True)
+        self.assertLed(Leds.CLOUD, LedStates.SOLID)
 
-    def assertLed(self, led, on, mode):
-        self.assertEqual((on, mode), FrontpanelControllerCoreTest.LED_STATE.get(led))
+    def assertLed(self, led, state):
+        self.assertEqual(state, self._controller._led_states.get(led))
 
     @staticmethod
     @Scope
     def _get_controller():
-        def drive_led(led, on, mode):
-            FrontpanelControllerCoreTest.LED_STATE[led] = (on, mode)
+        driver_map = {}
+        for chip_id, chip_mapping in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM['CORE'].items():
+            for led_id, led_name in chip_mapping.items():
+                driver_map[led_name] = (chip_id, led_id)
 
-        from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
+        led_states = {}
+        led_modes = {}
+        for chip_id in range(2):
+            led_states[chip_id] = {}
+            led_modes[chip_id] = {}
+            for led_id in range(16):
+                led_states[chip_id][led_id] = False
+                led_modes[chip_id][led_id] = LedStates.SOLID
+
+        def drive_led(led, state):
+            drive_chip_id, drive_led_id = driver_map[led]
+            led_states[drive_chip_id][drive_led_id] = 'ON' if state != LedStates.OFF else 'OFF'
+            led_modes[drive_chip_id][drive_led_id] = state if state != LedStates.OFF else LedStates.SOLID
+
         SetUpTestInjections(master_communicator=Mock(),
                             master_controller=Mock(),
                             energy_communicator=Mock(),
@@ -94,6 +106,7 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
                             energy_module_controller=Mock())
         controller = FrontpanelCoreController()
         controller._master_controller.drive_led = drive_led
+        controller._platform = 'CORE'
         return controller
 
 

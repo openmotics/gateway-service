@@ -34,6 +34,7 @@ class Logs(object):
     LOG_FORMAT = "%(asctime)s - %(levelname)-8s - (%(threadName)s) - %(name)s - %(message)s"
     PREFIX = constants.OPENMOTICS_PREFIX  # e.g. /x
     UPDATE_LOGS_FOLDER = os.path.join(PREFIX, 'update_logs')  # e.g. /x/update_logs
+    WEBSERVICE_ACCESS_LOGGER = 'gateway.webservice.access'
 
     @staticmethod
     def setup_logger(log_level_override=None):
@@ -41,9 +42,6 @@ class Logs(object):
         Setup the OpenMotics logger.
         :param log_level_override: Sets the main log level for OpenMotics logging to the default StreamHandler/SysLogHandler
         """
-
-        from platform_utils import System
-
         # Remove all log handlers (since python2 `defaultConfig` has no `force` flag)
         root_logger = logging.getLogger()
         while root_logger.handlers:
@@ -66,6 +64,15 @@ class Logs(object):
         # Apply log level
         for namespace in Logs._get_service_namespaces():
             Logs.set_loglevel(openmotics_log_level, namespace)
+
+        # Add stdout logger for `gateway.webservice.access`
+        access_logger = logging.getLogger(Logs.WEBSERVICE_ACCESS_LOGGER)
+        while len(access_logger.handlers) > 0:
+            access_logger.removeHandler(access_logger.handlers[0])
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
+        access_logger.addHandler(stdout_handler)
+        access_logger.propagate = False
 
     @staticmethod
     def get_update_logger(name):  # type: (str) -> Logger
@@ -116,11 +123,12 @@ class Logs(object):
             if namespace is None or re.match("^{}.*".format(namespace), logger_namespace):
                 logger = logging.getLogger(logger_namespace)
                 logger.setLevel(level)
-                logger.propagate = True
+                if logger.name != Logs.WEBSERVICE_ACCESS_LOGGER:
+                    logger.propagate = True
 
     @staticmethod
     def _get_service_namespaces():
-        return ['openmotics', 'gateway', 'master', 'plugins', 'energy', 'update']
+        return ['openmotics', 'gateway', 'master', 'plugins', 'energy', 'update', 'esafe']
 
     @staticmethod
     def _get_configured_loglevel(fallback=logging.INFO):

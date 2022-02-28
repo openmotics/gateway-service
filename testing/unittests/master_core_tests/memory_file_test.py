@@ -22,9 +22,10 @@ import xmlrunner
 import logging
 import mock
 import threading
+import time
 from threading import Thread
 from ioc import SetTestMode
-from master.core.memory_file import MemoryTypes
+from master.core.memory_file import MemoryTypes, MemoryFile
 from master.core.memory_types import MemoryAddress
 from logs import Logs
 from mocked_core_helper import MockedCore
@@ -57,7 +58,7 @@ class MemoryFileTest(unittest.TestCase):
         self.assertEqual(bytearray([1, 2, 4]), data)
         mocked_core.memory_file.write({address: bytearray([6, 7, 8])})
         self.assertEqual(bytearray([1, 2, 4]), memory[5][10:13])
-        mocked_core.memory_file.activate()  # Only save on activate
+        mocked_core.memory_file.commit()  # Only save on commit
         self.assertEqual(bytearray([6, 7, 8]), memory[5][10:13])
 
     def test_locking(self):
@@ -89,7 +90,7 @@ class MemoryFileTest(unittest.TestCase):
             memory_file.write({address_1: bytearray([20, 21, 22, 23])})
 
         # Activate should only activate the current thread's write cache - nothing in this case
-        memory_file.activate()
+        memory_file.commit()
         self.assertEqual({address_0: bytearray([255, 255, 255, 0]),
                           address_1: bytearray([0, 255, 255, 255])},
                          memory_file.read([address_0, address_1]))
@@ -97,7 +98,7 @@ class MemoryFileTest(unittest.TestCase):
         # Activate from within thread 0
         mocked_core.write_log = []
         with mock.patch.object(threading, 'current_thread', thread_0):
-            memory_file.activate()
+            memory_file.commit()
         self.assertEqual({address_0: bytearray([10, 11, 12, 13]),
                           address_1: bytearray([13, 255, 255, 255])},
                          memory_file.read([address_0, address_1]))
@@ -110,7 +111,7 @@ class MemoryFileTest(unittest.TestCase):
         # Activate from within thread 1
         mocked_core.write_log = []
         with mock.patch.object(threading, 'current_thread', thread_1):
-            memory_file.activate()
+            memory_file.commit()
         self.assertEqual({address_0: bytearray([10, 11, 12, 20]),
                           address_1: bytearray([20, 21, 22, 23])},
                          memory_file.read([address_0, address_1]))
@@ -142,7 +143,7 @@ class MemoryFileTest(unittest.TestCase):
         # Activate from within thread
         mocked_core.write_log = []
         with mock.patch.object(threading, 'current_thread', thread):
-            memory_file.activate()
+            memory_file.commit()
 
         self.assertEqual({address: bytearray([10 + i for i in range(64)])},
                          memory_file.read([address]))
@@ -151,6 +152,24 @@ class MemoryFileTest(unittest.TestCase):
         self.assertEqual([{'type': MemoryTypes.EEPROM, 'page': 5, 'start': 16, 'data': bytearray([10 + i for i in range(32)])},
                           {'type': MemoryTypes.EEPROM, 'page': 5, 'start': 48, 'data': bytearray([10 + 32 + i for i in range(32)])}],
                          mocked_core.write_log)
+
+    def test_post_commit_activation(self):
+        MemoryFile.ACTIVATION_HOLD_TIME = 0.2
+        mocked_core = MockedCore()
+        memory = mocked_core.memory[MemoryTypes.EEPROM]
+        memory_file = mocked_core.memory_file
+
+        memory[5] = bytearray([255])
+        address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=0, length=1)
+
+        memory_file.write({address: bytearray([0])})
+        self.assertFalse(memory_file._needs_activation.isSet())
+        memory_file.commit()
+        self.assertTrue(memory_file._needs_activation.isSet())
+        memory_file.start()
+        time.sleep(MemoryFile.ACTIVATION_HOLD_TIME + 0.1)
+        self.assertFalse(memory_file._needs_activation.isSet())
+        memory_file.stop()
 
 
 if __name__ == "__main__":

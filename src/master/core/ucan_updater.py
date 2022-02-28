@@ -55,6 +55,11 @@ class UCANUpdater(object):
     BOOTLOADER_TIMEOUT_UPDATE = 60
     BOOTLOADER_TIMEOUT_RUNTIME = 0  # Currently needed to switch to application mode
 
+    # Tries
+    PING_TRIES = 4
+    CONTROL_ACTION_TRIES = 10
+    WRITE_FLASH_BLOCK_TRIES = 20
+
     @staticmethod
     @Inject
     def update(cc_address, ucan_address, hex_filename, version, logger, ucan_communicator=INJECTED):
@@ -73,7 +78,8 @@ class UCANUpdater(object):
 
         try:
             in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
-                                                                    ucan_address=ucan_address)
+                                                                    ucan_address=ucan_address,
+                                                                    tries=UCANUpdater.PING_TRIES)
         except Exception:
             raise RuntimeError('uCAN did not respond')
 
@@ -85,7 +91,8 @@ class UCANUpdater(object):
                 response = ucan_communicator.do_command(cc_address=cc_address,
                                                         command=UCANAPI.get_version(),
                                                         identity=ucan_address,
-                                                        fields={})
+                                                        fields={},
+                                                        tries=UCANUpdater.CONTROL_ACTION_TRIES)
                 if response is None:
                     raise RuntimeError()
                 current_version = response['firmware_version']
@@ -97,18 +104,21 @@ class UCANUpdater(object):
             ucan_communicator.do_command(cc_address=cc_address,
                                          command=UCANAPI.set_bootloader_timeout(SID.NORMAL_COMMAND),
                                          identity=ucan_address,
-                                         fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_UPDATE})
+                                         fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_UPDATE},
+                                         tries=UCANUpdater.CONTROL_ACTION_TRIES)
             response = ucan_communicator.do_command(cc_address=cc_address,
                                                     command=UCANAPI.reset(SID.NORMAL_COMMAND),
                                                     identity=ucan_address,
                                                     fields={},
-                                                    timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITCH_TIMEOUT)
+                                                    timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITCH_TIMEOUT,
+                                                    tries=UCANUpdater.CONTROL_ACTION_TRIES)
             if response is None:
                 raise RuntimeError('Error resettings uCAN before flashing')
             if response.get('application_mode', 1) != 0:
                 raise RuntimeError('uCAN didn\'t enter bootloader after reset')
             in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
-                                                                    ucan_address=ucan_address)
+                                                                    ucan_address=ucan_address,
+                                                                    tries=UCANUpdater.PING_TRIES)
             if not in_bootloader:
                 raise RuntimeError('Could not enter bootloader')
             logger.info('Bootloader active')
@@ -118,7 +128,8 @@ class UCANUpdater(object):
             response = ucan_communicator.do_command(cc_address=cc_address,
                                                     command=UCANAPI.get_bootloader_version(),
                                                     identity=ucan_address,
-                                                    fields={})
+                                                    fields={},
+                                                    tries=UCANUpdater.CONTROL_ACTION_TRIES)
             if response is None:
                 raise RuntimeError()
             if response['major'] == ord('v'):
@@ -133,7 +144,8 @@ class UCANUpdater(object):
         ucan_communicator.do_command(cc_address=cc_address,
                                      command=UCANAPI.erase_flash(),
                                      identity=ucan_address,
-                                     fields={})
+                                     fields={},
+                                     tries=UCANUpdater.CONTROL_ACTION_TRIES)
         logger.info('Erasing flash... Done')
 
         logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
@@ -173,7 +185,7 @@ class UCANUpdater(object):
                                                           fields={'start_address': little_start_address,
                                                                   'data': payload},
                                                           timeout=UCANUpdater.WRITE_FLASH_BLOCK_TIMEOUT,
-                                                          tries=6)
+                                                          tries=UCANUpdater.WRITE_FLASH_BLOCK_TRIES)
                     if result is None or not result['success']:
                         raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
                 except CommunicationTimedOutException as ex:
@@ -197,12 +209,14 @@ class UCANUpdater(object):
         ucan_communicator.do_command(cc_address=cc_address,
                                      command=UCANAPI.set_bootloader_timeout(SID.BOOTLOADER_COMMAND),
                                      identity=ucan_address,
-                                     fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME})
+                                     fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME},
+                                     tries=UCANUpdater.CONTROL_ACTION_TRIES)
         logger.info('Set safety counter allowing the application to immediately start on reset')
         ucan_communicator.do_command(cc_address=cc_address,
                                      command=UCANAPI.set_bootloader_safety_counter(),
                                      identity=ucan_address,
-                                     fields={'safety_counter': 5})
+                                     fields={'safety_counter': 5},
+                                     tries=UCANUpdater.CONTROL_ACTION_TRIES)
 
         # Switch to application mode
         logger.info('Reset to application mode')
@@ -210,7 +224,8 @@ class UCANUpdater(object):
                                                 command=UCANAPI.reset(SID.BOOTLOADER_COMMAND),
                                                 identity=ucan_address,
                                                 fields={},
-                                                timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITCH_TIMEOUT)
+                                                timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITCH_TIMEOUT,
+                                                tries=UCANUpdater.CONTROL_ACTION_TRIES)
         if response is None:
             raise RuntimeError('Error resettings uCAN after flashing')
         if response.get('application_mode', 0) != 1:
@@ -222,7 +237,8 @@ class UCANUpdater(object):
                 response = ucan_communicator.do_command(cc_address=cc_address,
                                                         command=UCANAPI.get_version(),
                                                         identity=ucan_address,
-                                                        fields={})
+                                                        fields={},
+                                                        tries=UCANUpdater.CONTROL_ACTION_TRIES)
                 if response is None:
                     raise RuntimeError()
                 current_version = response['firmware_version']

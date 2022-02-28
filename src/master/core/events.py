@@ -19,7 +19,7 @@ Module to handle Events from the Core
 from __future__ import absolute_import
 import logging
 from gateway.enums import ModuleType
-from master.core.fields import WordField, AddressField
+from master.core.fields import WordField, AddressField, UInt32Field
 from master.core.system_value import Temperature, Humidity, Timer, Dimmer
 from master.core.basic_action import BasicAction
 
@@ -31,6 +31,7 @@ class Event(object):
         OUTPUT = 'OUTPUT'
         INPUT = 'INPUT'
         SENSOR = 'SENSOR'
+        PULSE_COUNTER = 'PULSE_COUNTER'
         THERMOSTAT = 'THERMOSTAT'
         SYSTEM = 'SYSTEM'
         POWER = 'POWER'
@@ -40,8 +41,6 @@ class Event(object):
         MODULE_DISCOVERY = 'MODULE_DISCOVERY'
         SLAVE_SEARCH = 'SLAVE_SEARCH'
         BUTTON_PRESS = 'BUTTON_PRESS'
-        LED_ON = 'LED_ON'
-        LED_BLINK = 'LED_BLINK'
         UCAN = 'UCAN'
         EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
         MODULE_NOT_RESPONDING = 'MODULE_NOT_RESPONDING'
@@ -136,34 +135,6 @@ class Event(object):
         RS485 = 'RS485'
         CAN = 'CAN'
 
-    class Leds(object):
-        LED_0 = 0
-        LED_1 = 1
-        LED_2 = 2
-        LED_3 = 3
-        LED_4 = 4
-        LED_5 = 5
-        LED_6 = 6
-        LED_7 = 7
-        LED_8 = 8
-        LED_9 = 9
-        LED_10 = 10
-        LED_11 = 11
-        LED_12 = 12
-        LED_13 = 13
-        LED_14 = 14
-        LED_15 = 15
-
-    class LedStates(object):
-        OFF = 'OFF'
-        ON = 'ON'
-
-    class LedFrequencies(object):
-        BLINKING_25 = 'BLINKING_25'
-        BLINKING_50 = 'BLINKING_50'
-        BLINKING_75 = 'BLINKING_75'
-        SOLID = 'SOLID'
-
     class Buttons(object):
         SETUP = 0
         ACTION = 1
@@ -179,6 +150,7 @@ class Event(object):
     TYPE_MAP = {0: Types.OUTPUT,
                 1: Types.INPUT,
                 2: Types.SENSOR,
+                3: Types.PULSE_COUNTER,
                 20: Types.THERMOSTAT,
                 21: Types.UCAN,
                 22: Types.EXECUTED_BA,
@@ -191,8 +163,6 @@ class Event(object):
                 248: Types.SYSTEM,
                 249: Types.EXECUTE_GATEWAY_API,
                 250: Types.BUTTON_PRESS,
-                251: Types.LED_BLINK,
-                252: Types.LED_ON,
                 253: Types.POWER,
                 254: Types.RESET_ACTION}
 
@@ -215,6 +185,7 @@ class Event(object):
 
     def _parse_data(self, action, device_nr, data):
         word_helper = WordField('')
+        uint32_helper = UInt32Field('')
         ucan_address_helper = AddressField('', length=3)
         address_helper = AddressField('', length=4)
 
@@ -259,6 +230,9 @@ class Event(object):
                                    'value': word_helper.decode(bytearray(data[2:4]))}]
             return {'sensor': device_nr,
                     'values': sensor_values}
+        if self.type == Event.Types.PULSE_COUNTER:
+            return {'pulse_counter': device_nr,
+                    'value': uint32_helper.decode(data)}
         if self.type == Event.Types.THERMOSTAT:
             origin_map = {0: Event.ThermostatOrigins.SLAVE,
                           1: Event.ThermostatOrigins.MASTER}
@@ -363,29 +337,6 @@ class Event(object):
         if self.type == Event.Types.BUTTON_PRESS:
             return {'button': device_nr,
                     'state': data[0]}
-        if self.type == Event.Types.LED_BLINK:
-            word_25 = device_nr
-            word_50 = word_helper.decode(bytearray(data[0:2]))
-            word_75 = word_helper.decode(bytearray(data[2:4]))
-            leds = {}
-            for i in range(16):
-                if word_25 & (1 << i):
-                    leds[i] = Event.LedFrequencies.BLINKING_25
-                elif word_50 & (1 << i):
-                    leds[i] = Event.LedFrequencies.BLINKING_50
-                elif word_75 & (1 << i):
-                    leds[i] = Event.LedFrequencies.BLINKING_75
-                else:
-                    leds[i] = Event.LedFrequencies.SOLID
-            return {'chip': device_nr,
-                    'leds': leds}
-        if self.type == Event.Types.LED_ON:
-            word_on = word_helper.decode(bytearray(data[0:2]))
-            leds = {}
-            for i in range(16):
-                leds[i] = Event.LedStates.ON if word_on & (1 << i) else Event.LedStates.OFF
-            return {'chip': device_nr,
-                    'leds': leds}
         if self.type == Event.Types.POWER:
             return {'bus': Event.Bus.RS485 if device_nr == 0 else Event.Bus.CAN,
                     'power': data[0 > 1]}

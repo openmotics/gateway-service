@@ -35,6 +35,8 @@ from gateway.models import Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
+from platform_utils import Platform
+import gateway
 
 
 if False:  # MYPY
@@ -167,7 +169,7 @@ class OpenmoticsService(object):
               update_controller=INJECTED  # type: UpdateController
               ):
         """ Main function. """
-        logger.info('Starting OM core service...')
+        logger.info('Starting OM core service (%s) [%s]... ', gateway.__version__, Platform.get_platform())
 
         # MasterController should be running
         master_controller.start()
@@ -222,11 +224,11 @@ class OpenmoticsService(object):
         pulse_counter_controller.start()
         sensor_controller.start()
         shutter_controller.start()
-        system_controller.start()
         group_action_controller.start()
         if uart_controller:
             uart_controller.start()
         pubsub.start()
+        system_controller.start()
         rfid_controller.start()
         if rebus_controller is not None:
             rebus_controller.start()
@@ -244,10 +246,10 @@ class OpenmoticsService(object):
             if uart_controller:
                 uart_controller.stop()
             energy_module_controller.stop()
+            system_controller.stop()
             output_controller.stop()
             input_controller.stop()
             pulse_counter_controller.stop()
-            system_controller.stop()
             sensor_controller.stop()
             shutter_controller.stop()
             group_action_controller.stop()

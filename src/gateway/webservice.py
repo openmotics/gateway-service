@@ -38,15 +38,13 @@ import gateway
 from gateway.api.serializers import DimmerConfigurationSerializer, \
     EnergyModuleSerializer, GlobalFeedbackSerializer, GlobalRTD10Serializer, \
     GroupActionSerializer, InputSerializer, InputStateSerializer, \
-    LegacyScheduleSerializer, LegacyStartupActionSerializer, \
-    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
-    PulseCounterSerializer, PumpGroupSerializer, RoomSerializer, \
-    RTD10Serializer, ScheduleSerializer, SensorSerializer, \
-    SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatSerializer, \
-    VentilationSerializer, VentilationStatusSerializer, \
-    LegacyThermostatGroupStatusSerializer
+    LegacyThermostatGroupStatusSerializer, ModuleSerializer, \
+    OutputSerializer, OutputStateSerializer, PulseCounterSerializer, \
+    PumpGroupSerializer, RoomSerializer, RTD10Serializer, ScheduleSerializer, \
+    SensorSerializer, SensorStatusSerializer, ShutterGroupSerializer, \
+    ShutterSerializer, ThermostatAircoStatusSerializer, \
+    ThermostatGroupSerializer, ThermostatGroupStatusSerializer, \
+    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
@@ -58,15 +56,15 @@ from gateway.exceptions import CommunicationFailure, \
     ItemDoesNotExistException, ParseException, UnsupportedException, \
     WrongInputParametersException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, Schedule, User, Module
+from gateway.models import Config, Database, Feature, Module, Schedule, User
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.uart_controller import UARTController
+from gateway.update_controller import UpdateController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool, WebSocketEncoding
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
-from gateway.update_controller import UpdateController
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -94,6 +92,7 @@ if False:  # MYPY
     from plugins.base import PluginController
 
 logger = logging.getLogger(__name__)
+access_logger = logging.getLogger(Logs.WEBSERVICE_ACCESS_LOGGER)
 
 
 class FloatWrapper(float):
@@ -122,6 +121,52 @@ def limit_floats(struct):
         return struct
 
 
+def log_access(f, mask=None):
+    @decorator
+    def wrapper(func, *args, **kwargs):
+        start = time.time()
+        request = cherrypy.request
+        response = cherrypy.response
+
+        params = {}
+        query_string = request.query_string
+        if query_string:
+            for entry in query_string.split('&'):
+                if '=' not in entry:
+                    continue
+                key, value = entry.split('=')
+                if mask is None or key not in mask:
+                    params[key] = value
+                else:
+                    params[key] = '***'
+        headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
+                             for header in ['X-Request-Id', 'User-Agent']
+                             if header in request.headers)
+
+        access_logger.debug(
+            '{0} - {1} - {2}{3} - Query parameters: {4}{5}'.format(
+                request.remote.ip,
+                request.method,
+                request.script_name, request.path_info,
+                json.dumps(params),
+                ' - {0}'.format(headers) if headers else ''
+            )
+        )
+        return_data = func(*args, **kwargs)
+        access_logger.info(
+            '{0} - {1} - {2}{3} - Status: {4} - Duration: {5:.2f}s'.format(
+                request.remote.ip,
+                request.method,
+                request.script_name, request.path_info,
+                response.status,
+                time.time() - start
+            )
+        )
+        return return_data
+    return wrapper(f)
+
+
+@log_access
 def error_generic(status, message, *args, **kwargs):
     _ = args, kwargs
     cherrypy.response.headers["Content-Type"] = "application/json"
@@ -129,14 +174,16 @@ def error_generic(status, message, *args, **kwargs):
     return json.dumps({"success": False, "msg": message})
 
 
+@log_access
 def error_unexpected():
     cherrypy.response.headers["Content-Type"] = "application/json"
     cherrypy.response.status = 500  # Internal Server Error
     return json.dumps({"success": False, "msg": "unknown_error"})
 
 
-cherrypy.config.update({'error_page.404': error_generic,
-                        'error_page.401': error_generic,
+cherrypy.config.update({'error_page.401': error_generic,
+                        'error_page.404': error_generic,
+                        'error_page.406': error_generic,
                         'error_page.503': error_generic,
                         'request.error_response': error_unexpected})
 
@@ -166,7 +213,6 @@ def params_parser(params, param_types):
 def params_handler(expect_body_type=None, **kwargs):
     """ Converts/parses/loads specified request params. """
     request = cherrypy.request
-    response = cherrypy.response
     try:
         if request.method in request.methods_with_bodies:
             body = request.body.read()
@@ -183,21 +229,13 @@ def params_handler(expect_body_type=None, **kwargs):
             else:
                 if expect_body_type is not None:
                     raise WrongInputParametersException('No body has been passed to the request')
-    except Exception:
-        response.headers['Content-Type'] = 'application/json'
-        response.status = 406  # No Acceptable
-        contents = json.dumps({'success': False, 'msg': 'invalid_body'})
-        response.body = contents.encode()
-        request.handler = None
-        return
+    except Exception as ex:
+        logger.error('Could not process params: {0}'.format(ex))
+        raise cherrypy.HTTPError(406, 'invalid_body')
     try:
         params_parser(request.params, kwargs)
     except ValueError:
-        response.headers['Content-Type'] = 'application/json'
-        response.status = 406  # No Acceptable
-        contents = json.dumps({'success': False, 'msg': 'invalid_parameters'})
-        response.body = contents.encode()
-        request.handler = None
+        raise cherrypy.HTTPError(406, 'invalid_parameters')
 
 
 def cors_handler():
@@ -257,11 +295,8 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             else:
                 request.params['role'] = checked_token.user.role
     except Exception as ex:
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        cherrypy.response.status = 401  # Unauthorized
-        contents = json.dumps({'success': False, 'msg': 'invalid_token', 'detail': str(ex)})
-        cherrypy.response.body = contents.encode()
-        request.handler = None
+        logger.error('Could not authenticate: {0}'.format(ex))
+        raise cherrypy.HTTPError(401, 'invalid_token')
 
 
 cherrypy.tools.cors = cherrypy.Tool('before_handler', cors_handler, priority=10)
@@ -326,13 +361,14 @@ def _openmotics_api(f, *args, **kwargs):
 
 
 def openmotics_api(auth=False, check=None, pass_token=False, pass_role=False,
-                   plugin_exposed=True, deprecated=None, version=0):
+                   plugin_exposed=True, deprecated=None, mask=None, version=0):
     def wrapper(func):
         func.deprecated = deprecated
         func = _openmotics_api(func)
         if auth is True:
             func = cherrypy.tools.authenticated(pass_token=pass_token, pass_role=pass_role, version=version)(func)
         func = cherrypy.tools.params(**(check or {}))(func)
+        func = log_access(func, mask)
         func.exposed = True
         func.plugin_exposed = plugin_exposed
         func.check = check
@@ -485,7 +521,7 @@ class WebInterface(object):
         static_dir = constants.get_static_dir()
         return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
-    @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
+    @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False, mask=['password'])
     def login(self, username, password, accept_terms=None, timeout=None, impersonate=None):
         """
         Login to the web service, returns a token if successful, returns HTTP status code 401 otherwise.
@@ -526,7 +562,7 @@ class WebInterface(object):
             return {'status': 'Could not log out successfully'}
         return {'status': 'OK'}
 
-    @openmotics_api(plugin_exposed=False)
+    @openmotics_api(plugin_exposed=False, mask=['password'])
     def create_user(self, username, password):
         """
         Create a new user using a username and a password. Only possible in authorized mode.
@@ -691,6 +727,7 @@ class WebInterface(object):
             'ventilation',  # Native ventilation
             'modules_information',  # Clean module information
             'dynamic_updates',  # Dynamic updates
+            'copy_thermostat_schedules',  # Allow to copy schedules and certain presets with a single API call
             # TODO: remove
             'default_timer_disabled',
             '100_steps_dimmer',
@@ -705,10 +742,12 @@ class WebInterface(object):
         return {'features': list(features)}
 
     @openmotics_api(auth=True)
-    def get_platform_details(self):  # type: () -> Dict[str, str]
+    def get_platform_details(self):
+        # type: () -> Dict[str,  Union[str, None]]
         return {'platform': Platform.get_platform(),
                 'operating_system': System.get_operating_system().get('ID', 'unknown'),
                 'hardware': Hardware.get_board_type(),
+                'hardware_serial': Hardware.get_board_serial_number(),
                 'mac_address': Hardware.get_mac_address()}
 
     @openmotics_api(auth=True, check=types(type=int, id=int))
@@ -1028,15 +1067,6 @@ class WebInterface(object):
     def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
         """ Set the current setpoint of a thermostat. """
         self._thermostat_controller.set_current_setpoint(thermostat, temperature)
-        return {'status': 'OK'}
-
-    @openmotics_api(auth=True, check=types(thermostat=int, heating_temperature=float, cooling_temperature=float))
-    def set_setpoint_from_scheduler(self, thermostat, heating_temperature=None, cooling_temperature=None):
-        # type: (int, Optional[float], Optional[float]) -> Dict[str, str]
-        """ Set the scheduled setpoint of a thermostat. """
-        self._thermostat_controller.set_setpoint_from_scheduler(thermostat,
-                                                                heating_temperature=heating_temperature,
-                                                                cooling_temperature=cooling_temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int), deprecated='set_thermostat')
@@ -1473,6 +1503,15 @@ class WebInterface(object):
 
     # Heating thermostats
 
+    def _fetch_heating_thermostat_dto(self, thermostat_id):
+        try:
+            return self._thermostat_controller.load_heating_thermostat(thermostat_id=thermostat_id)
+        except DoesNotExist:
+            if thermostat_id >= 32:
+                raise
+            mode = 'heating'  # type: Literal['heating']
+            return ThermostatMapper.get_default_dto(thermostat_id=thermostat_id, mode=mode)
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_thermostat_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
@@ -1480,13 +1519,7 @@ class WebInterface(object):
         :param id: The id of the thermostat_configuration
         :param fields: The field of the thermostat_configuration to get, None if all
         """
-        try:
-            thermostat_dto = self._thermostat_controller.load_heating_thermostat(id)
-        except DoesNotExist:
-            if id >= 32:
-                raise
-            mode = 'heating'  # type: Literal['heating']
-            thermostat_dto = ThermostatMapper.get_default_dto(thermostat_id=id, mode=mode)
+        thermostat_dto = self._fetch_heating_thermostat_dto(thermostat_id=id)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1518,6 +1551,17 @@ class WebInterface(object):
         """ Set multiple thermostat_configurations. """
         data = [ThermostatSerializer.deserialize(entry) for entry in config]
         self._thermostat_controller.save_heating_thermostats(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(source_id=int, destination_id=int))
+    def copy_thermostat_schedule(self, source_id, destination_id):  # type: (int, int) -> Dict
+        """
+        Copies the schedule from one thermostat to the other
+        """
+        source_dto = self._fetch_heating_thermostat_dto(thermostat_id=source_id)
+        destination_dto = self._fetch_heating_thermostat_dto(thermostat_id=destination_id)
+        self._thermostat_controller.copy_heating_schedule(source_dto=source_dto,
+                                                          destination_dto=destination_dto)
         return {}
 
     # Sensor configurations
@@ -1601,6 +1645,15 @@ class WebInterface(object):
 
     # Cooling thermostats
 
+    def _fetch_cooling_thermostat_dto(self, thermostat_id):
+        try:
+            return self._thermostat_controller.load_cooling_thermostat(thermostat_id=thermostat_id)
+        except DoesNotExist:
+            if thermostat_id >= 32:
+                raise
+            mode = 'cooling'  # type: Literal['cooling']
+            return ThermostatMapper.get_default_dto(thermostat_id=thermostat_id, mode=mode)
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_cooling_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
@@ -1608,13 +1661,7 @@ class WebInterface(object):
         :param id: The id of the cooling_configuration
         :param fields: The field of the cooling_configuration to get, None if all
         """
-        try:
-            thermostat_dto = self._thermostat_controller.load_cooling_thermostat(id)
-        except DoesNotExist:
-            if id >= 32:
-                raise
-            mode = 'cooling'  # type: Literal['cooling']
-            thermostat_dto = ThermostatMapper.get_default_dto(thermostat_id=id, mode=mode)
+        thermostat_dto = self._fetch_cooling_thermostat_dto(thermostat_id=id)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1646,6 +1693,17 @@ class WebInterface(object):
         """ Set multiple cooling_configurations. """
         data = [ThermostatSerializer.deserialize(entry) for entry in config]
         self._thermostat_controller.save_cooling_thermostats(data)
+        return {}
+
+    @openmotics_api(auth=True, check=types(source_id=int, destination_id=int))
+    def copy_cooling_schedule(self, source_id, destination_id):  # type: (int, int) -> Dict
+        """
+        Copies the schedule from one thermostat to the other
+        """
+        source_dto = self._fetch_cooling_thermostat_dto(thermostat_id=source_id)
+        destination_dto = self._fetch_cooling_thermostat_dto(thermostat_id=destination_id)
+        self._thermostat_controller.copy_cooling_schedule(source_dto=source_dto,
+                                                          destination_dto=destination_dto)
         return {}
 
     # Cooling Pump Groups
@@ -1811,38 +1869,6 @@ class WebInterface(object):
         self._group_action_controller.save_group_actions(data)
         return {}
 
-    # Schedules  # TODO: Legacy, cleanp
-
-    @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_scheduled_action_configuration(self, id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str, Any]
-        """ Get a specific scheduled_action_configuration defined by its id. """
-        return {'config': LegacyScheduleSerializer.serialize(schedule_dto=self._scheduling_controller.load_scheduled_action(id),
-                                                             fields=fields)}
-
-    @openmotics_api(auth=True, check=types(fields='json'))
-    def get_scheduled_action_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str, List[Any]]
-        """ Get all scheduled_action_configurations. """
-        return {'config': [LegacyScheduleSerializer.serialize(schedule_dto=schedule, fields=fields)
-                           for schedule in self._scheduling_controller.load_scheduled_actions()]}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_scheduled_action_configuration(self, config):
-        # type: (Dict[str, Any]) -> Dict[str, Any]
-        """ Set one scheduled_action_configuration. """
-        data = LegacyScheduleSerializer.deserialize(config)
-        self._scheduling_controller.save_scheduled_actions([data])
-        return {}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_scheduled_action_configurations(self, config):
-        # type: (List[Dict[str, Any]]) -> Dict[str, Any]
-        """ Set multiple scheduled_action_configurations. """
-        data = [LegacyScheduleSerializer.deserialize(entry) for entry in config]
-        self._scheduling_controller.save_scheduled_actions(data)
-        return {}
-
     # PulseCounters
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
@@ -1900,23 +1926,6 @@ class WebInterface(object):
         with a pulse_counter_id >= 24.
         """
         return {'value': self._pulse_counter_controller.set_value(pulse_counter_id, value)}
-
-    # Startup actions  # TODO: Legacy, cleanp
-
-    @openmotics_api(auth=True, check=types(fields='json'))
-    def get_startup_action_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str, Any]
-        """ Get the startup_action_configuration. """
-        return {'config': LegacyStartupActionSerializer.serialize(startup_action_dto=self._scheduling_controller.load_startup_action(),
-                                                                  fields=fields)}
-
-    @openmotics_api(auth=True, check=types(config='json'))
-    def set_startup_action_configuration(self, config):
-        # type: (Dict[str, Any]) -> Dict[str, Any]
-        """ Set the startup_action_configuration. """
-        data = LegacyStartupActionSerializer.deserialize(config)
-        self._scheduling_controller.save_startup_action(data)
-        return {}
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_dimmer_configuration(self, fields=None):
@@ -2262,7 +2271,6 @@ class WebInterface(object):
         :type timezone: str
         """
         self._system_controller.set_timezone(timezone)
-        self._module_controller.sync_master_time()
         return {}
 
     @openmotics_api(auth=True)
@@ -2474,7 +2482,7 @@ class WebInterface(object):
         self._module_controller.save_can_bus_termination(enabled=enabled)
         return {}
 
-    @openmotics_api(check=types(confirm=bool, can=bool), auth=True, plugin_exposed=False)
+    @openmotics_api(check=types(confirm=bool, can=bool), auth=True, plugin_exposed=False, mask=['password'])
     def factory_reset(self, username, password, confirm=False, can=True):
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
@@ -2488,6 +2496,14 @@ class WebInterface(object):
     @openmotics_api(auth=True, plugin_exposed=False)
     def restart_services(self):
         return self._system_controller.restart_services()
+
+    @log_access
+    @cherrypy.expose
+    @cherrypy.tools.authenticated()
+    def get_system_logs(self):
+        cherrypy.response.headers['Content-Type'] = 'application/octet-stream'
+        cherrypy.response.headers['Content-Disposition'] = 'attachment;filename={0}.tar.gz'.format(Platform.get_registration_key())
+        return self._system_controller.get_logs()
 
     @openmotics_api(auth=False)
     def health_check(self):
@@ -2514,6 +2530,7 @@ class WebInterface(object):
         else:
             raise NotImplementedError()
 
+    @log_access
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
@@ -2525,6 +2542,7 @@ class WebInterface(object):
                                                 'interval': None if interval is None else int(interval),
                                                 'interface': self}
 
+    @log_access
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
@@ -2539,6 +2557,7 @@ class WebInterface(object):
             'serialization': serialization
         }
 
+    @log_access
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
@@ -2603,7 +2622,10 @@ class WebService(object):
             cherrypy.tree.mount(root=self._webinterface,
                                 config=config)
 
-            cherrypy.config.update({'engine.autoreload.on': False})
+            cherrypy.config.update({'engine.autoreload.on': False,
+                                    'log.screen': False,
+                                    'log.access_file': '',
+                                    'log.error_file': ''})
             cherrypy.server.unsubscribe()
 
             self._https_server = cherrypy._cpserver.Server()

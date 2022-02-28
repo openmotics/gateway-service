@@ -545,7 +545,7 @@ class Preset(BaseModel):
 
 class DaySchedule(BaseModel):
     DEFAULT_SCHEDULE_TIMES = [0, 6 * 3600, 8 * 3600, 16 * 3600, 22 * 3600]
-    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [17.0, 21.0, 17.0, 21.0, 17.0])),
+    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [19.0, 21.0, 19.0, 21.0, 19.0])),
                         ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [26.0, 23.0, 26.0, 23.0, 26.0]))}
 
     id = AutoField()
@@ -556,7 +556,7 @@ class DaySchedule(BaseModel):
 
     @property
     def schedule_data(self):  # type: () -> Dict[int, float]
-        return json.loads(self.content)
+        return {int(k): v for k, v in json.loads(self.content).items()}
 
     @schedule_data.setter
     def schedule_data(self, value):  # type: (Dict[int, float]) -> None

@@ -21,25 +21,29 @@ from __future__ import absolute_import
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytz
 import six
 from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.base import JobLookupError
 from croniter import croniter
 
-from gateway.dto import ScheduleDTO
+from gateway.daemon_thread import DaemonThread
+from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
+from gateway.dto.schedule import BaseScheduleDTO
+from gateway.events import GatewayEvent
 from gateway.mappers import ScheduleMapper
-from gateway.models import Schedule
+from gateway.models import DaySchedule, Schedule
+from gateway.pubsub import PubSub
 from gateway.webservice import params_parser
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Dict, List, Optional
+    from typing import Dict, Iterable, List, Optional, Tuple
     from apscheduler.job import Job
-    from gateway.dto import LegacyScheduleDTO, LegacyStartupActionDTO
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.master_controller import MasterController
     from gateway.system_controller import SystemController
@@ -74,19 +78,20 @@ class SchedulingController(object):
     NO_NTP_LOWER_LIMIT = 1546300800.0  # 2019-01-01
 
     @Inject
-    def __init__(self, group_action_controller=INJECTED, master_controller=INJECTED, system_controller=INJECTED):
-        # type: (GroupActionController, MasterController, SystemController) -> None
+    def __init__(self, group_action_controller=INJECTED, pubsub=INJECTED, system_controller=INJECTED):
+        # type: (GroupActionController, PubSub, SystemController) -> None
         self._group_action_controller = group_action_controller
-        self._master_controller = master_controller
+        self._pubsub = pubsub
         self._web_interface = None  # type: Optional[WebInterface]
+        self._sync_thread = None  # type: Optional[DaemonThread]
         self._schedules = {}  # type: Dict[int, ScheduleDTO]
-        self._jobs = {}  # type: Dict[str, Job]
-        timezone = system_controller.get_python_timezone()
+        self._thermostat_setpoints = {} # type: Dict[Tuple[int,str],List[ScheduleSetpointDTO]]
+        timezone = system_controller.get_timezone()
         self._scheduler = BackgroundScheduler(timezone=timezone, job_defaults={
             'coalesce': True,
             'misfire_grace_time': 3600  # 1h
         })
-        self._scheduler.add_listener(self._handle_schedule_event, EVENT_JOB_EXECUTED)
+        # self._scheduler.add_listener(self._handle_job_executed, EVENT_JOB_EXECUTED)
 
     def set_webinterface(self, web_interface):
         # type: (WebInterface) -> None
@@ -95,71 +100,63 @@ class SchedulingController(object):
     def start(self):
         # type: () -> None
         self._scheduler.start()
-        self.reload_schedules()
+        self._sync_thread = DaemonThread(name='schedulingsync',
+                                         target=self._sync_configuration,
+                                         interval=900,
+                                         delay=300)
+        self._sync_thread.start()
 
     def stop(self):
         # type: () -> None
         self._scheduler.shutdown()
+        if self._sync_thread is not None:
+            self._sync_thread.stop()
 
-    def _handle_schedule_event(self, event):
-        job = self._jobs.get(event.job_id)
-        schedule_dto = self._schedules[int(event.job_id)]
-        if job and hasattr(job, 'next_run_time') and job.next_run_time:
-            schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
-        else:
-            schedule_dto.status = 'COMPLETED'
-            schedule = ScheduleMapper.dto_to_orm(schedule_dto)
-            schedule.save()
+    def refresh_schedules(self):
+        if self._sync_thread is not None:
+            self._sync_thread.request_single_run()
 
-    def _schedule_job(self, schedule_dto):
+    def _sync_configuration(self):
+        # type: () -> None
+        stale_schedules = {k: v for k, v in self._schedules.items()}
+        for schedule in list(Schedule.select()):
+            schedule_dto = ScheduleMapper.orm_to_dto(schedule)
+            if self._schedules.get(schedule.id) != schedule_dto:
+                self._submit_schedule(schedule_dto)
+            stale_schedules.pop(schedule.id, None)
+            self._update_status(schedule_dto)
+        for schedule_dto in stale_schedules.values():
+            self._abort(schedule_dto)
+            self._schedules.pop(schedule_dto.id, None)
+
+    def _submit_schedule(self, schedule_dto):
         # type: (ScheduleDTO) -> None
-        job_id = str(schedule_dto.id)
         if schedule_dto.status == 'ACTIVE':
-            job = self._jobs.get(job_id)
+            logger.debug('Submitting schedule %s', schedule_dto)
+            kwargs = {'replace_existing': True,
+                      'id': schedule_dto.job_id,
+                      'args': (schedule_dto,),
+                      'name': schedule_dto.name}
+
             if schedule_dto.repeat is None:
                 run_date = datetime.fromtimestamp(schedule_dto.start)
-                job = self._scheduler.add_job(self._execute_schedule, args=(schedule_dto,),
-                                              id=job_id, name=schedule_dto.name,
-                                              trigger='date', run_date=run_date)
+                kwargs.update({'trigger': 'date', 'run_date': run_date})
             else:
                 # TODO: parse
                 minute, hour, day, month, day_of_week = schedule_dto.repeat.split(' ')
                 end_date = datetime.fromtimestamp(schedule_dto.end) if schedule_dto.end else None
-                job = self._scheduler.add_job(self._execute_schedule, args=(schedule_dto,),
-                                              id=job_id, name=schedule_dto.name,
-                                              trigger='cron', end_date=end_date,
-                                              minute=minute, hour=hour, day=day, month=month, day_of_week=day_of_week)
-            self._jobs[job_id] = job
-
-    def reload_schedules(self):
-        # type: () -> None
-        if time.time() < SchedulingController.NO_NTP_LOWER_LIMIT:
-            logger.warning('Detected invalid system time, skipping schedules')
-            return
-        schedule_ids = []
-        # TODO: reschedule jobs
-        self._scheduler.remove_all_jobs()
-        for schedule in Schedule.select():
-            schedule_dto = ScheduleMapper.orm_to_dto(schedule)
-            self._schedule_job(schedule_dto)
+                kwargs.update({'trigger': 'cron', 'end_date': end_date,
+                               'minute': minute, 'hour': hour, 'day': day, 'month': month, 'day_of_week': day_of_week})
+            self._scheduler.add_job(self._execute_schedule, **kwargs)
             self._schedules[schedule_dto.id] = schedule_dto
-            schedule_ids.append(schedule_dto.id)
-        for schedule_id in list(self._schedules.keys()):
-            if schedule_id not in schedule_ids:
-                self._schedules.pop(schedule_id, None)
-                self._jobs.pop(str(schedule_id), None)
-        self.refresh_schedules()
 
-    def refresh_schedules(self):
-        # type: () -> None
-        for schedule_dto in self._schedules.values():
-            job = self._jobs.get(str(schedule_dto.id))
-            if job and hasattr(job, 'next_run_time') and job.next_run_time:
-                schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
-            if schedule_dto.end and schedule_dto.end < time.time() - 3600:
-                schedule_dto.status = 'COMPLETED'
-                schedule = ScheduleMapper.dto_to_orm(schedule_dto)
-                schedule.save()
+    def _abort(self, base_dto):
+        # type: (BaseScheduleDTO) -> None
+        try:
+            logger.debug('Removing schedule %s', base_dto)
+            self._scheduler.remove_job(base_dto.job_id)
+        except JobLookupError:
+            pass
 
     def load_schedule(self, schedule_id):
         # type: (int) -> ScheduleDTO
@@ -168,10 +165,9 @@ class SchedulingController(object):
             raise Schedule.DoesNotExist('Schedule {0} does not exist'.format(schedule_id))
         return schedule_dto
 
-    def load_schedules(self, source=Schedule.Sources.GATEWAY):
-        # type: (str) -> List[ScheduleDTO]
-        return [schedule_dto for schedule_dto in self._schedules.values()
-                if schedule_dto.source == source]
+    def load_schedules(self):
+        # type: () -> List[ScheduleDTO]
+        return [schedule_dto for schedule_dto in self._schedules.values()]
 
     def save_schedules(self, schedules):
         # type: (List[ScheduleDTO]) -> None
@@ -179,20 +175,66 @@ class SchedulingController(object):
             schedule = ScheduleMapper.dto_to_orm(schedule_dto)
             self._validate(schedule)
             schedule.save()
-        self.reload_schedules()
+        self.refresh_schedules()
 
     def remove_schedules(self, schedules):
         # type: (List[ScheduleDTO]) -> None
         Schedule.delete().where(Schedule.id.in_([s.id for s in schedules])).execute()
-        self.reload_schedules()
+        self.refresh_schedules()
+
+    def update_thermostat_setpoints(self, thermostat_id, mode, day_schedules):
+        # type: (int, str, List[DaySchedule]) -> None
+        key = (thermostat_id, mode)
+        setpoints = []
+        for t, setpoint in calculate_transitions(day_schedules, datetime.now()):
+            setpoints.append(ScheduleSetpointDTO(thermostat=thermostat_id,
+                                                 mode=mode,
+                                                 temperature=setpoint,
+                                                 weekday=t.weekday(),
+                                                 hour=t.hour,
+                                                 minute=t.minute))
+        current_setpoints = self._thermostat_setpoints.get(key, [])
+        if current_setpoints != setpoints:
+            for setpoint_dto in current_setpoints:
+                self._abort(setpoint_dto)
+            for setpoint_dto in setpoints:
+                self._submit_setpoint(setpoint_dto)
+            self._thermostat_setpoints[key] = setpoints
+
+    def last_thermostat_setpoint(self, day_schedules):
+        # type: (List[DaySchedule]) -> Tuple[datetime, float]
+        now = datetime.now()
+        transitions = sorted(calculate_transitions(day_schedules, now), reverse=True)
+        return next((t, v) for t, v in transitions if t <= now)
+
+    def _submit_setpoint(self, setpoint_dto):
+        # type: (ScheduleSetpointDTO) -> None
+        kwargs = {'replace_existing': True,
+                  'id': setpoint_dto.job_id,
+                  'args': (setpoint_dto,),
+                  'name': 'Thermostat {0}'.format(setpoint_dto.thermostat),
+                  'trigger': 'cron',
+                  'minute': setpoint_dto.minute,
+                  'hour': setpoint_dto.hour,
+                  'day_of_week': setpoint_dto.weekday}
+        self._scheduler.add_job(self._execute_setpoint, **kwargs)
+
+    def _execute_setpoint(self, setpoint_dto):
+        # type: (ScheduleSetpointDTO) -> None
+        event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
+                             {'id': setpoint_dto.thermostat,
+                              'status': {'mode': setpoint_dto.mode,
+                                         'current_setpoint': setpoint_dto.temperature}})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.SCHEDULER, event)
+        logger.info('Thermostat %s: scheduled %s temperature=%s', setpoint_dto.thermostat, setpoint_dto.mode, setpoint_dto.temperature)
 
     def _execute_schedule(self, schedule_dto):
         # type: (ScheduleDTO) -> None
+        logger.info('Executing schedule %s (%s)', schedule_dto.name, schedule_dto.action)
         if schedule_dto.running:
             return
         try:
             schedule_dto.running = True
-            logger.debug('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
             if schedule_dto.arguments is None:
                 raise ValueError('Invalid schedule arguments')
             # Execute
@@ -208,10 +250,7 @@ class SchedulingController(object):
 
             # Cleanup or prepare for next run
             schedule_dto.last_executed = time.time()
-            if schedule_dto.has_ended:
-                schedule_dto.status = 'COMPLETED'
-                schedule = ScheduleMapper.dto_to_orm(schedule_dto)
-                schedule.save()
+            self._update_status(schedule_dto)
         except CommunicationTimedOutException as ex:
             logger.error('Got error while executing schedule: {0}'.format(ex))
         except Exception as ex:
@@ -219,6 +258,21 @@ class SchedulingController(object):
             schedule_dto.last_executed = time.time()
         finally:
             schedule_dto.running = False
+
+    def _update_status(self, schedule_dto):
+        # type: (ScheduleDTO) -> None
+        if schedule_dto.has_ended:
+            schedule_dto.next_execution = None
+            schedule_dto.status = 'COMPLETED'
+            schedule = ScheduleMapper.dto_to_orm(schedule_dto)
+            schedule.save()
+        else:
+            try:
+                job = self._scheduler.get_job(schedule_dto.job_id)
+                if job and hasattr(job, 'next_run_time') and job.next_run_time:
+                    schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
+            except JobLookupError:
+                pass
 
     def _validate(self, schedule):
         # type: (Schedule) -> None
@@ -268,27 +322,28 @@ class SchedulingController(object):
             if check is not None:
                 params_parser(arguments['parameters'], check)
 
-    # Legacy master driven schedules & startup action
 
-    def load_scheduled_action(self, scheduled_action_id):
-        # type: (int) -> LegacyScheduleDTO
-        return self._master_controller.load_scheduled_action(scheduled_action_id)
+def calculate_transitions(day_schedules, at):
+    # type: (List[DaySchedule], datetime) -> Iterable[Tuple[datetime, float]]
+    """
+    Calculate the setpoint transitions relative to a timestamp based on the
+    given day schedules.
+    """
+    index = at.weekday()
+    start_of_day = datetime(at.year, at.month, at.day)
 
-    def load_scheduled_actions(self):
-        # type: () -> List[LegacyScheduleDTO]
-        return self._master_controller.load_scheduled_actions()
-
-    def save_scheduled_actions(self, scheduled_actions):
-        # type: (List[LegacyScheduleDTO]) -> None
-        self._master_controller.save_scheduled_actions(scheduled_actions)
-
-    def load_startup_action(self):
-        # type: () -> LegacyStartupActionDTO
-        return self._master_controller.load_startup_action()
-
-    def save_startup_action(self, startup_action):
-        # type: (LegacyStartupActionDTO) -> None
-        self._master_controller.save_startup_action(startup_action)
+    data = {}
+    for day_schedule in day_schedules:
+        offset = max(day_schedule.index, index) - min(day_schedule.index, index)
+        # Shift last day schedule when at start of the week.
+        if index == 0 and day_schedule.index == 6:
+            offset -= 7
+        if day_schedule.index < index:
+            offset = -offset
+        d = start_of_day + timedelta(days=offset)
+        data.update({d + timedelta(seconds=int(k)): v
+                     for k, v in day_schedule.schedule_data.items()})
+    return sorted(data.items())
 
 
 def datetime_to_timestamp(date):

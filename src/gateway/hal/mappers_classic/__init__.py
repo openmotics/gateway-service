@@ -14,13 +14,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gateway.hal.mappers_classic.global_feedback import GlobalFeedbackMapper
-from gateway.hal.mappers_classic.output import OutputMapper, DimmerConfigurationMapper
-from gateway.hal.mappers_classic.shutter import ShutterMapper
-from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
-from gateway.hal.mappers_classic.thermostat import ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper
+from gateway.hal.mappers_classic.group_action import GroupActionMapper
 from gateway.hal.mappers_classic.input import InputMapper
-from gateway.hal.mappers_classic.schedule import LegacyScheduleMapper, LegacyStartupActionMapper
-from gateway.hal.mappers_classic.sensor import SensorMapper
+from gateway.hal.mappers_classic.output import DimmerConfigurationMapper, \
+    OutputMapper
 from gateway.hal.mappers_classic.pulse_counter import PulseCounterMapper
 from gateway.hal.mappers_classic.rtd10 import GlobalRTD10Mapper, RTD10Mapper
-from gateway.hal.mappers_classic.group_action import GroupActionMapper
+from gateway.hal.mappers_classic.sensor import SensorMapper
+from gateway.hal.mappers_classic.shutter import ShutterMapper
+from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
+from gateway.hal.mappers_classic.thermostat import PumpGroupMapper, \
+    ThermostatGroupMapper, ThermostatMapper

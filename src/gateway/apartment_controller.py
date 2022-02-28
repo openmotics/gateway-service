@@ -106,16 +106,25 @@ class ApartmentController(object):
                 not self.rebus_controller.verify_device_exists(apartment_dto.mailbox_rebus_id):
             raise ItemDoesNotExistException("Cannot save apartment: mailbox ({}) does not exists".format(apartment_dto.mailbox_rebus_id))
 
-    def save_apartment(self, apartment_dto):
-        # type: (ApartmentDTO) -> ApartmentDTO
+    def save_apartment(self, apartment_dto, send_event=True):
+        # type: (ApartmentDTO, bool) -> ApartmentDTO
         self._check_rebus_ids(apartment_dto)
         apartment_orm = ApartmentMapper.dto_to_orm(apartment_dto)
         apartment_orm.save()
-        ApartmentController.send_config_change_event('save')
+        if send_event:
+            ApartmentController.send_config_change_event('save')
         return ApartmentMapper.orm_to_dto(apartment_orm)
 
-    def update_apartment(self, apartment_dto):
-        # type: (ApartmentDTO) -> ApartmentDTO
+    def save_apartments(self, apartments_dto):
+        apartments_dtos = []
+        for apartment in apartments_dto:
+            apartment_saved = self.save_apartment(apartment, send_event=False)
+            apartments_dtos.append(apartment_saved)
+        self.send_config_change_event('save')
+        return apartments_dtos
+
+    def update_apartment(self, apartment_dto, send_event=True):
+        # type: (ApartmentDTO, bool) -> ApartmentDTO
         self._check_rebus_ids(apartment_dto)
         if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
             raise RuntimeError('cannot update an apartment without the id being set')
@@ -129,7 +138,8 @@ class ApartmentController(object):
                     setattr(loaded_apartment_dto, field, getattr(apartment_dto, field))
             apartment_orm = ApartmentMapper.dto_to_orm(loaded_apartment_dto)
             apartment_orm.save()
-            ApartmentController.send_config_change_event('update')
+            if send_event:
+                ApartmentController.send_config_change_event('update')
             return ApartmentMapper.orm_to_dto(apartment_orm)
         except Exception as e:
             raise RuntimeError('Could not update the user: {}'.format(e))
@@ -160,9 +170,10 @@ class ApartmentController(object):
                             apartment_orm.save()
 
                 for apartment in apartment_dtos:
-                    updated = self.update_apartment(apartment)
+                    updated = self.update_apartment(apartment, send_event=False)
                     if updated is not None:
                         apartments.append(updated)
+                self.send_config_change_event('update')
             except Exception as ex:
                 logger.error('Could not update apartments: {}: {}'.format(type(ex).__name__, ex))
                 transaction.rollback()

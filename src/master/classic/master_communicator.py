@@ -94,7 +94,7 @@ class MasterCommunicator(object):
                                       'bytes_written': 0,
                                       'bytes_read': 0}  # type: Dict[str,Any]
         self.__debug_buffer = {'read': {},
-                               'write': {}}  # type: Dict[str, Dict[float,bytearray]]
+                               'write': {}}  # type: Dict[str, Dict[float, bytearray]]
         self.__debug_buffer_duration = 300
 
     def start(self):
@@ -209,9 +209,9 @@ class MasterCommunicator(object):
             logger.debug('Writing to Master serial:   %s', Printable(data))
             threshold = time.time() - self.__debug_buffer_duration
             self.__debug_buffer['write'][time.time()] = data
-            for t in self.__debug_buffer['write'].keys():
+            for t in list(self.__debug_buffer['write'].keys()):
                 if t < threshold:
-                    del self.__debug_buffer['write'][t]
+                    self.__debug_buffer['write'].pop(t)
 
             self.__serial.write(data)  # TODO: make non blocking
             self.__communication_stats['bytes_written'] += len(data)
@@ -488,9 +488,9 @@ class MasterCommunicator(object):
 
                 threshold = time.time() - self.__debug_buffer_duration
                 self.__debug_buffer['read'][time.time()] = data
-                for t in self.__debug_buffer['read'].keys():
+                for t in list(self.__debug_buffer['read'].keys()):
                     if t < threshold:
-                        del self.__debug_buffer['read'][t]
+                        self.__debug_buffer['read'].pop(t)
 
                 logger.debug('Reading from Master serial: %s', Printable(data))
 

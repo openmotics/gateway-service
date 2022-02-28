@@ -77,7 +77,7 @@ class CloudAPIClient(object):
             response = self._session.post(events_endpoint,
                                           params=query_params,
                                           data={'events': json.dumps([event.serialize() for event in events])},
-                                          timeout=2,
+                                          timeout=5,
                                           verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             if not response:
                 raise APIException('Error while sending events to {}. HTTP Status: {}'.format(self._hostname, response.status_code))

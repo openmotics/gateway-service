@@ -19,7 +19,7 @@ import time
 import mock
 from peewee import SqliteDatabase
 
-from gateway.enums import HardwareType, ModuleType
+from gateway.enums import ModuleType
 from gateway.api.serializers import ModuleSerializer
 from gateway.dto import ModuleDTO
 from gateway.hal.master_controller import MasterController
@@ -28,6 +28,7 @@ from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
 from gateway.energy_module_controller import EnergyModuleController
 from ioc import SetTestMode, SetUpTestInjections
+from enums import HardwareType
 import fakesleep
 
 MODELS = [Module]

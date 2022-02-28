@@ -26,7 +26,7 @@ import time
 if False:  # MYPY
     from typing import Union, Dict, List, Tuple
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Hardware(object):
@@ -83,6 +83,7 @@ class Hardware(object):
 
     @staticmethod
     def get_board_type():
+        # type: () -> Union[str, None]
         try:
             with open('/proc/device-tree/model', 'r') as mfh:
                 board_type = mfh.read().strip('\x00').replace(' ', '_')
@@ -104,7 +105,20 @@ class Hardware(object):
         except IOError:
             pass
         logger.warning('could not detect board type, unknown')
-        return  # Unknown
+        return None  # Unknown
+
+    @staticmethod
+    def get_board_serial_number():
+        # type: () -> Union[str, None]
+        serial_number = None
+        try:
+            with open('/sys/bus/i2c/devices/0-0050/eeprom') as fd:
+                serial_pos, serial_length = 16, 12
+                fd.seek(serial_pos)
+                serial_number = str(fd.read(serial_length))
+        except Exception:
+            logger.error('Unable to read board serial number')
+        return serial_number
 
     @staticmethod
     def get_main_interface():
@@ -117,7 +131,8 @@ class Hardware(object):
         return 'lo'
 
     @staticmethod
-    def get_mac_address():  # type: () -> Union[str, None]
+    def get_mac_address():
+        # type: () -> Union[str, None]
         """ Get the main interface mac address """
         interface = Hardware.get_main_interface()
         try:
@@ -202,9 +217,11 @@ class System(object):
         BUILDROOT = 'buildroot'
 
     @staticmethod
-    def restart_service(service):
-        # type: (str) -> None
-        System.run_service_action('restart', service)
+    def restart_service(service, wait=False):
+        # type: (str, bool) -> None
+        process = System.run_service_action('restart', service)
+        if wait:
+            process.wait()
 
     @staticmethod
     def run_service_action(action, service):
@@ -344,10 +361,11 @@ class System(object):
         else:
             import select
             import ssl
+            import socket
             if isinstance(exception, ssl.SSLEOFError):
                 logger.info('Got SSLEOFError, aborting due to lost connection')
                 return False  # break
-            elif isinstance(exception, ssl.SSLError):
+            elif isinstance(exception, ssl.SSLError) or isinstance(exception, socket.timeout):
                 if 'The read operation timed out' in str(exception):
                     # Got read timeout, just wait for data to arrive
                     return True  # continue
@@ -401,6 +419,15 @@ class Platform(object):
             if platform in Platform.Types:
                 return platform
         return Platform.Type.CLASSIC
+
+
+    @staticmethod
+    def get_registration_key():
+        # type: () -> str
+        from six.moves.configparser import ConfigParser
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        return config.get('OpenMotics', 'uuid')
 
     @staticmethod
     def has_master_hardware():

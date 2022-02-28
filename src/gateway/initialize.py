@@ -33,6 +33,7 @@ from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
+import gateway
 from bus.om_bus_client import MessageClient
 from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
 from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
@@ -65,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 def initialize(message_client_name):
     # type: (Optional[str]) -> None
-    logger.info('Initializing')
+    logger.info('Initializing v{0}'.format(gateway.__version__))
     init_lock = constants.get_init_lockfile()
     logger.info('Waiting for lock')
     had_factory_reset = False
