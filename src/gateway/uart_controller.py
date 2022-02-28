@@ -169,40 +169,58 @@ class UARTController(object):
 
     @require_mode(Mode.MODBUS)
     def write_register(self, slaveaddress, registeraddress, value, number_of_decimals=0, functioncode=16, signed=False):
-        # type: (int, int, Union[float, int], int, int, bool) -> None
+        # type: (int, int, Union[float, int, list], int, int, bool) -> None
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
             try:
-                client.write_register(registeraddress=registeraddress,
-                                      value=value,
-                                      number_of_decimals=number_of_decimals,
-                                      functioncode=functioncode,
-                                      signed=signed)
+                if isinstance(value, float):
+                    client.write_register(registeraddress=registeraddress,
+                                          value=value,
+                                          number_of_decimals=number_of_decimals,
+                                          functioncode=functioncode,
+                                          signed=signed)
+                elif isinstance(value, list):
+                    client.write_registers(registeraddress=registeraddress,
+                                           values=value)
             except Exception as ex:
                 logger.warning('Modbus write error: {0}'.format(ex))
                 time.sleep(0.1)
-                client.write_register(registeraddress=registeraddress,
-                                      value=value,
-                                      number_of_decimals=number_of_decimals,
-                                      functioncode=functioncode,
-                                      signed=signed)
+                if isinstance(value, float):
+                    client.write_register(registeraddress=registeraddress,
+                                          value=value,
+                                          number_of_decimals=number_of_decimals,
+                                          functioncode=functioncode,
+                                          signed=signed)
+                elif isinstance(value, list):
+                    client.write_registers(registeraddress=registeraddress,
+                                           values=value)
             self._last_activity = time.time()
 
     @require_mode(Mode.MODBUS)
-    def read_register(self, slaveaddress, registeraddress, number_of_decimals=0, functioncode=3, signed=False):
-        # type: (int, int, int, int, bool) -> Union[float, int]
+    def read_register(self, slaveaddress, registeraddress, number_of_decimals=0, functioncode=3, signed=False, number_of_registers=1):
+        # type: (int, int, int, int, bool, int) -> Union[float, int, list]
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
             try:
-                return client.read_register(registeraddress=registeraddress,
-                                            number_of_decimals=number_of_decimals,
-                                            functioncode=functioncode,
-                                            signed=signed)
+                if number_of_registers == 1:
+                    return client.read_register(registeraddress=registeraddress,
+                                                number_of_decimals=number_of_decimals,
+                                                functioncode=functioncode,
+                                                signed=signed)
+                elif number_of_registers > 1:
+                    return client.read_registers(registeraddress=registeraddress,
+                                                 number_of_registers=number_of_registers,
+                                                 functioncode=functioncode)
             except Exception as ex:
                 logger.warning('Modbus read error: {0}'.format(ex))
                 time.sleep(0.1)
-                return client.read_register(registeraddress=registeraddress,
-                                            number_of_decimals=number_of_decimals,
-                                            functioncode=functioncode,
-                                            signed=signed)
+                if number_of_registers == 1:
+                    return client.read_register(registeraddress=registeraddress,
+                                                number_of_decimals=number_of_decimals,
+                                                functioncode=functioncode,
+                                                signed=signed)
+                elif number_of_registers > 1:
+                    return client.read_registers(registeraddress=registeraddress,
+                                                 number_of_registers=number_of_registers,
+                                                 functioncode=functioncode)
             self._last_activity = time.time()

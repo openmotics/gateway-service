@@ -2063,8 +2063,8 @@ class WebInterface(object):
                                                             functioncode=functioncode,
                                                             signed=signed)}
 
-    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, value=float, number_of_decimals=int, functioncode=int, signed=bool))
-    def write_modbus_register(self, slaveaddress, registeraddress, value, number_of_decimals=0, functioncode=16, signed=False):
+    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, value=Union[float, list], number_of_decimals=int, functioncode=int, signed=bool))
+    def write_modbus_register(self, slaveaddress, registeraddress, value, number_of_decimals=0, functioncode=16, signed=False, number_of_registers=1):
         if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
             raise FeatureUnavailableException()
         self._uart_controller.write_register(slaveaddress=slaveaddress,
