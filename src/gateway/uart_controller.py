@@ -193,7 +193,7 @@ class UARTController(object):
         # type: (int, int, int, int, bool) -> Union[float, int, list]
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
-            return self._execute_modbus(action=client.read_registers,
+            return self._execute_modbus(action=client.read_register,
                                         registeraddress=registeraddress,
                                         number_of_decimals=number_of_decimals,
                                         functioncode=functioncode,
@@ -217,4 +217,4 @@ class UARTController(object):
             time.sleep(0.1)
             return action(**kwargs)
         finally:
-            self._last_activity=time.time()
+            self._last_activity = time.time()
