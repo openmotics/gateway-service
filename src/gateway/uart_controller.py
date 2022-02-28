@@ -207,4 +207,5 @@ class UARTController(object):
                                             number_of_decimals=number_of_decimals,
                                             functioncode=functioncode,
                                             signed=signed)
-            self._last_activity = time.time()
+            finally:
+                self._last_activity = time.time()
