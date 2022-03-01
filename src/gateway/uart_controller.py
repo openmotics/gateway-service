@@ -190,7 +190,7 @@ class UARTController(object):
 
     @require_mode(Mode.MODBUS)
     def read_register(self, slaveaddress, registeraddress, number_of_decimals=0, functioncode=3, signed=False):
-        # type: (int, int, int, int, bool) -> Union[float, int, list]
+        # type: (int, int, int, int, bool) -> Union[float, int]
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
             return self._execute_modbus(action=client.read_register,
@@ -201,7 +201,7 @@ class UARTController(object):
 
     @require_mode(Mode.MODBUS)
     def read_registers(self, slaveaddress, registeraddress, number_of_registers=1, functioncode=3):
-        # type: (int, int, int, int) -> Union[float, int, list]
+        # type: (int, int, int, int) -> list
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
             return self._execute_modbus(action=client.read_registers,
