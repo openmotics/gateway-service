@@ -67,19 +67,15 @@ class ValveDriver(object):
 
     def steer_output(self):  # type: () -> None
         with self._state_change_lock:
-            # BE83: always set the output back to the desired state to override potential manual intervention
-            current_status = self._output_controller.get_output_status(output_id=self._valve.output.number)
-            desired_on = self._desired_percentage > 0
-            if current_status and (current_status.status != desired_on or current_status.dimmer != self._desired_percentage):
-                self._output_controller.set_output_status(output_id=self._valve.output.number,
-                                                          is_on=desired_on,
-                                                          dimmer=self._desired_percentage)
-
             # update the timestamps of the valves so the pump delays etc. are taken into account
             if self._current_percentage != self._desired_percentage:
                 logger.info('Valve {0} (output {1}) changing from {2}% to {3}%'.format(
                     self._valve.id, self._valve.output.number, self._current_percentage, self._desired_percentage
                 ))
+                desired_on = self._desired_percentage > 0
+                self._output_controller.set_output_status(output_id=self._valve.output.number,
+                                                          is_on=desired_on,
+                                                          dimmer=self._desired_percentage)
                 self._current_percentage = self._desired_percentage
                 # TODO: use the updated_at timestamp of the output in the outputcontroller cache
                 self._time_state_changed = time.time()

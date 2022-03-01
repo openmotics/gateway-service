@@ -94,6 +94,12 @@ class ThermostatMapper(object):
             thermostat = Thermostat(number=thermostat_dto.id, thermostat_group_id=thermostat_group.id, start=0)
         if 'name' in thermostat_dto.loaded_fields:
             thermostat.name = thermostat_dto.name
+        if 'thermostat_group' in thermostat_dto.loaded_fields:
+            if thermostat_dto.thermostat_group in (255, None):
+                thermostat_group = None
+            else:
+                thermostat_group = ThermostatGroup.get(number=thermostat_dto.thermostat_group)
+            thermostat.thermostat_group = thermostat_group
         if 'room' in thermostat_dto.loaded_fields:
             if thermostat_dto.room in (255, None):
                 room = None
