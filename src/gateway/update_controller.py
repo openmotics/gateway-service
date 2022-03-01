@@ -1117,7 +1117,7 @@ class UpdateController(object):
         update_url = Config.get_entry('update_metadata_url', None)  # type: Optional[str]
         if update_url is None:
             parsed_url = urlparse(self._cloud_url)
-            path = '/api/v1/base/updates/metadata/{0}'.format(version)
+            path = '/api/v1.1/base/updates/metadata/{0}'.format(version)
         else:
             parsed_url = urlparse(update_url)
             path = parsed_url.path
@@ -1128,7 +1128,7 @@ class UpdateController(object):
         update_url = Config.get_entry('update_firmware_metadata_url', None)  # type: Optional[str]
         if update_url is None:
             parsed_url = urlparse(self._cloud_url)
-            path = '/api/v1/base/updates/metadata/firmwares/{0}/{1}'.format(firmware_type, version)
+            path = '/api/v1.1/base/updates/metadata/firmwares/{0}/{1}'.format(firmware_type, version)
         else:
             parsed_url = urlparse(update_url)
             path = parsed_url.path

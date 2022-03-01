@@ -300,8 +300,8 @@ class CoreUpdater(object):
     def _clear_read_queue(self, flush=False):
         try:
             if flush:
-                self._cli_serial.flushInput()
-                self._cli_serial.flushOutput()
+                self._cli_serial.reset_input_buffer()
+                self._cli_serial.reset_output_buffer()
             while True:
                 self._read_queue.get(False)
         except Empty:
