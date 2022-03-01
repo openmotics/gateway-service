@@ -107,7 +107,7 @@ class Cloud(object):
             data = {'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
                     'assertion': token.decode(),
                     'scope': 'device'}  # type: Dict[str, Any]
-            response = requests.post(self._build_url('/api/v1/authentication/oauth2/token'), data=data)
+            response = requests.post(self._build_url('/api/v1.1/authentication/oauth2/token'), data=data)
             response.raise_for_status()
             data = response.json()
             logger.info('Authenticated until %s', datetime.now() + timedelta(seconds=data['expires_in']))
