@@ -61,7 +61,7 @@ from platform_utils import Hardware
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set
+    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar, Set, Callable
     from master.core.core_updater import CoreUpdater
     T_co = TypeVar('T_co', bound=None, covariant=True)
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -1349,7 +1349,7 @@ class MasterCoreController(MasterController):
         # type: (bool) -> None
         _ = self  # Must be an instance method
 
-        cycle = [False]  # type: List[Union[bool, float]]
+        cycle = [False]  # type: List[Union[bool, float, Callable[[], None]]]
         if power_on:
             self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
                                                       active=True)
