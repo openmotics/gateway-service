@@ -629,12 +629,6 @@ class WebInterface(object):
         port = self._maintenance_controller.open_maintenace_socket()
         return {'port': port}
 
-    @openmotics_api(auth=True, check=types(power_on=bool))
-    def reset_master(self, power_on=True):  # type: (bool) -> Dict[str, Any]
-        """ Perform a cold reset on the master. """
-        self._module_controller.reset_master(power_on=power_on)
-        return {}
-
     @openmotics_api(auth=True, plugin_exposed=False, check=types(action=str, size=int, data='json'))
     def raw_master_action(self, action, size, data=None):
         # type: (str, int, Optional[List[int]]) -> Dict[str,Any]
@@ -2495,7 +2489,22 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def restart_services(self):
+        # type: () -> Dict[str, Any]
         return self._system_controller.restart_services()
+
+    @openmotics_api(auth=True, check=types(power_on=bool), plugin_exposed=False)
+    def reset_master(self, power_on=True):
+        # type: (bool) -> Dict[str, Any]
+        """ Perform a cold reset on the master. """
+        self._module_controller.reset_master(power_on=power_on)
+        return {}
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def reset_bus(self):
+        # type: () -> Dict[str, Any]
+        """ Perform a power reset of the slave bus(es). """
+        self._module_controller.reset_bus()
+        return {}
 
     @log_access
     @cherrypy.expose
