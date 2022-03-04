@@ -49,9 +49,9 @@ class OutputSerializer(object):
                 'can_led_4_function': output_dto.can_led_4.function,
                 'room': Toolbox.denonify(output_dto.room, OutputSerializer.BYTE_MAX)}
         if output_dto.module is not None:
-            data.update({'hardware_type': output_dto.module.hardware_type,
-                         'hardware_module': output_dto.module.module_type,
-                         'module_id': output_dto.module.order})
+            data.update({'module': {'hardware_type': output_dto.module.hardware_type,
+                                    'hardware_module': output_dto.module.module_type,
+                                    'module_id': output_dto.module.order}})
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
