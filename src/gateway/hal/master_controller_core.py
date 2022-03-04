@@ -501,14 +501,25 @@ class MasterCoreController(MasterController):
         return [InputStatusDTO(id=input_port['id'], status=input_port['status'])
                 for input_port in self._input_state.get_inputs()]
 
+    def _load_input(self, input_orm, module_dto=None):  # type: (InputConfiguration, Optional[ModuleDTO]) -> InputDTO
+        input_dto = InputMapper.orm_to_dto(input_orm)
+        if module_dto is None:
+            input_dto.module = self._get_input_modules_information(module_id=input_orm.module.id)[0]
+        else:
+            input_dto.module = module_dto
+        return input_dto
+
     def load_input(self, input_id):  # type: (int) -> InputDTO
-        input_ = InputConfiguration(input_id)
-        return InputMapper.orm_to_dto(input_)
+        input_orm = InputConfiguration(input_id)
+        return self._load_input(input_orm=input_orm)
 
     def load_inputs(self):  # type: () -> List[InputDTO]
         inputs = []
-        for i in self._enumerate_io_modules('input'):
-            inputs.append(self.load_input(i))
+        module_dtos = {module_dto.id: module_dto for module_dto in self._get_input_modules_information()}
+        for input_id in self._enumerate_io_modules('input'):
+            input_orm = InputConfiguration(input_id)
+            inputs.append(self._load_input(input_orm=input_orm,
+                                           module_dto=module_dtos.get(input_orm.module.id)))
         return inputs
 
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
@@ -565,19 +576,32 @@ class MasterCoreController(MasterController):
                                           action=16,
                                           device_nr=output_id))
 
-    def load_output(self, output_id):  # type: (int) -> OutputDTO
-        output = OutputConfiguration(output_id)
-        if output.is_shutter:
+    def _load_output(self, output_orm, module_dto=None):  # type: (OutputConfiguration, Optional[ModuleDTO]) -> OutputDTO
+        if output_orm.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
-            return OutputDTO(id=output.id, output_type=OutputType.SHUTTER_RELAY)
-        output_dto = OutputMapper.orm_to_dto(output)
-        CANFeedbackController.load_output_led_feedback_configuration(output, output_dto)
+            output_dto = OutputDTO(id=output_orm.id, output_type=OutputType.SHUTTER_RELAY)
+        else:
+            output_dto = OutputMapper.orm_to_dto(output_orm)
+            CANFeedbackController.load_output_led_feedback_configuration(output_orm, output_dto)
+        if module_dto is None:
+            module_dtos, _ = self._get_output_modules_information(module_id=output_orm.module.id)
+            output_dto.module = module_dtos[0]
+        else:
+            output_dto.module = module_dto
         return output_dto
+
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
+        output_orm = OutputConfiguration(output_id)
+        return self._load_output(output_orm=output_orm)
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         outputs = []
-        for i in self._enumerate_io_modules('output'):
-            outputs.append(self.load_output(i))
+        module_dtos, _ = self._get_output_modules_information()
+        module_dto_map = {module_dto.id: module_dto for module_dto in module_dtos}
+        for output_id in self._enumerate_io_modules('output'):
+            output_orm = OutputConfiguration(output_id)
+            outputs.append(self._load_output(output_orm=output_orm,
+                                             module_dto=module_dto_map.get(output_id // 8)))
         return outputs
 
     def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
@@ -671,10 +695,12 @@ class MasterCoreController(MasterController):
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
         # At this moment, the system expects a given amount of Shutter modules to be physically
-        # installed. However, in the Core+, this is not the case as a Shutter isn't a physical module
-        # but instead a virtual layer over physical Output modules. For easy backwards compatible
-        # implementation, a Shutter will map 1-to-1 to the Outputs with the same ID. This means we only need
-        # to emulate such a Shutter module foreach Output module.
+        #   installed. However, in the Core+, this is not the case as a Shutter isn't a physical module
+        #   but instead a virtual layer over physical Output modules. For easy backwards compatible
+        #   implementation, a Shutter will map 1-to-1 to the Outputs with the same ID. This means we only need
+        #   to emulate such a Shutter module foreach Output module.
+        # No module metadata is returned for Gen3 shutters, as they are not real anyway. It would introduce too
+        #   many issues when we make the shutter/output assignments flexible in the future.
         shutters = []
         for shutter_id in self._enumerate_io_modules('output', amount_per_module=4):
             shutters.append(self.load_shutter(shutter_id))
@@ -1109,11 +1135,8 @@ class MasterCoreController(MasterController):
             self._master_communicator.report_blockage(blocker=CommunicationBlocker.VERSION_SCAN,
                                                       active=False)
 
-    def get_modules_information(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
+    def get_modules_information(self):  # type: () -> List[ModuleDTO]
         """ Gets module information """
-
-        def _default_if_255(value, default):
-            return value if value != 255 else default
 
         local_firmware_version = {}
         local_firmware_version.update(self._request_firmware_versions(bus=MasterCoreEvent.Bus.RS485))
@@ -1125,55 +1148,106 @@ class MasterCoreController(MasterController):
                 return False, None, None
             return True, None, version_info
 
-        information = []
-        module_type_lookup = {'c': ModuleType.CAN_CONTROL,
-                              't': ModuleType.SENSOR,
-                              's': ModuleType.SENSOR,  # uCAN sensor
-                              'i': ModuleType.INPUT,
-                              'b': ModuleType.INPUT,  # uCAN input
-                              'o': ModuleType.OUTPUT,
-                              'l': ModuleType.OPEN_COLLECTOR,
-                              'r': ModuleType.SHUTTER,
-                              'd': ModuleType.DIM_CONTROL}
+        online_info = {address: _get_version(address) for address in local_firmware_version.keys()}
+        output_dtos, shutter_dtos = self._get_output_modules_information(online_info=online_info)
+        information = self._get_input_modules_information(online_info=online_info) + \
+            self._get_sensor_modules_information(online_info=online_info) + \
+            self._get_can_control_modules_information(online_info=online_info) + \
+            self._get_ucan_modules_information(online_info=online_info) + \
+            output_dtos + shutter_dtos
+        return information
 
-        global_configuration = GlobalConfiguration()
-        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
-        for module_id in range(nr_of_input_modules):
+    @staticmethod
+    def _get_input_modules_information(module_id=None, online_info=None):
+        # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        dtos = []
+        module_type_lookup = {'i': ModuleType.INPUT,
+                              'b': ModuleType.INPUT}  # uCAN input
+
+        if module_id is None:
+            global_configuration = GlobalConfiguration()
+            nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+            module_ids = list(range(nr_of_input_modules))
+        else:
+            module_ids = [module_id]
+        for module_id in module_ids:
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=input_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=input_module_info.hardware_type,
                             order=module_id)
-            if input_module_info.hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _get_version(input_module_info.address)
-            information.append(dto)
+            if input_module_info.hardware_type == HardwareType.PHYSICAL and online_info is not None:
+                dto.online, dto.hardware_version, dto.firmware_version = online_info.get(input_module_info.address,
+                                                                                         (False, None, None))
+            dtos.append(dto)
+        return dtos
 
-        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
-        for module_id in range(nr_of_output_modules):
+    @staticmethod
+    def _get_output_modules_information(module_id=None, online_info=None):
+        # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> Tuple[List[ModuleDTO], List[ModuleDTO]]
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        output_dtos, shutter_dtos = [], []
+        module_type_lookup = {'o': ModuleType.OUTPUT,
+                              'l': ModuleType.OPEN_COLLECTOR,
+                              'r': ModuleType.SHUTTER,
+                              'd': ModuleType.DIM_CONTROL}
+
+        if module_id is None:
+            global_configuration = GlobalConfiguration()
+            nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
+            module_ids = list(range(nr_of_output_modules))
+        else:
+            module_ids = [module_id]
+        for module_id in module_ids:
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=output_module_info.hardware_type,
                             order=module_id)
-            shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            shutter_dto = ModuleDTO(id=module_id,
+                                    source=ModuleDTO.Source.MASTER,
                                     address='114.{0}'.format(output_module_info.address[4:]),
                                     module_type=ModuleType.SHUTTER,
                                     hardware_type=output_module_info.hardware_type,
                                     order=module_id)
-            if output_module_info.hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _get_version(output_module_info.address)
+            if output_module_info.hardware_type == HardwareType.PHYSICAL and online_info is not None:
+                dto.online, dto.hardware_version, dto.firmware_version = online_info.get(output_module_info.address,
+                                                                                         (False, None, None))
                 shutter_dto.online = dto.online
                 shutter_dto.hardware_version = dto.hardware_version
                 shutter_dto.firmware_version = dto.firmware_version
-            information.append(dto)
-            information.append(shutter_dto)
+            output_dtos.append(dto)
+            shutter_dtos.append(shutter_dto)
+        return output_dtos, shutter_dtos
 
-        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
-        for module_id in range(nr_of_sensor_modules):
+    @staticmethod
+    def _get_sensor_modules_information(module_id=None, online_info=None):
+        # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        dtos = []
+        module_type_lookup = {'t': ModuleType.SENSOR,
+                              's': ModuleType.SENSOR}  # uCAN sensor
+
+        if module_id is None:
+            global_configuration = GlobalConfiguration()
+            nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
+            module_ids = list(range(nr_of_sensor_modules))
+        else:
+            module_ids = [module_id]
+        for module_id in module_ids:
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
             if device_type == 'T':
@@ -1182,39 +1256,71 @@ class MasterCoreController(MasterController):
                 hardware_type = HardwareType.EMULATED
             else:
                 hardware_type = HardwareType.VIRTUAL
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=sensor_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
-            if hardware_type == HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = _get_version(sensor_module_info.address)
-            information.append(dto)
+            if hardware_type == HardwareType.PHYSICAL and online_info is not None:
+                dto.online, dto.hardware_version, dto.firmware_version = online_info.get(sensor_module_info.address,
+                                                                                         (False, None, None))
+            dtos.append(dto)
+        return dtos
 
-        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
-        for module_id in range(nr_of_can_controls):
+    @staticmethod
+    def _get_can_control_modules_information(module_id=None, online_info=None):
+        # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        dtos = []
+        if module_id is None:
+            global_configuration = GlobalConfiguration()
+            nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
+            module_ids = list(range(nr_of_can_controls))
+        else:
+            module_ids = [module_id]
+        for module_id in module_ids:
             can_control_module_info = CanControlModuleConfiguration(module_id)
-            device_type = can_control_module_info.device_type
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=can_control_module_info.address,
-                            module_type=module_type_lookup.get(device_type.lower()),
+                            module_type=ModuleType.CAN_CONTROL,
                             hardware_type=HardwareType.PHYSICAL,
                             order=module_id)
-            dto.online, dto.hardware_version, dto.firmware_version = _get_version(can_control_module_info.address)
-            information.append(dto)
+            if online_info is not None:
+                dto.online, dto.hardware_version, dto.firmware_version = online_info.get(can_control_module_info.address,
+                                                                                         (False, None, None))
+            dtos.append(dto)
+        return dtos
 
-        nr_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
-        for module_id in range(nr_of_ucs):
+    @staticmethod
+    def _get_ucan_modules_information(module_id=None, online_info=None):
+        # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        dtos = []
+        if module_id is None:
+            global_configuration = GlobalConfiguration()
+            nr_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
+            module_ids = list(range(nr_of_ucs))
+        else:
+            module_ids = [module_id]
+        for module_id in module_ids:
             ucan_configuration = UCanModuleConfiguration(module_id)
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=ucan_configuration.address,
                             module_type=ModuleType.MICRO_CAN,
                             hardware_type=HardwareType.PHYSICAL,
                             order=module_id)
-            dto.online, dto.hardware_version, dto.firmware_version = _get_version(ucan_configuration.address)
-            information.append(dto)
-
-        return information
+            if online_info is not None:
+                dto.online, dto.hardware_version, dto.firmware_version = online_info.get(ucan_configuration.address,
+                                                                                         (False, None, None))
+            dtos.append(dto)
+        return dtos
 
     def _handle_firmware_information(self, information):  # type: (Dict[str, str]) -> None
         raw_version = information['version']

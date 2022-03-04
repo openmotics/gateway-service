@@ -28,7 +28,8 @@ class ModuleMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (Module) -> ModuleDTO
-        return ModuleDTO(source=orm_object.source,
+        return ModuleDTO(id=orm_object.order,
+                         source=orm_object.source,
                          address=orm_object.address,
                          module_type=orm_object.module_type,
                          hardware_type=orm_object.hardware_type,
