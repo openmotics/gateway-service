@@ -20,7 +20,7 @@ from __future__ import absolute_import
 import logging
 import time
 
-from peewee import JOIN
+from sqlalchemy import func
 
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
@@ -28,7 +28,7 @@ from gateway.dto import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.mappers.sensor import SensorMapper
-from gateway.models import Room, Sensor
+from gateway.models import Database, Plugin, Room, Sensor, Session
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
@@ -55,7 +55,6 @@ class SensorController(BaseController):
         self._pubsub = pubsub
         self._master_cache = {}  # type: Dict[Tuple[str, int],SensorDTO]
         self._status = {}  # type: Dict[int, SensorStatusDTO]
-
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.SENSOR, self._handle_master_event)
 
     def _publish_config(self):
@@ -90,6 +89,7 @@ class SensorController(BaseController):
                 self.request_sync_orm()
 
     def _sync_orm_structure(self, structure):  # type: (SyncStructure) -> None
+        db = Database.get_session()
         if structure.orm_model is Sensor:
             master_orm_mapping = {}
             for dto in self._master_controller.load_sensors():
@@ -103,10 +103,9 @@ class SensorController(BaseController):
             ids |= self._sync_orm_master(Sensor.PhysicalQuantities.HUMIDITY, 'percent', humidity, master_orm_mapping)
             brighness = self._master_controller.get_sensors_brightness()
             ids |= self._sync_orm_master(Sensor.PhysicalQuantities.BRIGHTNESS, 'percent', brighness, master_orm_mapping)
-            count = Sensor.delete() \
-                .where(Sensor.source == Sensor.Sources.MASTER) \
-                .where(Sensor.external_id.not_in(ids)) \
-                .execute()
+
+            query = (Sensor.source == Sensor.Sources.MASTER) & (Sensor.external_id.notin_(ids))
+            count = db.query(Sensor).where(query).delete()
             if count > 0:
                 logger.info('Removed {} unreferenced sensor(s)'.format(count))
 
@@ -138,7 +137,7 @@ class SensorController(BaseController):
                                    physical_quantity=physical_quantity,
                                    unit=unit,
                                    name=master_sensor_dto.name)
-            sensor, _ = SensorController._create_or_update_sensor(sensor_dto)
+            sensor, _ = self._create_or_update_sensor(sensor_dto)
 
             sensor_dto.id = sensor.id
             self._master_cache[(physical_quantity, i)] = sensor_dto
@@ -148,10 +147,8 @@ class SensorController(BaseController):
         return ids
 
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
-        sensor = Sensor.select() \
-                       .join_from(Sensor, Room, join_type=JOIN.LEFT_OUTER) \
-                       .where(Sensor.id == sensor_id) \
-                       .get()  # type: Sensor
+        db = Database.get_session()
+        sensor = db.get(Sensor, sensor_id)
         room = sensor.room.number if sensor.room is not None else None
         source_name = None if sensor.plugin is None else sensor.plugin.name
         sensor_dto = SensorDTO(id=sensor.id,
@@ -168,12 +165,14 @@ class SensorController(BaseController):
                 sensor_dto.offset = master_sensor_dto.offset
         return sensor_dto
 
-    def load_sensors(self):  # type: () -> List[SensorDTO]
+    def load_sensors(self):
+        # type: () -> List[SensorDTO]
         sensor_dtos = []
-        query = Sensor.select() \
-            .join_from(Sensor, Room, join_type=JOIN.LEFT_OUTER) \
-            .where(~Sensor.physical_quantity.is_null())
-        for sensor in list(query):
+        db = Database.get_session()
+        sensors = db.query(Sensor) \
+            .where(Sensor.physical_quantity != None) \
+            .all()  # type: List[Sensor]
+        for sensor in sensors:
             source_name = None
             if sensor.plugin is not None:
                 source_name = sensor.plugin.name
@@ -194,10 +193,11 @@ class SensorController(BaseController):
         return sensor_dtos
 
     def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> List[SensorDTO]
+        db = Database.get_session()
         publish = False
         master_sensors = []
         for sensor_dto in sensors:
-            sensor, changed = SensorController._create_or_update_sensor(sensor_dto)
+            sensor, changed = self._create_or_update_sensor(sensor_dto)
             publish |= changed
 
             sensor_dto.id = sensor.id
@@ -218,30 +218,31 @@ class SensorController(BaseController):
             self._publish_config()
         return sensors
 
-    @staticmethod
-    def _create_or_update_sensor(sensor_dto):  # type: (SensorDTO) -> Tuple[Sensor, bool]
+    def _create_or_update_sensor(self, sensor_dto):  # type: (SensorDTO) -> Tuple[Sensor, bool]
+        db = Database.get_session()
         changed = False
         sensor = SensorMapper.dto_to_orm(sensor_dto)
         if sensor.id is None:
             orm_id = get_sensor_orm_id(sensor.source)
-            sensor = Sensor.create(id=orm_id,
-                                   source=sensor.source,
-                                   plugin=sensor.plugin,
-                                   external_id=sensor.external_id,
-                                   physical_quantity=sensor.physical_quantity,
-                                   unit=sensor.unit,
-                                   name=sensor.name,
-                                   room=sensor.room)
+            sensor = Sensor(id=orm_id,
+                            source=sensor.source,
+                            plugin=sensor.plugin,
+                            external_id=sensor.external_id,
+                            physical_quantity=sensor.physical_quantity,
+                            unit=sensor.unit,
+                            name=sensor.name,
+                            room=sensor.room)
+            db.add(sensor)
             changed = True
-        else:
-            if sensor.save() > 0:
-                changed = True
         if sensor.source == Sensor.Sources.MASTER and sensor.id > 200:
-            Sensor.delete().where(Sensor.id == sensor.id).execute()
+            db.query(Sensor).filter_by(id=sensor.id).delete()
             raise ValueError('Master sensor id {} out of range'.format(sensor.id))
         if sensor.source == Sensor.Sources.PLUGIN and sensor.id < 500:
-            Sensor.delete().where(Sensor.id == sensor.id).execute()
+            db.query(Sensor).filter_by(id=sensor.id).delete()
             raise ValueError('Plugin sensor id {} is invalid'.format(sensor.id))
+        if db.dirty:
+            changed = True
+            db.commit()
         return sensor, changed
 
     def get_sensors_status(self):  # type: () -> List[SensorStatusDTO]
@@ -267,9 +268,11 @@ class SensorController(BaseController):
         self._master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
     def _translate_legacy_statuses(self, physical_quantity):  # type: (str) -> List[Optional[float]]
-        sensors = Sensor.select() \
-            .where(Sensor.source == Sensor.Sources.MASTER) \
-            .where(Sensor.physical_quantity == physical_quantity)
+        db = Database.get_session()
+        sensors = db.query(Sensor) \
+            .filter_by(physical_quantity=physical_quantity,
+                       source=Sensor.Sources.MASTER) \
+            .all()
         try:
             sensor_count = max(s.id for s in sensors) + 1
         except ValueError:
@@ -297,17 +300,16 @@ class SensorController(BaseController):
 
 
 def get_sensor_orm_id(source):  # type: (str) -> Optional[int]
+    db = Database.get_session()
     if source == Sensor.Sources.PLUGIN:
         # Plugins sensors use 510 or auto increment
-        if Sensor.select().where(Sensor.id > 255).count() == 0:
+        if db.query(Sensor).where(Sensor.id > 255).count() == 0:
             return 510
     if source == Sensor.Sources.MASTER:
         # Master sensors use 1-200
-        query = Sensor.select(Sensor.id) \
+        value = db.query(func.max(Sensor.id)) \
             .where(Sensor.source == Sensor.Sources.MASTER) \
-            .where(Sensor.id < 200)
-        try:
-            return max(x for (x,) in query.tuples()) + 1
-        except ValueError:
-            return 0
+            .where(Sensor.id < 200) \
+            .scalar()
+        return (value or 0) + 1
     return None
