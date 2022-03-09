@@ -99,7 +99,7 @@ class Sensor(Base):
     __table_args__ = (UniqueConstraint('source', 'plugin_id', 'external_id', 'physical_quantity'), {'sqlite_autoincrement': True})
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    source = Column(String(255), nullable=False)  # Options: 'master' or 'plugin'
+    source = Column(String(255), nullable=False)
     external_id = Column(String(255), nullable=False)
     physical_quantity = Column(String(255), nullable=True)
     unit = Column(String(255), nullable=True)
@@ -107,8 +107,8 @@ class Sensor(Base):
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
 
-    thermostats = relationship("Thermostat", backref="sensor")
-    thermostat_groups = relationship("ThermostatGroup", backref="sensor")
+    room = relationship('Room', foreign_keys=[room_id])
+    plugin = relationship('Plugin', foreign_keys=[plugin_id])
 
     class Sources(object):
         MASTER = 'master'
@@ -606,7 +606,6 @@ class Room(Base):
     shutters = relationship("Shutter", backref="room")
     shutter_groups = relationship("ShutterGroup", backref="room")
     pulse_counters = relationship("PulseCounter", backref="room")
-    sensors = relationship("Sensor", backref="room")
     thermostats = relationship("Thermostat", backref="room")
 
 
