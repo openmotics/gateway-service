@@ -133,14 +133,12 @@ class BaseController(object):
         skip = structure.skip
 
         numbers = []
-        entries_to_save = []
         for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
             if skip is not None and skip(dto):
                 continue
             n = dto.id
             numbers.append(n)
             if not db.query(db.query(orm_model).filter(orm_model.number == n).exists()).scalar():
-                entries_to_save.append(orm_model(number=id_))
-        db.add_all(entries_to_save)
+                db.add(orm_model(number=n))
         db.query(orm_model).where(orm_model.number.not_in(numbers)).delete()
         db.commit()
