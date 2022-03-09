@@ -24,13 +24,13 @@ from gateway.hal.mappers_classic import PumpGroupMapper
 from gateway.mappers.thermostat import ThermostatMapper, \
     ThermostatScheduleMapper
 from gateway.models import DaySchedule, Feature, Output, \
-    OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, ValveToThermostat
+    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, Room, Sensor, \
+    Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
 from logs import Logs
 from master.classic.eeprom_models import PumpGroupConfiguration
 
-MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
-          Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule,
+MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroupAssociation, Pump, Sensor,
+          Valve, PumpToValveAssociation, Thermostat, ValveToThermostatAssociation, Preset, DaySchedule,
           Room]
 
 

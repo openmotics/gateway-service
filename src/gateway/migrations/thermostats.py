@@ -19,8 +19,8 @@ from datetime import timedelta
 
 from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import DaySchedule, Feature, Output, \
-    OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, ValveToThermostat
+    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, Room, Sensor, \
+    Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
 from ioc import INJECTED, Inject
 from master.classic import master_api
 from master.classic.eeprom_controller import CompositeDataType, EepromByte, \

@@ -24,7 +24,7 @@ import fakesleep
 from gateway.dto import SensorStatusDTO
 from gateway.enums import ThermostatState
 from gateway.models import DaySchedule, Output, Preset, Sensor, Thermostat, \
-    ThermostatGroup, Valve, ValveToThermostat
+    ThermostatGroup, Valve, ValveToThermostatAssociation
 from gateway.sensor_controller import SensorController
 from gateway.thermostat.gateway.pump_valve_controller import \
     PumpValveController
@@ -32,7 +32,7 @@ from gateway.thermostat.gateway.thermostat_pid import PID, ThermostatPid
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
-MODELS = [Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, Valve, Output, DaySchedule]
+MODELS = [Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostatAssociation, Valve, Output, DaySchedule]
 
 
 class PumpValveControllerTest(unittest.TestCase):

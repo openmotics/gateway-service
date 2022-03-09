@@ -20,19 +20,19 @@ import mock
 from peewee import SqliteDatabase
 
 from gateway.migrations.thermostats import CoolingConfiguration, DaySchedule, \
-    GlobalThermostatConfiguration, OutputToThermostatGroup, \
+    GlobalThermostatConfiguration, OutputToThermostatGroupAssociation, \
     PumpGroupConfiguration, ThermostatConfiguration, ThermostatsMigrator
-from gateway.models import DaySchedule, Output, Preset, Pump, PumpToValve, \
-    Room, Sensor, Thermostat, ThermostatGroup, Valve, ValveToThermostat
+from gateway.models import DaySchedule, Output, Preset, Pump, PumpToValveAssociation, \
+    Room, Sensor, Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
 from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import SetTestMode, SetUpTestInjections
 from master.classic.eeprom_controller import EepromController
 from master.classic.master_communicator import MasterCommunicator
 from platform_utils import Platform
 
-MODELS = [DaySchedule, Output, OutputToThermostatGroup, Preset, Pump,
-          PumpToValve, Room, Sensor, Thermostat, ThermostatGroup,
-          Valve, ValveToThermostat]
+MODELS = [DaySchedule, Output, OutputToThermostatGroupAssociation, Preset, Pump,
+          PumpToValveAssociation, Room, Sensor, Thermostat, ThermostatGroup,
+          Valve, ValveToThermostatAssociation]
 
 
 class ThermostatsMigratorTest(unittest.TestCase):
