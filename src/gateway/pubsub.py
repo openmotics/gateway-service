@@ -29,7 +29,7 @@ from ioc import Injectable, Singleton
 if False:  # MYPY
     from typing import Callable, Dict, List, Literal, Tuple, Union
     GATEWAY_TOPIC = Literal['config', 'scheduler', 'state']
-    MASTER_TOPIC = Literal['eeprom', 'module', 'power', 'output', 'input', 'shutter', 'sensor']
+    MASTER_TOPIC = Literal['eeprom', 'module', 'power', 'output', 'input', 'shutter', 'sensor', 'thermostat']
     ESAFE_TOPIC = Literal['delivery', 'lock', 'config', 'rfid']
 
 logger = logging.getLogger(__name__)
