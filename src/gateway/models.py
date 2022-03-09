@@ -372,7 +372,7 @@ class Pump(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    output_id = Column(Integer, ForeignKey('output.id', ondelete='SET NULL'), nullable=True, unique=True)
+    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), nullable=True, unique=True)
 
     # TODO: implement custom filters
     # @property

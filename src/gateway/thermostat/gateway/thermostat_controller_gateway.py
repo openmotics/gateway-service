@@ -161,9 +161,6 @@ class ThermostatControllerGateway(ThermostatController):
             # TODO: Delete stale/removed thermostats
         for thermostat_id in removed_thermostats:
             self.thermostat_pids.pop(thermostat_id, None)
-        # FIXME: remove invalid pumps, database should cascade instead.
-        Pump.delete().where(Pump.output.is_null()) \
-            .execute()
         self._sync_scheduler()
         # Ensure changes for auto presets are published
         for thermostat in list(Thermostat.select()):
