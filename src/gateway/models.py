@@ -14,15 +14,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import absolute_import
+
 import json
 import logging
 import time
-import constants
-from sqlalchemy import create_engine, Column, ForeignKey, Integer, String, Boolean, Float, Text
+
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, \
+    Text, UniqueConstraint, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, scoped_session
+from sqlalchemy.orm import relationship, scoped_session, sessionmaker
 from sqlalchemy.schema import MetaData
-from sqlalchemy import UniqueConstraint
+
+import constants
+
+if False:  # MYPY
+    from typing import Any, Dict, List, Optional, TypeVar
+    T = TypeVar('T')
+
+logger = logging.getLogger(__name__)
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///{}".format(constants.get_gateway_database_file())
 engine = create_engine(
@@ -30,6 +39,13 @@ engine = create_engine(
 )
 session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Session = scoped_session(session_factory)
+
+
+class Database:
+    @staticmethod
+    def get_session():
+        return Session()
+
 
 # https://alembic.sqlalchemy.org/en/latest/naming.html
 convention = {
@@ -41,12 +57,6 @@ convention = {
 }
 
 Base = declarative_base(metadata=MetaData(naming_convention=convention))
-
-# if False:  # MYPY
-#     from typing import Dict, List, Any, TypeVar
-#     T = TypeVar('T')
-
-logger = logging.getLogger(__name__)
 
 
 class Feature(Base):
@@ -236,52 +246,52 @@ class Config(Base):
     setting = Column(String(255), unique=True, nullable=False)
     data = Column(String(255), nullable=False)
 
-    CACHE_EXPIRY_DURATION = 60
-    CACHE = {}
+    # CACHE_EXPIRY_DURATION = 60
+    # CACHE = {}
 
-    @staticmethod
-    def get_entry(key, fallback):
-        # type: (str, T) -> T
-        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
-        key = key.lower()
-        if key in Config.CACHE:
-            data, expire_at = Config.CACHE[key]
-            if expire_at > time.time():
-                return data
-        raw_data = Config.select(Config.data).where(Config.setting == key).dicts().first()
-        if raw_data is not None:
-            data = json.loads(raw_data['data'])
-        else:
-            data = fallback
-        Config.CACHE[key] = (data, time.time() + Config.CACHE_EXPIRY_DURATION)
-        return data
+    # @staticmethod
+    # def get_entry(key, fallback):
+    #     # type: (str, T) -> T
+    #     """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
+    #     key = key.lower()
+    #     if key in Config.CACHE:
+    #         data, expire_at = Config.CACHE[key]
+    #         if expire_at > time.time():
+    #             return data
+    #     raw_data = Config.select(Config.data).where(Config.setting == key).dicts().first()
+    #     if raw_data is not None:
+    #         data = json.loads(raw_data['data'])
+    #     else:
+    #         data = fallback
+    #     Config.CACHE[key] = (data, time.time() + Config.CACHE_EXPIRY_DURATION)
+    #     return data
 
-    @staticmethod
-    def set_entry(key, value):
-        # type: (str, Any) -> None
-        """ Sets a setting in the DB, does overwrite if already existing """
-        key = key.lower()
-        data = json.dumps(value)
-        config_orm = Config.get_or_none(Config.setting == key)
-        if config_orm is not None:
-            # if the key already exists, update the value
-            config_orm.data = data
-            config_orm.save()
-        else:
-            # create a new setting if it was non existing
-            config_orm = Config(setting=key, data=data)
-            config_orm.save()
-        Config.CACHE[key] = (value, time.time() + Config.CACHE_EXPIRY_DURATION)
+    # @staticmethod
+    # def set_entry(key, value):
+    #     # type: (str, Any) -> None
+    #     """ Sets a setting in the DB, does overwrite if already existing """
+    #     key = key.lower()
+    #     data = json.dumps(value)
+    #     config_orm = Config.get_or_none(Config.setting == key)
+    #     if config_orm is not None:
+    #         # if the key already exists, update the value
+    #         config_orm.data = data
+    #         config_orm.save()
+    #     else:
+    #         # create a new setting if it was non existing
+    #         config_orm = Config(setting=key, data=data)
+    #         config_orm.save()
+    #     Config.CACHE[key] = (value, time.time() + Config.CACHE_EXPIRY_DURATION)
 
-    @staticmethod
-    def remove_entry(key):
-        # type: (str) -> int
-        """ Removes a setting from the DB """
-        amount = Config.delete().where(
-            Config.setting == key.lower()
-        ).execute()
-        Config.CACHE.pop(key, None)
-        return amount
+    # @staticmethod
+    # def remove_entry(key):
+    #     # type: (str) -> int
+    #     """ Removes a setting from the DB """
+    #     amount = Config.delete().where(
+    #         Config.setting == key.lower()
+    #     ).execute()
+    #     Config.CACHE.pop(key, None)
+    #     return amount
 
 
 class Plugin(Base):
@@ -572,7 +582,7 @@ class DaySchedule(Base):
     def schedule_data(self, value):  # type: (Dict[int, float]) -> None
         self.content = json.dumps(value)
 
-    def get_scheduled_temperature(self, seconds_in_day):  # type: (int) -> float
+    def get_scheduled_temperature(self, seconds_in_day):  # type: (int) -> Optional[float]
         seconds_in_day = seconds_in_day % 86400
         data = self.schedule_data
         last_value = data.get(0)
