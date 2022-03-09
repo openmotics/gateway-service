@@ -101,7 +101,7 @@ class Sensor(Base):
     __table_args__ = (UniqueConstraint('source', 'plugin_id', 'external_id', 'physical_quantity'), {'sqlite_autoincrement': True})
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    source = Column(String(255), nullable=False)  # Options: 'master' or 'plugin'
+    source = Column(String(255), nullable=False)
     external_id = Column(String(255), nullable=False)
     physical_quantity = Column(String(255), nullable=True)
     unit = Column(String(255), nullable=True)
@@ -110,8 +110,8 @@ class Sensor(Base):
     room = relationship('Room', foreign_keys=[room_id])
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
 
-    thermostats = relationship("Thermostat", backref="sensor")
-    thermostat_groups = relationship("ThermostatGroup", backref="sensor")
+    room = relationship('Room', foreign_keys=[room_id])
+    plugin = relationship('Plugin', foreign_keys=[plugin_id])
 
     class Sources(object):
         MASTER = 'master'
@@ -607,14 +607,6 @@ class Room(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     number = Column(Integer, unique=True, nullable=False)
     name = Column(String(255), nullable=True)
-
-    outputs = relationship("Output")
-    inputs = relationship("Input")
-    shutters = relationship("Shutter")
-    shutter_groups = relationship("ShutterGroup")
-    pulse_counters = relationship("PulseCounter")
-    sensors = relationship("Sensor")
-    thermostats = relationship("Thermostat")
 
 
 class DataMigration(Base):

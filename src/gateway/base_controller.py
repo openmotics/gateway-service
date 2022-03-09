@@ -25,26 +25,26 @@ from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
+from gateway.models import Database
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
     from typing import Any, Callable, List, Optional, Type
     from gateway.maintenance_controller import MaintenanceController
-    from gateway.models import BaseModel
+    from gateway.models import Base
 
 logger = logging.getLogger(__name__)
 
 
 class SyncStructure(object):
-    def __init__(self, orm_model, name, skip=None):  # type: (Type[BaseModel], str, Optional[Callable[[Any], bool]]) -> None
-        self.orm_model = orm_model  # type: Type[BaseModel]
+    def __init__(self, orm_model, name, skip=None):  # type: (Type[Base], str, Optional[Callable[[Any], bool]]) -> None
+        self.orm_model = orm_model  # type: Type[Base]
         self.name = name  # type: str
         self.skip = skip  # type: Optional[Callable[[Any], bool]]
 
 
 class BaseController(object):
-
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
 
     @Inject
@@ -126,21 +126,21 @@ class BaseController(object):
 
     def _sync_orm_structure(self, structure):
         # type: (SyncStructure) -> None
+        db = Database.get_session()
+
         orm_model = structure.orm_model
         name = structure.name
         skip = structure.skip
 
-        db = Database.get_session()
-
-        ids = []
+        numbers = []
         entries_to_save = []
         for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
             if skip is not None and skip(dto):
                 continue
-            id_ = dto.id
-            ids.append(id_)
-            if not db.query(db.query(orm_model).filter(orm_model.number == id_).exists()).scalar():
+            n = dto.id
+            numbers.append(n)
+            if not db.query(db.query(orm_model).filter(orm_model.number == n).exists()).scalar():
                 entries_to_save.append(orm_model(number=id_))
         db.add_all(entries_to_save)
-        db.query(orm_model).where(orm_model.number.not_in(ids)).delete()
+        db.query(orm_model).where(orm_model.number.not_in(numbers)).delete()
         db.commit()

@@ -21,7 +21,7 @@ from __future__ import absolute_import
 import logging
 
 from gateway.dto.sensor import MasterSensorDTO, SensorDTO, SensorSourceDTO
-from gateway.models import Plugin, Room, Sensor
+from gateway.models import Database, Plugin, Room, Sensor
 
 if False:  # MYPY
     from typing import Optional
@@ -49,38 +49,38 @@ class SensorMapper(object):
 
     @staticmethod
     def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> Sensor
+        db = Database.get_session()
         plugin = None
+        room = None
         if sensor_dto.id is not None:
-            query = Sensor.select().where(Sensor.id == sensor_dto.id)
+            sensor = db.get(Sensor, sensor_dto.id)
         elif sensor_dto.source and sensor_dto.external_id and sensor_dto.physical_quantity:
             if sensor_dto.source and sensor_dto.source.is_plugin:
-                plugin = Plugin.get(name=sensor_dto.source.name)
-            query = Sensor.select() \
-                .where(Sensor.source == sensor_dto.source.type) \
-                .where(Sensor.plugin == plugin) \
-                .where(Sensor.external_id == sensor_dto.external_id) \
-                .where(Sensor.physical_quantity == sensor_dto.physical_quantity)
+                plugin = db.query(Plugin).filter_by(name=sensor_dto.source.name).one()
+            sensor = db.query(Sensor) \
+                .filter_by(source=sensor_dto.source.type,
+                           external_id=sensor_dto.external_id,
+                           physical_quantity=sensor_dto.physical_quantity) \
+                .first()
         else:
             raise ValueError('Invalid sensor %s', sensor_dto)
-        sensor = query.first()
         if sensor is None:
             if sensor_dto.source and sensor_dto.source.is_master:
-                query = Sensor.select() \
-                    .where(Sensor.source == sensor_dto.source.type) \
-                    .where(Sensor.external_id == sensor_dto.external_id) \
-                    .where(Sensor.physical_quantity.is_null())
-                sensor = query.first()
+                sensor = db.query(Sensor) \
+                    .filter_by(source=sensor_dto.source.type,
+                               external_id=sensor_dto.external_id,
+                               physical_quantity=None) \
+                    .first()
         if sensor is None:
             if plugin is None and sensor_dto.source and sensor_dto.source.is_plugin:
-                plugin = Plugin.get(name=sensor_dto.source.name)
-            if 'room' in sensor_dto.loaded_fields:
-                room = Room.get_or_create(number=sensor_dto.room)
+                plugin = db.query(Plugin).filter_by(name=sensor_dto.source.name).one()
+            if 'room' in sensor_dto.loaded_fields and sensor_dto.room is not None:
+                room = db.query(Room).filter_by(number=sensor_dto.room).one()
             else:
-                query = Sensor.select() \
-                    .where(Sensor.source == sensor_dto.source.type) \
-                    .where(Sensor.external_id == sensor_dto.external_id) \
-                    .where(~Sensor.room.is_null())
-                sensor = query.first()
+                query = (Sensor.source == sensor_dto.source.type) \
+                    & (Sensor.external_id == sensor_dto.external_id) \
+                    & (Sensor.room != None)
+                sensor = db.query(Sensor).where(query).first()
                 if sensor:
                     room = sensor.room
                 else:
@@ -100,10 +100,8 @@ class SensorMapper(object):
             if 'name' in sensor_dto.loaded_fields:
                 sensor.name = sensor_dto.name
             if 'room' in sensor_dto.loaded_fields:
-                if sensor_dto.room is None:
-                    room = None
-                elif 0 <= sensor_dto.room <= 100:
-                    room, _ = Room.get_or_create(number=sensor_dto.room)
+                if sensor_dto.room is not None and 0 <= sensor_dto.room <= 100:
+                    room = db.query(Room).filter_by(number=sensor_dto.room).one()
                 sensor.room = room
         return sensor
 
