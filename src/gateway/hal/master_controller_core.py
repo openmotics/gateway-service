@@ -30,7 +30,7 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
     OutputDTO, OutputStatusDTO, PulseCounterDTO, ShutterDTO, ShutterGroupDTO
 from gateway.enums import IndicateType, Leds, LedStates, ModuleType, \
-    ShutterEnums
+    ShutterEnums, ThermostatState, ThermostatMode
 from gateway.exceptions import CommunicationFailure, UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -236,14 +236,39 @@ class MasterCoreController(MasterController):
                 logger.info('Processed master event: {0}'.format(core_event))
 
     def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
+        processed = False
         if action == 0:
-            if extra_parameter not in [0, 1, 2]:
-                return
-            event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
-            self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
-                                              master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
-                                                                       data={'type': MasterEvent.APITypes.SET_LIGHTS,
-                                                                             'data': {'action': event_action}}))
+            if extra_parameter in [0, 1, 2]:
+                processed = True
+                event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
+                self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
+                                                  master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                                           data={'type': MasterEvent.APITypes.SET_LIGHTS,
+                                                                                 'data': {'action': event_action}}))
+        elif action == 1:
+            data = {}
+            if device_nr == 0:
+                # The field `extra_parameter` is a 16-bit number
+                mode = extra_parameter // 256
+                state = extra_parameter % 256
+                if mode in [0, 1] and state in [0, 1]:
+                    data = {'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
+                            'data': {'mode': {0: ThermostatMode.HEATING,
+                                              1: ThermostatMode.COOLING}[mode],
+                                     'state': {0: ThermostatState.OFF,
+                                               1: ThermostatState.ON}[state]}}
+            elif device_nr == 1:
+                if extra_parameter in [0, 1]:
+                    data = {'type': MasterEvent.APITypes.SET_THERMOSTAT_PRESET,
+                            'data': {'preset': {0: 'away',
+                                                1: 'party'}[extra_parameter]}}
+            if data:
+                self._pubsub.publish_master_event(topic=PubSub.MasterTopics.THERMOSTAT,
+                                                  master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                                           data=data))
+                processed = True
+        if not processed:
+            logger.warning('Master execute-event could not be processed: {0}, {1}, {2}'.format(action, device_nr, extra_parameter))
 
     def _handle_output_state(self, output_id, state_dto):
         # type: (int, OutputStatusDTO) -> None

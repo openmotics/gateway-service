@@ -390,6 +390,7 @@ class Preset(BaseModel):
         VACATION: Literal['vacation']
         PARTY: Literal['party']
 
+    ALL_TYPES: List[str]
     TYPE_TO_SETPOINT: Dict[str, int]
     SETPOINT_TO_TYPE: Dict[int, str]
 

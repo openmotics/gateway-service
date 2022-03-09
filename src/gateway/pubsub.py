@@ -66,6 +66,7 @@ class PubSub(object):
         INPUT = 'input'  # type: MASTER_TOPIC
         SHUTTER = 'shutter'  # type: MASTER_TOPIC
         SENSOR = 'sensor'  # type: MASTER_TOPIC
+        THERMOSTAT = 'thermostat'  # type: MASTER_TOPIC
 
     class GatewayTopics(BaseEnum):
         CONFIG = 'config'  # type: GATEWAY_TOPIC
