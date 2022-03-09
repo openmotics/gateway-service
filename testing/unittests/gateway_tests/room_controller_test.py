@@ -16,59 +16,64 @@
 Tests for the room controller.
 """
 from __future__ import absolute_import
-
-import os
-import tempfile
 import unittest
-
+import logging
 import mock
 import xmlrunner
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from gateway.models import Database, Base, Room
 from gateway.dto import RoomDTO
 from gateway.models import Database, Room
 from gateway.room_controller import RoomController
 from ioc import SetTestMode
-from peewee import SqliteDatabase
-
+from logs import Logs
 MODELS = [Room]
 
 
 class RoomControllerTest(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
+        super(RoomControllerTest, cls).setUpClass()
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.input_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
+        self.db = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.db)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
 
     def test_save_load(self):
-        with mock.patch.object(Database, 'get_db', return_value=self.test_db):
-            controller = RoomController()
-            rooms = controller.load_rooms()
-            self.assertEqual(0, len(rooms))
-            room_dto_1 = RoomDTO(id=1, name='one')
-            controller.save_rooms([room_dto_1])
-            rooms = controller.load_rooms()
-            self.assertEqual(1, len(rooms))
-            self.assertEqual(room_dto_1, rooms[0])
-            room_dto_2 = RoomDTO(id=2, name='two')
-            controller.save_rooms([room_dto_2])
-            rooms = controller.load_rooms()
-            self.assertEqual(2, len(rooms))
-            self.assertIn(room_dto_1, rooms)
-            self.assertIn(room_dto_2, rooms)
-            room_dto_1.name = ''
-            controller.save_rooms([room_dto_1])
-            rooms = controller.load_rooms()
-            self.assertEqual(1, len(rooms))
-            self.assertNotIn(room_dto_1, rooms)
-            self.assertIn(room_dto_2, rooms)
+        controller = RoomController()
+        rooms = controller.load_rooms()
+        self.assertEqual(0, len(rooms))
+        room_dto_1 = RoomDTO(id=1, name='one')
+        controller.save_rooms([room_dto_1])
+        rooms = controller.load_rooms()
+        self.assertEqual(1, len(rooms))
+        self.assertEqual(room_dto_1, rooms[0])
+        room_dto_2 = RoomDTO(id=2, name='two')
+        controller.save_rooms([room_dto_2])
+        rooms = controller.load_rooms()
+        self.assertEqual(2, len(rooms))
+        self.assertIn(room_dto_1, rooms)
+        self.assertIn(room_dto_2, rooms)
+        room_dto_1.name = ''
+        controller.save_rooms([room_dto_1])
+        rooms = controller.load_rooms()
+        self.assertEqual(1, len(rooms))
+        self.assertNotIn(room_dto_1, rooms)
+        self.assertIn(room_dto_2, rooms)
 
 
 if __name__ == "__main__":
