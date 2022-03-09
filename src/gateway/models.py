@@ -20,10 +20,12 @@ import logging
 import time
 
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, \
-    Text, UniqueConstraint, create_engine, and_
+    Text, UniqueConstraint, and_, create_engine
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, scoped_session, sessionmaker, RelationshipProperty
+from sqlalchemy.orm import RelationshipProperty, relationship, \
+    scoped_session, sessionmaker
 from sqlalchemy.schema import MetaData
 
 import constants
@@ -100,7 +102,9 @@ class Output(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
-    room = relationship('Room', foreign_keys=[room_id])
+    room = relationship('Room')
+    pump = relationship('Pump', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Pump]]
+    valve = relationship('Valve', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Valve]]
 
 
 class Sensor(Base):
@@ -172,7 +176,7 @@ class PulseCounter(Base, MasterNumber):
     persistent = Column(Boolean, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
-    room = relationship('Room', lazy='joined', outerjoin=True, foreign_keys=[room_id])
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
 class GroupAction(Base, MasterNumber):
@@ -343,6 +347,19 @@ class ThermostatGroup(Base, MasterNumber):
     sensor_id = Column(Integer, ForeignKey('sensor.id', ondelete='SET NULL'), nullable=True)
     mode = Column(String(255), default=Modes.HEATING, nullable=False)  # Options: 'heating' or 'cooling'
 
+    sensor = relationship('Sensor')  # type: RelationshipProperty[Optional[Sensor]]
+    thermostats = relationship('Thermostat', back_populates='group')  # type: RelationshipProperty[List[Thermostat]]
+    outputs = relationship('Output', secondary='outputtothermostatgroup')  # type: RelationshipProperty[List[Output]]
+
+    heating_output_associations = relationship('OutputToThermostatGroupAssociation',
+                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "heating")',
+                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
+                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
+    cooling_output_associations = relationship('OutputToThermostatGroupAssociation',
+                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "cooling")',
+                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
+                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
+
 
 class OutputToThermostatGroupAssociation(Base):
     __tablename__ = 'outputtothermostatgroup'
@@ -354,6 +371,9 @@ class OutputToThermostatGroupAssociation(Base):
     index = Column(Integer, nullable=False)  # The index of this output in the config 0-3
     mode = Column(String(255), nullable=False)  # The mode this config is used for. Options: 'heating' or 'cooling'
     value = Column(Integer, nullable=False)  # The value that needs to be set on the output when in this mode (0-100)
+
+    output = relationship('Output')
+    thermostat_group = relationship('ThermostatGroup')
 
 
 class PumpToValveAssociation(Base):
@@ -371,6 +391,15 @@ class Pump(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), nullable=True, unique=True)
+
+    output = relationship('Output', lazy='joined', back_populates='pump')
+
+    valves = relationship('Valve', back_populates='pump', secondary='pumptovalve')  # type: RelationshipProperty[List[Valve]]
+
+    # heating_valves = relationship('Valve', back_populates='pump', secondary='pumptovalve',
+    #                               secondaryjoin='and_(Valve.id == PumpToValveAssociation.valve_id, Valve.mode == "heating")')
+    # cooling_valves = relationship('Valve', back_populates='pump', secondary='pumptovalve',
+    #                               secondaryjoin='and_(Valve.id == PumpToValveAssociation.valve_id, Valve.mode == "cooling")')
 
     # TODO: implement custom filters
     # @property
@@ -401,6 +430,10 @@ class Valve(Base):
     delay = Column(Integer, default=60, nullable=False)
     output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), unique=True, nullable=False)
 
+    output = relationship('Output', lazy='joined', back_populates='valve')
+    pump = relationship('Pump', secondary='pumptovalve')  # type: RelationshipProperty[Optional[Pump]]
+    # associations = relationship('ValveToThermostatAssociation', lazy='joined')
+
 
 class Thermostat(Base, MasterNumber):
     __tablename__ = 'thermostat'
@@ -426,7 +459,31 @@ class Thermostat(Base, MasterNumber):
     valve_config = Column(String(255), default=ValveConfigs.CASCADE, nullable=False)  # Options: 'cascade' or 'equal'
     thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), nullable=False)
 
-    room = relationship('Room', foreign_keys=[room_id])
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    sensor = relationship('Sensor')
+    group = relationship('ThermostatGroup')
+
+    presets = relationship('Preset', back_populates='thermostat')  # type: RelationshipProperty[List[Preset]]
+    active_preset = relationship('Preset',
+                                 primaryjoin='and_(Thermostat.id == Preset.thermostat_id, Preset.active == True)',
+                                 back_populates='thermostat', uselist=False)  # type: RelationshipProperty[Preset]
+
+    valves = relationship('Valve', secondary='valvetothermostat',
+                          order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[Valve]]
+    heating_valve_associations = relationship('ValveToThermostatAssociation',
+                                              primaryjoin='and_(Thermostat.id == ValveToThermostatAssociation.thermostat_id, ValveToThermostatAssociation.mode == "heating")',
+                                              order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[ValveToThermostatAssociation]]
+    cooling_valve_associations = relationship('ValveToThermostatAssociation',
+                                              primaryjoin='and_(Thermostat.id == ValveToThermostatAssociation.thermostat_id, ValveToThermostatAssociation.mode == "cooling")',
+                                              order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[ValveToThermostatAssociation]]
+
+    schedules = relationship('DaySchedule', back_populates='thermostat')  # type: RelationshipProperty[List[DaySchedule]]
+    heating_schedules = relationship('DaySchedule',
+                                     primaryjoin='and_(Thermostat.id == DaySchedule.thermostat_id, DaySchedule.mode == "heating")',
+                                     order_by='asc(DaySchedule.index)')  # type: RelationshipProperty[List[DaySchedule]]
+    cooling_schedules = relationship('DaySchedule',
+                                     primaryjoin='and_(Thermostat.id == DaySchedule.thermostat_id, DaySchedule.mode == "cooling")',
+                                     order_by='asc(DaySchedule.index)')  # type: RelationshipProperty[List[DaySchedule]]
 
     # def get_preset(self, preset_type):  # type: (str) -> Preset
     #     if preset_type not in Preset.ALL_TYPES:
@@ -519,6 +576,9 @@ class ValveToThermostatAssociation(Base):
     mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)
     priority = Column(Integer, default=0, nullable=False)
 
+    thermostat = relationship('Thermostat', backref='valve_associations')
+    valve = relationship('Valve', lazy='joined', backref='thermostat_associations')
+
 
 class Preset(Base):
     __tablename__ = 'preset'
@@ -548,6 +608,8 @@ class Preset(Base):
     active = Column(Boolean, default=False, nullable=False)
     thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), nullable=False)
 
+    thermostat = relationship('Thermostat', back_populates='presets')
+
 
 class DaySchedule(Base):
     __tablename__ = 'dayschedule'
@@ -562,6 +624,8 @@ class DaySchedule(Base):
     content = Column(Text, nullable=False)
     mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)
     thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), nullable=False)
+
+    thermostat = relationship('Thermostat', back_populates='schedules')
 
     @property
     def schedule_data(self):  # type: () -> Dict[int, float]
