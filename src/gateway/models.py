@@ -78,6 +78,7 @@ class Input(Base):
     number = Column(Integer, unique=True, nullable=False)
     event_enabled = Column(Boolean, default=False, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', foreign_keys=[room_id])
 
 
 class Output(Base):
@@ -87,6 +88,7 @@ class Output(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', foreign_keys=[room_id])
 
     pumps = relationship("Pump", backref="output")
     valves = relationship("Valve", backref="output")
@@ -105,6 +107,7 @@ class Sensor(Base):
     unit = Column(String(255), nullable=True)
     name = Column(String(255), nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', foreign_keys=[room_id])
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
 
     thermostats = relationship("Thermostat", backref="sensor")
@@ -142,6 +145,7 @@ class Shutter(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', foreign_keys=[room_id])
 
 
 class ShutterGroup(Base):
@@ -151,6 +155,7 @@ class ShutterGroup(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', foreign_keys=[room_id])
 
 
 class PulseCounter(Base):
@@ -163,6 +168,7 @@ class PulseCounter(Base):
     source = Column(String(255), nullable=False)  # Options: 'master' or 'gateway'
     persistent = Column(Boolean, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', foreign_keys=[room_id])
 
 
 class GroupAction(Base):
@@ -427,6 +433,7 @@ class Thermostat(Base):
     pid_cooling_d = Column(Float, default=0, nullable=False)
     automatic = Column(Boolean, default=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', foreign_keys=[room_id])
     start = Column(Integer, nullable=False)
     valve_config = Column(String(255), default=ValveConfigs.CASCADE, nullable=False)  # Options: 'cascade' or 'equal'
     thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), nullable=False)
@@ -601,13 +608,13 @@ class Room(Base):
     number = Column(Integer, unique=True, nullable=False)
     name = Column(String(255), nullable=True)
 
-    outputs = relationship("Output", backref="room")
-    inputs = relationship("Input", backref="room")
-    shutters = relationship("Shutter", backref="room")
-    shutter_groups = relationship("ShutterGroup", backref="room")
-    pulse_counters = relationship("PulseCounter", backref="room")
-    sensors = relationship("Sensor", backref="room")
-    thermostats = relationship("Thermostat", backref="room")
+    outputs = relationship("Output")
+    inputs = relationship("Input")
+    shutters = relationship("Shutter")
+    shutter_groups = relationship("ShutterGroup")
+    pulse_counters = relationship("PulseCounter")
+    sensors = relationship("Sensor")
+    thermostats = relationship("Thermostat")
 
 
 class DataMigration(Base):

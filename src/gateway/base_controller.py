@@ -19,7 +19,7 @@ from __future__ import absolute_import
 
 import logging
 import time
-
+from gateway.models import Database
 from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
@@ -130,12 +130,17 @@ class BaseController(object):
         name = structure.name
         skip = structure.skip
 
+        db = Database.get_session()
+
         ids = []
+        entries_to_save = []
         for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
             if skip is not None and skip(dto):
                 continue
             id_ = dto.id
             ids.append(id_)
-            if not orm_model.select().where(orm_model.number == id_).exists():
-                orm_model.create(number=id_)
-        orm_model.delete().where(orm_model.number.not_in(ids)).execute()
+            if not db.query(db.query(orm_model).filter(orm_model.number == id_).exists()).scalar():
+                entries_to_save.append(orm_model(number=id_))
+        db.add_all(entries_to_save)
+        db.query(orm_model).where(orm_model.number.not_in(ids)).delete()
+        db.commit()
