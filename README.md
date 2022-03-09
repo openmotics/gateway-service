@@ -4,6 +4,15 @@ This project is the OpenMotics Gateway backend. It provides an API used by the f
 
 It is the glue between the OpenMotics Master (microcontroller) and the rest of the world.
 
+### Development
+
+For type checking during development mypy is used, this requires python3 as well as
+some extra dependencies in order to function properly:
+
+```sh
+pip install mypy types-all sqlalchemy-stubs
+```
+
 
 ## Running locally
 

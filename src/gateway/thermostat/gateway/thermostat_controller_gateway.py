@@ -24,9 +24,9 @@ from gateway.enums import ThermostatMode, ThermostatState
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
 from gateway.mappers import ThermostatMapper
-from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
-    Preset, Pump, PumpToValve, Schedule, Sensor, Thermostat, ThermostatGroup, \
-    Valve, ValveToThermostat
+from gateway.models import DaySchedule, Output, OutputToThermostatGroupAssociation, \
+    Preset, Pump, PumpToValveAssociation, Schedule, Sensor, Thermostat, ThermostatGroup, \
+    Valve, ValveToThermostatAssociation
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.pump_valve_controller import \

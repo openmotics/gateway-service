@@ -21,13 +21,13 @@ import time
 import logging
 from peewee import SqliteDatabase
 
-from gateway.models import Pump, Output, Valve, PumpToValve
+from gateway.models import Pump, Output, Valve, PumpToValveAssociation
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.output_controller import OutputController
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
-MODELS = [Pump, Output, Valve, PumpToValve]
+MODELS = [Pump, Output, Valve, PumpToValveAssociation]
 
 
 class PumpValveControllerTest(unittest.TestCase):

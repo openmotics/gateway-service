@@ -20,12 +20,12 @@ import mock
 import time
 from peewee import SqliteDatabase
 
-from gateway.models import Pump, Output, Valve, PumpToValve
+from gateway.models import Pump, Output, Valve, PumpToValveAssociation
 from gateway.thermostat.gateway.valve_driver import ValveDriver
 from gateway.output_controller import OutputController
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Pump, Output, Valve, PumpToValve]
+MODELS = [Pump, Output, Valve, PumpToValveAssociation]
 
 
 class ValveDriverTest(unittest.TestCase):

@@ -27,9 +27,9 @@ from gateway.dto import OutputStatusDTO, PumpGroupDTO, ScheduleDTO, \
     SensorStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
     ThermostatGroupStatusDTO, ThermostatScheduleDTO, ThermostatStatusDTO
 from gateway.events import GatewayEvent
-from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
-    Preset, Pump, PumpToValve, Room, Sensor, Thermostat, ThermostatGroup, \
-    Valve, ValveToThermostat
+from gateway.models import DaySchedule, Output, OutputToThermostatGroupAssociation, \
+    Preset, Pump, PumpToValveAssociation, Room, Sensor, Thermostat, ThermostatGroup, \
+    Valve, ValveToThermostatAssociation
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
@@ -39,9 +39,9 @@ from gateway.thermostat.gateway.thermostat_controller_gateway import \
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
-MODELS = [Pump, Output, Valve, PumpToValve, Thermostat,
-          ThermostatGroup, ValveToThermostat, Room, Sensor, Preset,
-          OutputToThermostatGroup, DaySchedule]
+MODELS = [Pump, Output, Valve, PumpToValveAssociation, Thermostat,
+          ThermostatGroup, ValveToThermostatAssociation, Room, Sensor, Preset,
+          OutputToThermostatGroupAssociation, DaySchedule]
 
 
 class ThermostatControllerTest(unittest.TestCase):
