@@ -19,7 +19,7 @@ from __future__ import absolute_import
 
 import logging
 import time
-
+from gateway.models import Database
 from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
@@ -138,7 +138,7 @@ class BaseController(object):
                 continue
             n = dto.id
             numbers.append(n)
-            if not db.query(orm_model).where(orm_model.number == n).exists():
+            if not db.query(db.query(orm_model).filter(orm_model.number == n).exists()).scalar():
                 db.add(orm_model(number=n))
         db.query(orm_model).where(orm_model.number.not_in(numbers)).delete()
         db.commit()

@@ -21,15 +21,12 @@ import copy
 import logging
 import time
 from threading import Lock
-
-from peewee import JOIN
-
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto.input import InputStatusDTO
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import InputDTO
 from gateway.events import GatewayEvent
-from gateway.models import Input, Room
+from gateway.models import Input, Room, Database
 from gateway.hal.master_event import MasterEvent
 from gateway.exceptions import CommunicationFailure
 from gateway.base_controller import BaseController, SyncStructure
@@ -111,19 +108,20 @@ class InputController(BaseController):
             self._handle_input_status(master_event.data['state'])
 
     def load_input(self, input_id):  # type: (int) -> InputDTO
-        input_ = Input.select(Input, Room) \
-                      .join_from(Input, Room, join_type=JOIN.LEFT_OUTER) \
-                      .where(Input.number == input_id) \
-                      .get()  # type: Input  # TODO: Load dict
+        db = Database.get_session()
+        input_ = db.query(Input)\
+            .join(Input.room, isouter=True) \
+            .where(Input.number == input_id) \
+            .one()  # type: Input
         input_dto = self._master_controller.load_input(input_id=input_id)
         input_dto.room = input_.room.number if input_.room is not None else None
         input_dto.event_enabled = input_.event_enabled
         return input_dto
 
     def load_inputs(self):  # type: () -> List[InputDTO]
+        db = Database.get_session()
         inputs_dtos = []
-        for input_ in list(Input.select(Input, Room)
-                                .join_from(Input, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
+        for input_ in db.query(Input).join(Input.room, isouter=True).all():
             try:
                 input_dto = self._master_controller.load_input(input_id=input_.number)
             except TypeError as ex:
@@ -137,21 +135,24 @@ class InputController(BaseController):
         return inputs_dtos
 
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
+        db = Database.get_session()
         inputs_to_save = []
         for input_dto in inputs:
-            input_ = Input.get_or_none(number=input_dto.id)  # type: Input
+            input_ = db.query(Input)\
+                .where(Input.number == input_dto.id)\
+                .join(Input.room, isouter=True)\
+                .one_or_none()
             if input_ is None:
                 logger.info('Ignored saving non-existing Input {0}'.format(input_dto.id))
-            if 'event_enabled' in input_dto.loaded_fields:
+            elif 'event_enabled' in input_dto.loaded_fields:
                 input_.event_enabled = input_dto.event_enabled
-                input_.save()
-            if 'room' in input_dto.loaded_fields:
-                if input_dto.room is None:
-                    input_.room = None
-                elif 0 <= input_dto.room <= 100:
-                    # TODO: Validation should happen on API layer
-                    input_.room, _ = Room.get_or_create(number=input_dto.room)
-                input_.save()
+                if 'room' in input_dto.loaded_fields:
+                    if input_dto.room is None:
+                        input_.room = None
+                    elif 0 <= input_dto.room <= 100:
+                        # TODO: Validation should happen on API layer
+                        input_.room = db.query(Room).where(Room.number == input_dto.room).one()
+            db.commit()
             inputs_to_save.append(input_dto)
         self._master_controller.save_inputs(inputs_to_save)
 
@@ -185,8 +186,8 @@ class InputController(BaseController):
 
     @staticmethod
     def load_inputs_event_enabled():
-        return {input_['number']: input_['event_enabled']
-                for input_ in Input.select().dicts()}
+        db = Database.get_session()
+        return {input_.number: input_.event_enabled for input_ in db.query(Input).all()}
 
 
 class InputStateCache(object):
