@@ -170,6 +170,7 @@ class SensorController(BaseController):
         sensor_dtos = []
         db = Database.get_session()
         sensors = db.query(Sensor) \
+            .join(Room, Plugin, isouter=True) \
             .where(Sensor.physical_quantity != None) \
             .all()  # type: List[Sensor]
         for sensor in sensors:
