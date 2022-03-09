@@ -39,6 +39,4 @@ class RoomMapper(object):
             room = Room(number=room_dto.id)
         if 'name' in room_dto.loaded_fields:
             room.name = room_dto.name
-        db.add(room)
-        db.commit()
         return room
