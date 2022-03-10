@@ -64,8 +64,9 @@ from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple, Set
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Set, TypeVar, Union
     from serial import Serial
+    T_co = TypeVar('T_co', covariant=True)
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
@@ -389,13 +390,21 @@ class MasterClassicController(MasterController):
         classic_object = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_id)
         if classic_object.module_type not in ['i', 'I']:  # Only return 'real' inputs
             raise TypeError('The given id {0} is not an input, but {1}'.format(input_id, classic_object.module_type))
-        return InputMapper.orm_to_dto(classic_object)
+        input_dto = InputMapper.orm_to_dto(classic_object)
+        input_dto.module = self._get_input_modules_information(module_id=input_dto.id // 8)[0]
+        return input_dto
 
     @communication_enabled
     def load_inputs(self):  # type: () -> List[InputDTO]
-        return [InputMapper.orm_to_dto(o)
-                for o in self._eeprom_controller.read_all(eeprom_models.InputConfiguration)
-                if o.module_type in ['i', 'I']]  # Only return 'real' inputs
+        dtos = []
+        module_dtos = {module_dto.id: module_dto for module_dto in self._get_input_modules_information()}
+        for classic_object in self._eeprom_controller.read_all(eeprom_models.InputConfiguration):
+            if classic_object.module_type not in ['i', 'I']:
+                continue  # Only return 'real' inputs
+            input_dto = InputMapper.orm_to_dto(classic_object)
+            input_dto.module = module_dtos.get(input_dto.id // 8)
+            dtos.append(input_dto)
+        return dtos
 
     @communication_enabled
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
@@ -475,15 +484,19 @@ class MasterClassicController(MasterController):
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
         output_dto = OutputMapper.orm_to_dto(classic_object)
+        output_dto.module = self._get_output_modules_information(module_id=output_dto.id // 8)[0]
         self._output_config[output_id] = output_dto
         return output_dto
 
     @communication_enabled
     def load_outputs(self):  # type: () -> List[OutputDTO]
-        output_dtos = [OutputMapper.orm_to_dto(o)
-                       for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
-        self._output_config = {output_dto.id: output_dto for output_dto in output_dtos}
-        return output_dtos
+        dtos = []
+        module_dtos = {module_dto.id: module_dto for module_dto in self._get_output_modules_information()}
+        for classic_object in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration):
+            output_dto = OutputMapper.orm_to_dto(classic_object)
+            output_dto.module = module_dtos.get(output_dto.id // 8)
+            dtos.append(output_dto)
+        return dtos
 
     @communication_enabled
     def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
@@ -551,12 +564,19 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
         classic_object = self._eeprom_controller.read(eeprom_models.ShutterConfiguration, shutter_id)
-        return ShutterMapper.orm_to_dto(classic_object)
+        shutter_dto = ShutterMapper.orm_to_dto(classic_object)
+        shutter_dto.module = self._get_shutter_modules_information(module_id=shutter_dto.id // 4)[0]
+        return shutter_dto
 
     @communication_enabled
     def load_shutters(self):  # type: () -> List[ShutterDTO]
-        return [ShutterMapper.orm_to_dto(o)
-                for o in self._eeprom_controller.read_all(eeprom_models.ShutterConfiguration)]
+        dtos = []
+        module_dtos = {module_dto.id: module_dto for module_dto in self._get_shutter_modules_information()}
+        for classic_object in self._eeprom_controller.read_all(eeprom_models.ShutterConfiguration):
+            shutter_dto = ShutterMapper.orm_to_dto(classic_object)
+            shutter_dto.module = module_dtos.get(shutter_dto.id // 4)
+            dtos.append(shutter_dto)
+        return dtos
 
     @communication_enabled
     def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
@@ -965,18 +985,27 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def get_modules_information(self):  # type: () -> List[ModuleDTO]
         """ Gets module information """
-        information = []
+        no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
+        return self._get_input_modules_information(no_modules=no_modules) + \
+            self._get_output_modules_information(no_modules=no_modules) + \
+            self._get_shutter_modules_information(no_modules=no_modules)
+
+    @communication_enabled
+    def _get_input_modules_information(self, module_id=None, no_modules=None):  # type: (Optional[int], Optional[Union[T_co, Dict[str, Any]]]) -> List[ModuleDTO]
+        if module_id is None:
+            if no_modules is None:
+                no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
+            assert no_modules is not None and isinstance(no_modules, dict)
+            module_ids = list(range(no_modules['in']))
+        else:
+            module_ids = [module_id]
+        dtos = []
         module_type_lookup = {'c': ModuleType.CAN_CONTROL,
                               't': ModuleType.SENSOR,
-                              'i': ModuleType.INPUT,
-                              'o': ModuleType.OUTPUT,
-                              'r': ModuleType.SHUTTER,
-                              'd': ModuleType.DIM_CONTROL}
-
-        no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
-        for i in range(no_modules['in']):
-            is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == bytearray(b'C')
-            module_address = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 4))
+                              'i': ModuleType.INPUT}
+        for module_id in module_ids:
+            is_can = self._eeprom_controller.read_address(EepromAddress(2 + module_id, 252, 1)).bytes == bytearray(b'C')
+            module_address = self._eeprom_controller.read_address(EepromAddress(2 + module_id, 0, 4))
             module_type_letter = chr(module_address.bytes[0]).lower()
             is_virtual = chr(module_address.bytes[0]).islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
@@ -985,46 +1014,72 @@ class MasterClassicController(MasterController):
                 hardware_type = HardwareType.VIRTUAL
             elif is_can and module_type_letter != 'c':
                 hardware_type = HardwareType.EMULATED
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
                             module_type=module_type_lookup.get(module_type_letter),
                             hardware_type=hardware_type,
-                            order=i)
+                            order=module_id)
             if hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
-            information.append(dto)
+            dtos.append(dto)
+        return dtos
 
-        for i in range(no_modules['out']):
-            module_address = self._eeprom_controller.read_address(EepromAddress(33 + i, 0, 4))
+    @communication_enabled
+    def _get_output_modules_information(self, module_id=None, no_modules=None):  # type: (Optional[int], Optional[Union[T_co, Dict[str, Any]]]) -> List[ModuleDTO]
+        if module_id is None:
+            if no_modules is None:
+                no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
+            assert no_modules is not None and isinstance(no_modules, dict)
+            module_ids = list(range(no_modules['out']))
+        else:
+            module_ids = [module_id]
+        dtos = []
+        module_type_lookup = {'o': ModuleType.OUTPUT,
+                              'r': ModuleType.SHUTTER,
+                              'd': ModuleType.DIM_CONTROL}
+        for module_id in module_ids:
+            module_address = self._eeprom_controller.read_address(EepromAddress(33 + module_id, 0, 4))
             module_type_letter = chr(module_address.bytes[0]).lower()
             is_virtual = chr(module_address.bytes[0]).islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
                             module_type=module_type_lookup.get(module_type_letter),
                             hardware_type=(HardwareType.VIRTUAL if is_virtual else
                                            HardwareType.PHYSICAL),
-                            order=i)
+                            order=module_id)
             if not is_virtual:
                 dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
-            information.append(dto)
+            dtos.append(dto)
+        return dtos
 
-        for i in range(no_modules['shutter']):
-            module_address = self._eeprom_controller.read_address(EepromAddress(33 + i, 173, 4))
-            module_type_letter = chr(module_address.bytes[0]).lower()
+    @communication_enabled
+    def _get_shutter_modules_information(self, module_id=None, no_modules=None):  # type: (Optional[int], Optional[Union[T_co, Dict[str, Any]]]) -> List[ModuleDTO]
+        if module_id is None:
+            if no_modules is None:
+                no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
+            assert no_modules is not None and isinstance(no_modules, dict)
+            module_ids = list(range(no_modules['shutter']))
+        else:
+            module_ids = [module_id]
+        dtos = []
+        for module_id in module_ids:
+            module_address = self._eeprom_controller.read_address(EepromAddress(33 + module_id, 173, 4))
             is_virtual = chr(module_address.bytes[0]).islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
-            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+            dto = ModuleDTO(id=module_id,
+                            source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
-                            module_type=module_type_lookup.get(module_type_letter),
+                            module_type=ModuleType.SHUTTER,
                             hardware_type=(HardwareType.VIRTUAL if is_virtual else
                                            HardwareType.PHYSICAL),
-                            order=i)
+                            order=module_id)
             if not is_virtual:
                 dto.online, dto.hardware_version, dto.firmware_version = self.get_module_information(module_address.bytes)
-            information.append(dto)
-
-        return information
+            dtos.append(dto)
+        return dtos
 
     @communication_enabled
     def get_module_information(self, address):

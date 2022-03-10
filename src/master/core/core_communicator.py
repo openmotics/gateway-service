@@ -23,7 +23,6 @@ import logging
 import select
 import struct
 import time
-import six
 from threading import Lock, Event, Timer
 from collections import Counter
 from six.moves.queue import Empty, Queue
@@ -63,7 +62,7 @@ class CoreCommunicator(object):
     END_OF_REPLY = bytearray(b'\r\n')
 
     BLOCKER_TIMEOUTS = {CommunicationBlocker.RESTART: 15.0,
-                        CommunicationBlocker.UPDATE: 600.0,
+                        CommunicationBlocker.UPDATE: 900.0,
                         CommunicationBlocker.VERSION_SCAN: 5.0,
                         CommunicationBlocker.FACTORY_RESET: 600.0}
     BLOCKER_ABORT = [CommunicationBlocker.UPDATE,

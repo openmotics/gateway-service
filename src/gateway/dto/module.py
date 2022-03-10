@@ -28,7 +28,8 @@ class ModuleDTO(BaseDTO):
         MASTER = 'master'
         GATEWAY = 'gateway'
 
-    def __init__(self, source, address, module_type, hardware_type, firmware_version=None, hardware_version=None, order=None, online=None, last_online_update=None, update_success=None):
+    def __init__(self, id, source, address, module_type, hardware_type, firmware_version=None, hardware_version=None, order=None, online=None, last_online_update=None, update_success=None):
+        self.id = id  # type: int
         self.source = source  # type: str
         self.address = address  # type: str
         self.module_type = module_type  # type: Optional[str]

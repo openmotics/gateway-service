@@ -380,7 +380,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                                                            output_0_level=0,  # Valve drivers are not active
                                                                            output_1_level=0,
                                                                            steering_power=100,  # PID active
-                                                                           mode=0)])
+                                                                           mode='heating')])
         assert [expected] == self.controller.get_thermostat_group_status()
 
         self.controller.set_current_setpoint(thermostat_number=1, heating_temperature=15.0)

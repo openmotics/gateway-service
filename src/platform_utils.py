@@ -24,7 +24,7 @@ import constants
 import time
 
 if False:  # MYPY
-    from typing import Union, Dict, List, Tuple
+    from typing import Union, Dict, List, Tuple, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -162,14 +162,15 @@ class Hardware(object):
             gpio_file.write('1' if value else '0')
 
     @staticmethod
-    def cycle_gpio(gpio, cycle):  # type: (Tuple[int, bool], List[Union[bool, float]]) -> None
+    def cycle_gpio(gpio, cycle):  # type: (Tuple[int, bool], List[Union[bool, float, Callable[[], None]]]) -> None
         """
         Will cycle a given GPIO through a certain pattern `cycle`. This pattern
-        is a list of booleans and floats where every booilean will result in setting
-        the GPIO to this state, and every flow will wait for that amount of seconds.
-        Example:
-        > [False, 2.0, True]  # This will immediately turn the GPIO off, wait 2 seconds,
-        >                     # and turn it on again.
+        is a list of certain items:
+        * A boolean will set the GPIO in this state
+        * A float will wait that amount of seconds
+        * A callable will call this callback (no arguments)
+        > [False, 2.0, lambda: print('x'), 0.5, True]  # This will immediately turn the GPIO off, wait 2 seconds,
+        >                                              # execute this callback, wait 0.5 seconds and turn it on again.
         :param gpio: The GPIO pin
         :param cycle: The cycle to follow
         """
@@ -185,6 +186,8 @@ class Hardware(object):
                     gpio_file.write('1' if value else '0')
             elif isinstance(item, float):
                 time.sleep(item)
+            elif callable(item):
+                item()
             else:
                 raise ValueError('Unexpected {0} in cycle {1}'.format(item, cycle))
 
@@ -399,9 +402,10 @@ class Platform(object):
         CLASSIC = 'CLASSIC'
         CORE_PLUS = 'CORE_PLUS'
         CORE = 'CORE'
+        CORE_DUMMY = 'CORE_DUMMY'
         ESAFE = 'ESAFE'
 
-    DummyTypes = [Type.DUMMY, Type.ESAFE_DUMMY]
+    DummyTypes = [Type.DUMMY, Type.ESAFE_DUMMY, Type.CORE_DUMMY]
     ClassicTypes = [Type.CLASSIC]
     CoreTypes = [Type.CORE, Type.CORE_PLUS]
     EsafeTypes = [Type.ESAFE]

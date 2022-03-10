@@ -36,7 +36,7 @@
       "height": 400,
       "width": 380,
       "size": "M",
-      "simulate_stuck": true
+      "simulate_stuck": false
     },
     {
       "id": 160,
@@ -45,7 +45,7 @@
       "height": 400,
       "width": 760,
       "size": "L1",
-      "auto_close_after_open": false
+      "auto_close_after_open": true
     },
     {
       "id": 176,

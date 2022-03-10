@@ -237,8 +237,7 @@ class EnergyModuleController(BaseController):
                 logger.exception('Got exception while fetching realtime energy from {0}: {1}'.format(energy_module.number, ex))
         return output
 
-    def get_modules_information(self):
-        # type: () -> List[ModuleDTO]
+    def get_modules_information(self):  # type: () -> List[ModuleDTO]
         if not self._enabled:
             return []
 
@@ -253,7 +252,8 @@ class EnergyModuleController(BaseController):
                 except NotImplementedError:
                     # TODO: Remove once the P1C part is implemented
                     online, firmware_version = False, None
-                information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+                information.append(ModuleDTO(id=energy_module.number,
+                                             source=ModuleDTO.Source.GATEWAY,
                                              address=energy_module.module.address,
                                              module_type=energy_module.module.module_type,
                                              hardware_type=HardwareType.PHYSICAL,
