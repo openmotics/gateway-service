@@ -108,52 +108,52 @@ class InputController(BaseController):
             self._handle_input_status(master_event.data['state'])
 
     def load_input(self, input_id):  # type: (int) -> InputDTO
-        db = Database.get_session()
-        input_ = db.query(Input)\
-            .join(Input.room, isouter=True) \
-            .where(Input.number == input_id) \
-            .one()  # type: Input
-        input_dto = self._master_controller.load_input(input_id=input_id)
-        input_dto.room = input_.room.number if input_.room is not None else None
-        input_dto.event_enabled = input_.event_enabled
+        with Database.get_session() as db:
+            input_ = db.query(Input)\
+                .join(Input.room, isouter=True) \
+                .where(Input.number == input_id) \
+                .one()  # type: Input
+            input_dto = self._master_controller.load_input(input_id=input_id)
+            input_dto.room = input_.room.number if input_.room is not None else None
+            input_dto.event_enabled = input_.event_enabled
         return input_dto
 
     def load_inputs(self):  # type: () -> List[InputDTO]
-        db = Database.get_session()
         inputs_dtos = []
-        for input_ in db.query(Input).join(Input.room, isouter=True).all():
-            try:
-                input_dto = self._master_controller.load_input(input_id=input_.number)
-            except TypeError as ex:
-                logger.error('Could not load input {0}: {1}'.format(input_.number, ex))
-                continue
-            input_dto.room = input_.room.number if input_.room is not None else None
-            input_dto.event_enabled = input_.event_enabled
-            inputs_dtos.append(input_dto)
+        with Database.get_session() as db:
+            inputs = db.query(Input).join(Input.room, isouter=True).all()
+            for input_ in inputs:
+                try:
+                    input_dto = self._master_controller.load_input(input_id=input_.number)
+                except TypeError as ex:
+                    logger.error('Could not load input {0}: {1}'.format(input_.number, ex))
+                    continue
+                input_dto.room = input_.room.number if input_.room is not None else None
+                input_dto.event_enabled = input_.event_enabled
+                inputs_dtos.append(input_dto)
         self._cache.update_inputs(inputs_dtos)
-
         return inputs_dtos
 
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
-        db = Database.get_session()
         inputs_to_save = []
-        for input_dto in inputs:
-            input_ = db.query(Input)\
-                .where(Input.number == input_dto.id)\
-                .join(Input.room, isouter=True)\
-                .one_or_none()
-            if input_ is None:
-                logger.info('Ignored saving non-existing Input {0}'.format(input_dto.id))
-            elif 'event_enabled' in input_dto.loaded_fields:
-                input_.event_enabled = input_dto.event_enabled
-                if 'room' in input_dto.loaded_fields:
-                    if input_dto.room is None:
-                        input_.room = None
-                    elif 0 <= input_dto.room <= 100:
-                        # TODO: Validation should happen on API layer
-                        input_.room = db.query(Room).where(Room.number == input_dto.room).one()
+        with Database.get_session() as db:
+            for input_dto in inputs:
+                input_ = db.query(Input) \
+                    .where(Input.number == input_dto.id) \
+                    .join(Input.room, isouter=True) \
+                    .one_or_none()  # type: Input
+                if input_ is None:
+                    logger.info('Ignored saving non-existing Input {0}'.format(input_dto.id))
+                elif 'event_enabled' in input_dto.loaded_fields:
+                    input_.event_enabled = input_dto.event_enabled
+                    if 'room' in input_dto.loaded_fields:
+                        if input_dto.room is None:
+                            input_.room = None
+                        elif 0 <= input_dto.room <= 100:
+                            # TODO: Validation should happen on API layer
+                            input_.room = db.query(Room).where(Room.number == input_dto.room).one()
+                inputs_to_save.append(input_dto)
             db.commit()
-            inputs_to_save.append(input_dto)
         self._master_controller.save_inputs(inputs_to_save)
 
     def get_input_status(self, input_id):
@@ -186,8 +186,8 @@ class InputController(BaseController):
 
     @staticmethod
     def load_inputs_event_enabled():
-        db = Database.get_session()
-        return {input_.number: input_.event_enabled for input_ in db.query(Input).all()}
+        with Database.get_session() as db:
+            return {input_.number: input_.event_enabled for input_ in db.query(Input).all()}
 
 
 class InputStateCache(object):

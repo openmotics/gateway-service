@@ -87,7 +87,7 @@ class Input(Base, MasterNumber):
     event_enabled = Column(Boolean, default=False, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
-    room = relationship('Room', foreign_keys=[room_id])
+    room = relationship('Room', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
 class Output(Base, MasterNumber):
