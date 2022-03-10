@@ -78,6 +78,7 @@ class Input(Base):
     number = Column(Integer, unique=True, nullable=False)
     event_enabled = Column(Boolean, default=False, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
     room = relationship('Room', foreign_keys=[room_id])
 
 
@@ -88,12 +89,8 @@ class Output(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
     room = relationship('Room', foreign_keys=[room_id])
-
-    pumps = relationship("Pump", backref="output")
-    valves = relationship("Valve", backref="output")
-
-    thermostat_groups = relationship("OutputToThermostatGroupAssociation", back_populates="output")
 
 
 class Sensor(Base):
@@ -107,7 +104,6 @@ class Sensor(Base):
     unit = Column(String(255), nullable=True)
     name = Column(String(255), nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
-    room = relationship('Room', foreign_keys=[room_id])
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
 
     room = relationship('Room', foreign_keys=[room_id])
@@ -145,6 +141,7 @@ class Shutter(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
     room = relationship('Room', foreign_keys=[room_id])
 
 
@@ -155,6 +152,7 @@ class ShutterGroup(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
     room = relationship('Room', foreign_keys=[room_id])
 
 
@@ -168,6 +166,7 @@ class PulseCounter(Base):
     source = Column(String(255), nullable=False)  # Options: 'master' or 'gateway'
     persistent = Column(Boolean, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
     room = relationship('Room', foreign_keys=[room_id])
 
 
@@ -194,8 +193,6 @@ class Module(Base):
     last_online_update = Column(Integer, nullable=True)
     update_success = Column(Boolean, nullable=True)
 
-    energy_modules = relationship("EnergyModule", backref="module")
-
 
 class EnergyModule(Base):
     __tablename__ = 'energymodule'
@@ -206,8 +203,6 @@ class EnergyModule(Base):
     version = Column(Integer, nullable=False)
     name = Column(String(255), default='', nullable=False)
     module_id = Column(Integer, ForeignKey('module.id', ondelete="CASCADE"), unique=True, nullable=False)
-
-    cts = relationship("EnergyCT", backref="energy_module")
 
 
 class EnergyCT(Base):
@@ -339,9 +334,6 @@ class ThermostatGroup(Base):
     sensor_id = Column(Integer, ForeignKey('sensor.id', ondelete='SET NULL'), nullable=True)
     mode = Column(String(255), default=Modes.HEATING, nullable=False)  # Options: 'heating' or 'cooling'
 
-    thermostats = relationship("Thermostat", backref="thermostat_group")
-    outputs = relationship("OutputToThermostatGroupAssociation", back_populates="thermostat_group")
-
 
 class OutputToThermostatGroupAssociation(Base):
     __tablename__ = 'outputtothermostatgroup'
@@ -355,20 +347,14 @@ class OutputToThermostatGroupAssociation(Base):
     mode = Column(String(255), nullable=False)  # The mode this config is used for. Options: 'heating' or 'cooling'
     value = Column(Integer, nullable=False)  # The value that needs to be set on the output when in this mode (0-100)
 
-    output = relationship("Output", back_populates="thermostat_groups")
-    thermostat_group = relationship("ThermostatGroup", back_populates="outputs")
-
 
 class PumpToValveAssociation(Base):
     __tablename__ = 'pumptovalve'
     __table_args__ = {'sqlite_autoincrement': True}
 
+    id = Column(Integer, nullable=False)
     pump_id = Column(Integer, ForeignKey('pump.id', ondelete='CASCADE'), primary_key=True)
     valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
-
-    id = Column(Integer, nullable=False)
-    pump = relationship("Pump", back_populates="valves")
-    valve = relationship("Valve", back_populates="pumps")
 
 
 class Pump(Base):
@@ -378,7 +364,6 @@ class Pump(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     output_id = Column(Integer, ForeignKey('output.id', ondelete='SET NULL'), nullable=True, unique=True)
-    valves = relationship("PumpToValveAssociation", back_populates="pump")
 
     # TODO: implement custom filters
     # @property
@@ -408,8 +393,6 @@ class Valve(Base):
     name = Column(String(255), nullable=False)
     delay = Column(Integer, default=60, nullable=False)
     output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), unique=True, nullable=False)
-    pumps = relationship("PumpToValveAssociation", back_populates="valve")
-    thermostats = relationship("ValveToThermostatAssociation", back_populates="valve")
 
 
 class Thermostat(Base):
@@ -433,14 +416,11 @@ class Thermostat(Base):
     pid_cooling_d = Column(Float, default=0, nullable=False)
     automatic = Column(Boolean, default=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
-    room = relationship('Room', foreign_keys=[room_id])
     start = Column(Integer, nullable=False)
     valve_config = Column(String(255), default=ValveConfigs.CASCADE, nullable=False)  # Options: 'cascade' or 'equal'
     thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), nullable=False)
 
-    valves = relationship("ValveToThermostatAssociation", back_populates="thermostat")
-    presets = relationship("Preset", backref="thermostat")
-    day_schedules = relationship("DaySchedule", backref="thermostat")
+    room = relationship('Room', foreign_keys=[room_id])
 
     # def get_preset(self, preset_type):  # type: (str) -> Preset
     #     if preset_type not in Preset.ALL_TYPES:
@@ -534,9 +514,6 @@ class ValveToThermostatAssociation(Base):
     mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)
     priority = Column(Integer, default=0, nullable=False)
 
-    thermostat = relationship("Thermostat", back_populates="valves")
-    valve = relationship("Valve", back_populates="thermostats")
-
 
 class Preset(Base):
     __tablename__ = 'preset'
@@ -627,8 +604,6 @@ class Apartment(Base):
     mailbox_rebus_id = Column(Integer, nullable=True, unique=True)
     doorbell_rebus_id = Column(Integer, nullable=True, unique=True)
 
-    users = relationship("User", backref="apartment")
-
 
 class User(Base):
     __tablename__ = 'user'
@@ -653,8 +628,6 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     accepted_terms = Column(Integer, default=0, nullable=False)
     email = Column(String(255), nullable=True, unique=False)
-
-    rfids = relationship("RFID", backref="user")
 
 
 class RFID(Base):
@@ -691,6 +664,3 @@ class Delivery(Base):
     parcelbox_rebus_id = Column(Integer, nullable=False)
     user_delivery_id = Column(Integer, ForeignKey('user.id'), nullable=True)
     user_pickup_id = Column(Integer, ForeignKey('user.id'), nullable=True)
-
-    user_delivery = relationship("User", backref="deliveries", foreign_keys=[user_delivery_id])
-    user_pickup = relationship("User", backref="pickups", foreign_keys=[user_pickup_id])
