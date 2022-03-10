@@ -23,6 +23,7 @@ from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, ScheduleDTO, \
 from gateway.enums import ThermostatMode, ThermostatState
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
+from gateway.hal.master_event import MasterEvent
 from gateway.mappers import ThermostatMapper
 from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
     Preset, Pump, PumpToValve, Schedule, Sensor, Thermostat, ThermostatGroup, \
@@ -67,6 +68,7 @@ class ThermostatControllerGateway(ThermostatController):
         self._pump_valve_controller = PumpValveController()
 
         self._pubsub.subscribe_gateway_events(PubSub.GatewayTopics.SCHEDULER, self._handle_scheduler_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.THERMOSTAT, self._handle_master_event)
 
     def get_features(self):
         # type: () -> Set[str]
@@ -122,6 +124,23 @@ class ThermostatControllerGateway(ThermostatController):
                 setattr(preset, field, gateway_event.data['status']['current_setpoint'])
                 preset.save()
                 self.tick_thermostat(thermostat=thermostat)
+
+    def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.EXECUTE_GATEWAY_API:
+            if master_event.data['type'] == MasterEvent.APITypes.SET_THERMOSTAT_MODE:
+                state = master_event.data['data']['state']
+                mode = master_event.data['data']['mode']
+                for thermostat_group in ThermostatGroup.select():
+                    self.set_thermostat_group(thermostat_group_id=thermostat_group.number,
+                                              state=state, mode=mode)
+                logger.info('Changed the state/mode for all ThermostatGroups to {0}/{1} by master event'.format(state, mode))
+            elif master_event.data['type'] == MasterEvent.APITypes.SET_THERMOSTAT_PRESET:
+                preset = master_event.data['data']['preset']
+                if preset in Preset.ALL_TYPES:
+                    for thermostat in list(Thermostat.select()):
+                        self.set_current_preset(preset_type=preset,
+                                                thermostat_number=thermostat.number)
+                    logger.info('Changed preset for all Thermostats to {0} by master event'.format(preset))
 
     def refresh_config_from_db(self):  # type: () -> None
         self.refresh_thermostats_from_db()

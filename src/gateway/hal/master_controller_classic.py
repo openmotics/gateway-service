@@ -34,7 +34,7 @@ from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
     MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     PumpGroupDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
     ThermostatDTO, ThermostatGroupDTO
-from gateway.enums import ModuleType, ShutterEnums
+from gateway.enums import ModuleType, ShutterEnums, ThermostatMode, ThermostatState
 from gateway.exceptions import CommunicationFailure, MasterUnavailable, \
     UnsupportedException
 from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
@@ -281,8 +281,33 @@ class MasterClassicController(MasterController):
             bit_nr = event_data['bytes'][0]
             value = bool(event_data['bytes'][1])
             self._on_master_validation_bit_change(bit_nr, value)
+        elif event_type == 2:
+            self._process_thermostat_action(action_type=event_data['bytes'][0],
+                                            action=event_data['bytes'][1])
         else:
             logger.warning('Received unknown master event: {0}'.format(event_data))
+
+    def _process_thermostat_action(self, action_type, action):
+        # Supported action_types:
+        # * 80: Sets the Cooling or Heating mode:
+        #       x=0 -> Heating is enabled and Cooling is disabled,
+        #       x=1 -> Cooling is enabled (but OFF) and Heating is disabled,
+        #       x=2 -> Cooling is enabled (and ON) and Heating is disabled
+        # * 137: Setpoint 3 for all thermostats - Away (Works in normal mode and in Thermostat Multi Tenant mode)
+        # * 139: Setpoint 5 for all thermostats - Party (Works in normal mode and in Thermostat Multi Tenant mode)
+        if action_type not in [80, 137, 139]:
+            logger.warning('Got a request to process not implemented thermostat action {0},{1}'.format(action_type, action))
+            return
+        if action_type == 80:
+            data = {'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
+                    'data': {'mode': ThermostatMode.HEATING if action == 0 else ThermostatMode.COOLING,
+                             'state': ThermostatState.ON if action in [0, 2] else ThermostatState.OFF}}
+        else:
+            data = {'type': MasterEvent.APITypes.SET_THERMOSTAT_PRESET,
+                    'data': {'preset': 'away' if action_type == 137 else 'party'}}
+        self._pubsub.publish_master_event(topic=PubSub.MasterTopics.THERMOSTAT,
+                                          master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                                   data=data))
 
     def _on_master_output_event(self, data):
         # type: (Dict[str,Any]) -> None
