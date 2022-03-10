@@ -32,35 +32,29 @@ logger = logging.getLogger(__name__)
 @Injectable.named('room_controller')
 @Singleton
 class RoomController(object):
-
-    def __init__(self):
-        pass
-
     def load_room(self, room_id):  # type: (int) -> RoomDTO
-        _ = self
-        db = Database.get_session()
-        room = db.query(Room).where(Room.number == room_id).one()
-        room_dto = RoomMapper.orm_to_dto(room)
+        with Database.get_session() as db:
+            room = db.query(Room).where(Room.number == room_id).one()
+            room_dto = RoomMapper(db).orm_to_dto(room)
         return room_dto
 
     def load_rooms(self):  # type: () -> List[RoomDTO]
-        _ = self
-        db = Database.get_session()
         room_dtos = []
-        for room in  db.query(Room).all():
-            room_dtos.append(RoomMapper.orm_to_dto(room))
+        with Database.get_session() as db:
+            rooms = db.query(Room).all()
+            for room in  rooms:
+                room_dtos.append(RoomMapper(db).orm_to_dto(room))
         return room_dtos
 
     def save_rooms(self, rooms):  # type: (List[RoomDTO]) -> None
-        _ = self
-        db = Database.get_session()
-        for room_dto in rooms:
-            rooms_to_add = []
-            rooms_to_delete = []
-            if room_dto.in_use:
-                rooms_to_add.append(RoomMapper.dto_to_orm(room_dto))
-            else:
-                rooms_to_delete.append(room_dto.id)
-        db.add_all(rooms_to_add)
-        db.query(Room).where(Room.number.in_(rooms_to_delete)).delete()
-        db.commit()
+        with Database.get_session() as db:
+            for room_dto in rooms:
+                rooms_to_add = []
+                rooms_to_delete = []
+                if room_dto.in_use:
+                    rooms_to_add.append(RoomMapper(db).dto_to_orm(room_dto))
+                else:
+                    rooms_to_delete.append(room_dto.id)
+            db.add_all(rooms_to_add)
+            db.query(Room).where(Room.number.in_(rooms_to_delete)).delete()
+            db.commit()

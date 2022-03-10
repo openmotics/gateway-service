@@ -28,11 +28,9 @@ from gateway.models import Database, Room
 from gateway.room_controller import RoomController
 from ioc import SetTestMode
 from logs import Logs
-MODELS = [Room]
 
 
 class RoomControllerTest(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         super(RoomControllerTest, cls).setUpClass()
@@ -74,7 +72,3 @@ class RoomControllerTest(unittest.TestCase):
         self.assertEqual(1, len(rooms))
         self.assertNotIn(room_dto_1, rooms)
         self.assertIn(room_dto_2, rooms)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
