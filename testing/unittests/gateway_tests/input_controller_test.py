@@ -25,6 +25,7 @@ from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from gateway.models import Database, Base, Input, Room
 from gateway.input_controller import InputController
 from gateway.pubsub import PubSub
@@ -49,7 +50,7 @@ class InputControllerTest(unittest.TestCase):
 
     def setUp(self):
         engine = create_engine(
-            'sqlite://', connect_args={'check_same_thread': False}
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
         )
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)

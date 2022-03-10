@@ -16,41 +16,55 @@
 from __future__ import absolute_import
 import unittest
 import xmlrunner
-import os
-import tempfile
 import mock
+import logging
 from datetime import datetime
-from peewee import SqliteDatabase
 from gateway.events import GatewayEvent
 from gateway.enums import EnergyEnums, ModuleType
 from gateway.pubsub import PubSub
 from gateway.dto import ModuleDTO, EnergyModuleDTO, RealtimeEnergyDTO, TotalEnergyDTO
 from gateway.energy_module_controller import EnergyModuleController
-from gateway.models import Module, EnergyModule, EnergyCT
+from gateway.models import Module, EnergyModule, EnergyCT, Base, Database
 from gateway.energy.energy_api import EnergyAPI, NIGHT
 from gateway.energy.energy_communicator import EnergyCommunicator
 from ioc import SetTestMode, SetUpTestInjections
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from serial_utils import RS485
 from serial_test import SerialMock, sin, sout
 from enums import HardwareType
+from logs import Logs
 
 MODELS = [Module, EnergyModule, EnergyCT]
 
 
 class EnergyModuleControllerTest(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
+        super(EnergyModuleControllerTest, cls).setUpClass()
         SetTestMode()
-        cls.db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls.db_filename)
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.energy_module_controller')
+        Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     @classmethod
     def tearDownClass(cls):
-        if os.path.exists(cls.db_filename):
-            os.remove(cls.db_filename)
+        super(EnergyModuleControllerTest, cls).tearDownClass()
 
     def setUp(self):
-        self.pubsub = PubSub()
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
+        self.pubsub = PubSub()  # triggering manually
         SetUpTestInjections(pubsub=self.pubsub,
                             master_controller=None,
                             maintenance_controller=None,
@@ -59,36 +73,34 @@ class EnergyModuleControllerTest(unittest.TestCase):
         self.serial = RS485(SerialMock(self.energy_data))
         SetUpTestInjections(energy_serial=self.serial)
         SetUpTestInjections(energy_communicator=EnergyCommunicator())
-        self.test_db.bind(MODELS, bind_refs=True, bind_backrefs=True)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
         self.controller = EnergyModuleController()
 
     def tearDown(self):
         self.serial.stop()
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
-    def _setup_module(self, version=EnergyEnums.Version.ENERGY_MODULE, address=1, number=1):
-        module = Module(address=address,
-                        source=ModuleDTO.Source.GATEWAY,
-                        module_type={EnergyEnums.Version.POWER_MODULE: ModuleType.POWER,
-                                     EnergyEnums.Version.ENERGY_MODULE: ModuleType.ENERGY,
-                                     EnergyEnums.Version.P1_CONCENTRATOR: ModuleType.P1_CONCENTRATOR}[version],
-                        hardware_type=HardwareType.PHYSICAL)
-        module.save()
-        energy_module = EnergyModule(version=version,
-                                     number=number,
-                                     module=module)
-        energy_module.save()
-        for i in range(EnergyEnums.NUMBER_OF_PORTS[version]):
-            ct = EnergyCT(number=i,
-                          sensor_type=2,
-                          times='',
-                          energy_module=energy_module)
-            ct.save()
+    def _setup_module(self, version=EnergyEnums.Version.ENERGY_MODULE, address='1', number=1):
+        with self.session as db:
+            module = Module(address=address,
+                            source=ModuleDTO.Source.GATEWAY,
+                            module_type={EnergyEnums.Version.POWER_MODULE: ModuleType.POWER,
+                                         EnergyEnums.Version.ENERGY_MODULE: ModuleType.ENERGY,
+                                         EnergyEnums.Version.P1_CONCENTRATOR: ModuleType.P1_CONCENTRATOR}[version],
+                            hardware_type=HardwareType.PHYSICAL)
+            db.add(module)
+            energy_module = EnergyModule(version=version,
+                                         number=number,
+                                         module=module)
+            db.add(energy_module)
 
-        return energy_module
+            cts = []
+            for i in range(EnergyEnums.NUMBER_OF_PORTS[version]):
+                ct = EnergyCT(number=i,
+                              sensor_type=2,
+                              times='',
+                              energy_module=energy_module)
+                cts.append(ct)
+            db.add_all(cts)
+            db.commit()
 
     def test_time_sync(self):
         times = "00:10,00:20,00:30,00:40,00:50,01:00,01:10,01:20,01:30,01:40,01:50,02:00,02:10,02:20"
@@ -166,8 +178,8 @@ class EnergyModuleControllerTest(unittest.TestCase):
         assert len(events) == 1
 
     def test_get_energy_modules(self):
-        self._setup_module(version=EnergyEnums.Version.POWER_MODULE, address=11, number=1)
-        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=21, number=2)
+        self._setup_module(version=EnergyEnums.Version.POWER_MODULE, address='11', number=1)
+        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address='21', number=2)
         result = self.controller.load_modules()
         default_kwargs = {}
         for field, default in {'input{0}': '', 'sensor{0}': 2, 'times{0}': '', 'inverted{0}': False}.items():
@@ -177,7 +189,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
                           EnergyModuleDTO(id=2, address=21, name='', version=1, **default_kwargs)], result)
 
     def test_get_realtime_power(self):
-        self._setup_module(version=EnergyEnums.Version.POWER_MODULE, address=11, number=10)
+        self._setup_module(version=EnergyEnums.Version.POWER_MODULE, address='11', number=10)
         with mock.patch.object(self.controller._power_module_helper, '_get_currents', return_value=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]), \
                 mock.patch.object(self.controller._power_module_helper, '_get_frequencies', return_value=[1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1]), \
                 mock.patch.object(self.controller._power_module_helper, '_get_powers', return_value=[1.2, 2.2, 3.2, 4.2, 5.2, 6.2, 7.2, 8.2]), \
@@ -187,7 +199,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
                                      for i in range(1, 9)]}, result)
 
     def test_get_realtime_energy(self):
-        self._setup_module(version=EnergyEnums.Version.ENERGY_MODULE, address=11, number=10)
+        self._setup_module(version=EnergyEnums.Version.ENERGY_MODULE, address='11', number=10)
         with mock.patch.object(self.controller._energy_module_helper, '_get_currents', return_value=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]), \
                 mock.patch.object(self.controller._energy_module_helper, '_get_frequencies', return_value=[1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1, 10.1, 11.1, 12.1]), \
                 mock.patch.object(self.controller._energy_module_helper, '_get_powers', return_value=[1.2, 2.2, 3.2, 4.2, 5.2, 6.2, 7.2, 8.2, 9.2, 10.2, 11.2, 12.2]), \
@@ -197,7 +209,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
                                      for i in range(1, 13)]}, result)
 
     def test_get_realtime_energy_p1(self):
-        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11, number=10)
+        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address='11', number=10)
         statuses = [True, True, False, True, False, False, False, False]
         with mock.patch.object(self.controller._p1c_helper, '_get_statuses', return_value=statuses), \
                 mock.patch.object(self.controller._p1c_helper, '_get_phase_currents', return_value=[{'phase1': 1.1, 'phase2': 0.2, 'phase3': 0.3},
@@ -225,7 +237,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
                                      for i in range(1, 9)]}, result)
 
     def test_get_realtime_energy_p1_partial(self):
-        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11, number=10)
+        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address='11', number=10)
         statuses = [True, True, False, True, False, False, False, False]
         with mock.patch.object(self.controller._p1c_helper, '_get_statuses', return_value=statuses), \
                 mock.patch.object(self.controller._p1c_helper, '_get_phase_currents', return_value=[{'phase1': 1.1, 'phase2': None, 'phase3': None},
@@ -253,7 +265,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
                                      for i in range(1, 9)]}, result)
 
     def test_get_total_energy(self):
-        self._setup_module(version=EnergyEnums.Version.POWER_MODULE, address=11, number=10)
+        self._setup_module(version=EnergyEnums.Version.POWER_MODULE, address='11', number=10)
         with mock.patch.object(self.controller._power_module_helper, 'get_day_counters', return_value=[1, 2, 3, 4, 5, 6, 7, 8]), \
                 mock.patch.object(self.controller._power_module_helper, 'get_night_counters', return_value=[2, 3, 4, 5, 6, 7, 8, 9]):
             result = self.controller.get_total_energy()
@@ -261,7 +273,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
                                      for i in range(1, 9)]}, result)
 
     def test_get_total_energy_p1(self):
-        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11, number=10)
+        self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address='11', number=10)
         statuses = [True, True, False, True, False, False, False, False]
         with mock.patch.object(self.controller._p1c_helper, '_get_statuses', return_value=statuses), \
                 mock.patch.object(self.controller._p1c_helper, 'get_day_counters', return_value=[1, 2, 3, 4, 5, 6, 7, 8]), \

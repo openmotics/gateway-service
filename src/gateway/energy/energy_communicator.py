@@ -20,12 +20,10 @@ from __future__ import absolute_import
 import logging
 import time
 from threading import RLock, Thread
-
 from six.moves.queue import Empty
-
 from gateway.daemon_thread import BaseThread
 from gateway.exceptions import CommunicationFailure
-from gateway.models import EnergyModule, EnergyCT, Module
+from gateway.models import EnergyModule, EnergyCT, Module, Database
 from gateway.dto import ModuleDTO
 from gateway.enums import EnergyEnums, ModuleType
 from ioc import INJECTED, Inject
@@ -309,21 +307,23 @@ class EnergyCommunicator(object):
                     new_address, old_module = EnergyCommunicator._get_address_and_module(old_address)
                     if old_module is None:
                         logger.info('Registering new Energy Module with address {0}'.format(new_address))
-                        module = Module(source=ModuleDTO.Source.GATEWAY,
-                                        address=str(new_address),
-                                        module_type=module_type,
-                                        hardware_type=HardwareType.PHYSICAL)
-                        module.save()
-                        energy_module = EnergyModule(number=new_address,
-                                                     version=version,
-                                                     module=module)
-                        energy_module.save()
-                        for port_id in range(EnergyEnums.NUMBER_OF_PORTS[version]):
-                            ct = EnergyCT(number=port_id,
-                                          sensor_type=2,  # Default of 12.5A
-                                          times='',  # No times by default (all night)
-                                          energy_module=energy_module)
-                            ct.save()
+                        with Database.get_session() as db:
+                            module = Module(source=ModuleDTO.Source.GATEWAY,
+                                            address=str(new_address),
+                                            module_type=module_type,
+                                            hardware_type=HardwareType.PHYSICAL)
+                            db.add(module)
+                            energy_module = EnergyModule(number=new_address,
+                                                         version=version,
+                                                         module=module)
+                            db.add(energy_module)
+                            for port_id in range(EnergyEnums.NUMBER_OF_PORTS[version]):
+                                ct = EnergyCT(number=port_id,
+                                              sensor_type=2,  # Default of 12.5A
+                                              times='',  # No times by default (all night)
+                                              energy_module=energy_module)
+                                db.add(ct)
+                            db.commit()
                     else:
                         logger.info('Confirming existing Energy Module with address {0}'.format(new_address))
 
@@ -354,23 +354,24 @@ class EnergyCommunicator(object):
 
     @staticmethod
     def _get_address_and_module(old_address):
-        modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
-                                        Module.hardware_type == HardwareType.PHYSICAL)
-        new_address = 2
-        old_module = None  # type: Optional[Module]
-        if len(modules) > 0:
-            matching_modules = [module for module in modules if module.address == str(old_address)]
-            old_module = None if len(matching_modules) == 0 else matching_modules[0]
-            if old_module is None:
-                existing_addresses = [int(module.address) for module in modules]
-                while new_address in existing_addresses and new_address < 255:
-                    new_address += 1
-                if new_address == 255:
-                    raise RuntimeError('No free EnergyModule address found')
-            else:
-                new_address = int(old_module.address)
+        with Database.get_session() as db:
+            modules = db.query(Module).where(Module.source == ModuleDTO.Source.GATEWAY,
+                                             Module.hardware_type == HardwareType.PHYSICAL).all()
+            new_address = 2
+            old_module = None  # type: Optional[Module]
+            if len(modules) > 0:
+                matching_modules = [module for module in modules if module.address == str(old_address)]
+                old_module = None if len(matching_modules) == 0 else matching_modules[0]
+                if old_module is None:
+                    existing_addresses = [int(module.address) for module in modules]
+                    while new_address in existing_addresses and new_address < 255:
+                        new_address += 1
+                    if new_address == 255:
+                        raise RuntimeError('No free EnergyModule address found')
+                else:
+                    new_address = int(old_module.address)
 
-        return new_address, old_module
+            return new_address, old_module
 
     def stop_address_mode(self):
         # type: () -> None
