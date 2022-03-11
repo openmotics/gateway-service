@@ -25,13 +25,13 @@ import time
 import uuid
 
 import cherrypy
-import msgpack
 import requests
 import six
 import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
 from peewee import DoesNotExist
+from six.moves.urllib.parse import unquote_plus
 
 import constants
 import gateway
@@ -129,22 +129,26 @@ def log_access(f, mask=None):
         response = cherrypy.response
 
         params = {}
-        query_string = request.query_string
-        if query_string:
-            for entry in query_string.split('&'):
-                if '=' not in entry:
-                    continue
-                key, value = entry.split('=')
+        headers = ''
+        if access_logger.level == logging.DEBUG:
+            for key, value in request.params.items():
                 if mask is None or key not in mask:
-                    params[key] = value
+                    if isinstance(value, six.string_types):
+                        params[key] = unquote_plus(value)
+                        try:
+                            params[key] = json.loads(params[key])
+                        except ValueError:
+                            pass
+                    else:
+                        params[key] = value
                 else:
                     params[key] = '***'
-        headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
-                             for header in ['X-Request-Id', 'User-Agent']
-                             if header in request.headers)
+            headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
+                                 for header in ['X-Request-Id', 'User-Agent']
+                                 if header in request.headers)
 
         access_logger.debug(
-            '{0} - {1} - {2}{3} - Query parameters: {4}{5}'.format(
+            '{0} - {1} - {2}{3} - Parameters: {4}{5}'.format(
                 request.remote.ip,
                 request.method,
                 request.script_name, request.path_info,
