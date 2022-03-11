@@ -26,7 +26,6 @@ import unittest
 from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod, AuthenticationToken, UnAuthorizedException
 from gateway.dto.user import UserDTO
 from gateway.models import User
-from gateway.rfid_controller import RfidController
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -46,8 +45,6 @@ class AuthenticationControllerTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.rfid_controller = mock.Mock(RfidController)
-        SetUpTestInjections(rfid_controller=self.rfid_controller)
         SetUpTestInjections(token_timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
         self.token_store = TokenStore()
         SetUpTestInjections(token_store=self.token_store)
@@ -375,8 +372,6 @@ class TokenStoreTest(unittest.TestCase):
     def test_login_method(self):
         token_1 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD)
         token_2 = self.store.create_token(self.test_user_2, login_method=LoginMethod.PIN_CODE)
-        token_3 = self.store.create_token(self.test_admin_1, login_method=LoginMethod.RFID)
 
         self.assertEqual(LoginMethod.PASSWORD, token_1.login_method)
         self.assertEqual(LoginMethod.PIN_CODE, token_2.login_method)
-        self.assertEqual(LoginMethod.RFID, token_3.login_method)

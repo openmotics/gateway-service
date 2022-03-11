@@ -35,8 +35,6 @@ from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 import gateway
 from bus.om_bus_client import MessageClient
-from esafe.rfid import RfidDeviceDummy, RfidDevice
-from esafe.rfid.idtronic_M890 import IdTronicM890
 from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
 from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
 from gateway.hal.master_controller_classic import MasterClassicController
@@ -231,16 +229,14 @@ def setup_target_platform(target_platform, message_client_name):
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
-                         ventilation_controller, apartment_controller, delivery_controller,
-                         system_config_controller, rfid_controller, energy_module_controller, update_controller)
+                         ventilation_controller, energy_module_controller, update_controller)
     from gateway.api.V1.webservice import webservice as webservice_v1
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
-         ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
-         rfid_controller, energy_module_controller, update_controller)
+         ventilation_controller, webservice_v1, energy_module_controller, update_controller)
 
     # V1 api
     # This will parse all the V1 api files that are included in the __init__.py file in the
@@ -323,7 +319,7 @@ def setup_target_platform(target_platform, message_client_name):
     if controller_serial_port:
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
 
-    if target_platform in Platform.DummyTypes + Platform.EsafeTypes:
+    if target_platform in Platform.DummyTypes:
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
         if target_platform == Platform.Type.CORE_DUMMY:
@@ -335,11 +331,8 @@ def setup_target_platform(target_platform, message_client_name):
         else:
             Injectable.value(master_controller=MasterDummyController())
         Injectable.value(eeprom_db=None)
-        try:
-            esafe_rebus_device = config.get('OpenMotics', 'rebus_device')
-            Injectable.value(rebus_device=esafe_rebus_device)
-        except NoOptionError:
-            Injectable.value(rebus_device=None)
+        from gateway.hal.master_controller_dummy import DummyEepromObject
+        Injectable.value(eeprom_extension=DummyEepromObject())
 
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
@@ -375,7 +368,7 @@ def setup_target_platform(target_platform, message_client_name):
     else:
         logger.warning('Unhandled master implementation for %s', target_platform)
 
-    if target_platform in Platform.DummyTypes + Platform.EsafeTypes:
+    if target_platform in Platform.DummyTypes:
         Injectable.value(frontpanel_controller=None)
     elif target_platform in Platform.CoreTypes:
         Injectable.value(frontpanel_controller=FrontpanelCoreController())
@@ -383,26 +376,6 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(frontpanel_controller=FrontpanelClassicController())
     else:
         logger.warning('Unhandled frontpanel implementation for %s', target_platform)
-
-    # eSafe controller
-    if target_platform == Platform.Type.ESAFE and six.PY3:
-        try:
-            from rebus import Rebus  # Test import to check if rebus is available
-        except ImportError as ex:
-            # when rebus is not available, use an dummy rebus controller
-            logger.warning("Could not load the esafe rebus controller, instantiating dummy rebus controller: {}".format(ex))
-            from esafe.rebus.dummy_rebus_controller import DummyRebusController
-            Injectable.value(rebus_controller=DummyRebusController())
-        else:
-            # when rebus is available, use the real rebus controller
-            from esafe.rebus.rebus_controller import RebusController
-            Injectable.value(rebus_controller=RebusController())
-
-    elif target_platform == Platform.Type.ESAFE_DUMMY:  # for local development purposes, when rebus is available, but dummy rebus controller is enforced
-        from esafe.rebus.dummy_rebus_controller import DummyRebusController
-        Injectable.value(rebus_controller=DummyRebusController())
-    else:
-        Injectable.value(rebus_controller=None)
 
     # Thermostats
     thermostats_gateway_enabled = Feature.select(Feature.enabled) \

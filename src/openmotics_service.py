@@ -29,7 +29,7 @@ from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
 from gateway.migrations import ConfigMigrator, EnergyModulesMigrator, \
-    EsafeMigrator, FeatureMigrator, InputMigrator, RoomsMigrator, \
+    FeatureMigrator, InputMigrator, RoomsMigrator, \
     ScheduleMigrator, ThermostatsMigrator, UserMigrator
 from gateway.models import Feature
 from gateway.pubsub import PubSub
@@ -40,11 +40,8 @@ import gateway
 
 
 if False:  # MYPY
-    from gateway.apartment_controller import ApartmentController
     from gateway.authentication_controller import AuthenticationController
-    from gateway.delivery_controller import DeliveryController
     from gateway.energy_module_controller import EnergyModuleController
-    from esafe.rebus.rebus_controller import RebusController
     from gateway.output_controller import OutputController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
@@ -67,7 +64,6 @@ if False:  # MYPY
     from gateway.hal.master_controller import MasterController
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.uart_controller import UARTController
-    from gateway.rfid_controller import RfidController
     from gateway.update_controller import UpdateController
     from plugins.base import PluginController
     from master.classic.passthrough import PassthroughService
@@ -92,19 +88,11 @@ class OpenmoticsService(object):
                 event_sender=INJECTED,  # type: EventSender
                 master_controller=INJECTED,  # type: MasterController
                 frontpanel_controller=INJECTED,  # type: FrontpanelController
-                rebus_controller=INJECTED,  # type: RebusController
-                delivery_controller=INJECTED,  # type: DeliveryController
                 authentication_controller=INJECTED,  # type: AuthenticationController
                 user_controller=INJECTED,  # type: UserController
-                apartment_controller=INJECTED  # type: ApartmentController
             ):
 
         # TODO: Fix circular dependencies
-
-        # Forward esafe events to consumers.
-        for topic in PubSub.EsafeTopics.get_values():
-            pubsub.subscribe_esafe_events(topic, event_sender.enqueue_event)
-            pubsub.subscribe_esafe_events(topic, web_interface.send_event_websocket)
 
         # Forward config change events to consumers.
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, event_sender.enqueue_event)
@@ -127,9 +115,7 @@ class OpenmoticsService(object):
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
         master_controller.set_plugin_controller(plugin_controller)
-        delivery_controller.set_rebus_controller(rebus_controller)
         authentication_controller.set_user_controller(user_controller)
-        apartment_controller.set_rebus_controller(rebus_controller)
 
         if frontpanel_controller:
             message_client.add_event_handler(frontpanel_controller.event_receiver)
@@ -164,8 +150,6 @@ class OpenmoticsService(object):
               web_service_v1=INJECTED,  # type: WebServiceV1
               uart_controller=INJECTED,  # type: UARTController
               energy_module_controller=INJECTED,  # type: EnergyModuleController
-              rfid_controller=INJECTED,  # type: RfidController
-              rebus_controller=INJECTED,  # type: RebusController
               update_controller=INJECTED  # type: UpdateController
               ):
         """ Main function. """
@@ -190,7 +174,6 @@ class OpenmoticsService(object):
         UserMigrator.migrate()
         ConfigMigrator.migrate()
         EnergyModulesMigrator.migrate()
-        EsafeMigrator.migrate()
 
         thermostats_gateway_enabled = Feature.select(Feature.enabled) \
             .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
@@ -229,9 +212,6 @@ class OpenmoticsService(object):
             uart_controller.start()
         pubsub.start()
         system_controller.start()
-        rfid_controller.start()
-        if rebus_controller is not None:
-            rebus_controller.start()
         update_controller.start()
 
         web_interface.set_service_state(True)
@@ -266,9 +246,6 @@ class OpenmoticsService(object):
                 frontpanel_controller.stop()
             event_sender.stop()
             pubsub.stop()
-            rfid_controller.start()
-            if rebus_controller is not None:
-                rebus_controller.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
 

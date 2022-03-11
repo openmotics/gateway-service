@@ -71,7 +71,6 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
-    from esafe.rebus.rebus_controller import RebusController
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -397,7 +396,7 @@ class WebInterface(object):
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
                  uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
-                 update_controller=INJECTED, rebus_controller=INJECTED):
+                 update_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -424,8 +423,6 @@ class WebInterface(object):
         self._plugin_controller = None  # type: Optional[PluginController]
         self._metrics_collector = None  # type: Optional[MetricsCollector]
         self._metrics_controller = None  # type: Optional[MetricsController]
-
-        self._rebus_controller = rebus_controller  # type: Optional[RebusController]
 
         self._ws_metrics_registered = False
         self._energy_dirty = False
@@ -733,9 +730,6 @@ class WebInterface(object):
         }
         features |= self._module_controller.master_get_features()
         features |= self._thermostat_controller.get_features()
-
-        if self._rebus_controller is not None:
-            features.add('esafe')
 
         return {'features': list(features)}
 

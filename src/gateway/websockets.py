@@ -26,7 +26,7 @@ from ws4py.server.cherrypyserver import WebSocketPlugin, WebSocketTool
 from ws4py.websocket import WebSocket
 
 from gateway.enums import BaseEnum
-from gateway.events import GatewayEvent, EsafeEvent
+from gateway.events import GatewayEvent
 
 if False:  # MyPy
     from typing import Dict, List
@@ -232,7 +232,7 @@ class EventsSocket(OMSocket):
         if not hasattr(self, 'metadata'):
             return
         allowed_types = {}  # type: Dict[str, List[str]]
-        for event_type in [GatewayEvent, EsafeEvent]:
+        for event_type in [GatewayEvent]:
             allowed_types[event_type.NAMESPACE] = event_type.Types.get_values()
         try:
             data = self.deserialize_data(message.data)

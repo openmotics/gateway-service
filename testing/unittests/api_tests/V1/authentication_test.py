@@ -148,21 +148,9 @@ class ApiAuthenticationTests(unittest.TestCase):
             response = self.web.authenticate_pin_code(request_body=body)
             self.assertIn(UnAuthorizedException.bytes_message(), response)
 
-    def test_authenticate_basic_rfid(self):
-        auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.RFID)
-        body = {'rfid_tag': 'some-test-tag'}
-        with mock.patch.object(self.auth_controller, 'login_with_rfid_tag', return_value=(True, auth_token)):
-            response = self.web.authenticate_rfid_tag(request_body=body).decode('utf-8')
-            self.assertEqual(response, json.dumps(auth_token.to_dict()))
-
     def test_authenticate_pin_code_wrong_body(self):
         body = {'some_wrong_key': 'some_wrong_data'}
         response = self.web.authenticate_pin_code(request_body=body)
-        self.assertIn(WrongInputParametersException.bytes_message(), response)
-
-    def test_authenticate_rfid_tag_wrong_body(self):
-        body = {'some_wrong_key': 'some_wrong_data'}
-        response = self.web.authenticate_rfid_tag(request_body=body)
         self.assertIn(WrongInputParametersException.bytes_message(), response)
 
     def test_authenticate_impersonate(self):
@@ -210,6 +198,7 @@ class AuthenticationApiCherryPyTest(BaseCherryPyUnitTester):
         with mock.patch.object(self.auth_controller, 'login_with_user_code') as login_func:
             login_func.return_value = (True, auth_token)
             status, headers, response = self.POST('/api/v1/authenticate/pin_code', login_user=self.test_user_1, body=None)
+            self.print_request_result()
             self.assertIn(WrongInputParametersException.bytes_message(), response)
 
     def test_deauthenticate_no_token(self):
