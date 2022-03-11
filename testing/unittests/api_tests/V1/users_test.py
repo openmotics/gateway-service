@@ -52,7 +52,6 @@ class ApiUsersTests(unittest.TestCase):
             last_name='',
             role='SUPER',
             pin_code='1234568',
-            apartment=None,
             accepted_terms=1
         )
 
@@ -64,7 +63,6 @@ class ApiUsersTests(unittest.TestCase):
             last_name='',
             role='ADMIN',
             pin_code='0000',
-            apartment=None,
             accepted_terms=1
         )
 
@@ -74,7 +72,6 @@ class ApiUsersTests(unittest.TestCase):
             last_name='1',
             role='USER',
             pin_code='1111',
-            apartment=None,
             language='en',
             accepted_terms=1,
             email='user_1@test.com'
@@ -85,7 +82,6 @@ class ApiUsersTests(unittest.TestCase):
             last_name='2',
             role='USER',
             pin_code='2222',
-            apartment=None,
             language='Nederlands',
             accepted_terms=0,
             email='user_2@test.com'
@@ -97,7 +93,6 @@ class ApiUsersTests(unittest.TestCase):
             last_name='3',
             role='USER',
             pin_code='some_random_string',
-            apartment=None,
             language='Francais',
             accepted_terms=1
         )
@@ -109,7 +104,6 @@ class ApiUsersTests(unittest.TestCase):
             last_name='4',
             role='USER',
             pin_code='some_random_string',
-            apartment=None,
             language='en',
             accepted_terms=1,
             is_active=False
@@ -385,31 +379,11 @@ class ApiUsersTests(unittest.TestCase):
                                           request_body=user_to_create)
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
-    def test_create_user_null_apartment(self):
-        user_to_create = {
-            'first_name': 'Test',
-            'last_name': 'User',
-            'apartment': None,
-            'role': 'USER'
-        }
-        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
-                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'):
-            user_to_create_return = user_to_create.copy()
-            user_to_create_return['id'] = 5
-            user_dto_to_return = UserDTO(**user_to_create_return)
-            user_dto_to_return.set_password('Test')
-            save_user_func.return_value = user_dto_to_return
-
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
-            response = self.web.post_user(auth_token=auth_token,
-                                          request_body=user_to_create)
-            self.verify_user_created(user_to_create, response, check_for_pin=True)
 
     def test_create_user_all(self):
         user_to_create = {
             'first_name': 'Test',
             'last_name': 'User',
-            'apartment': None,
             'pin_code': '6789',
             'password': 'TEST',
             'accepted_terms': 1,
@@ -430,22 +404,6 @@ class ApiUsersTests(unittest.TestCase):
                                           request_body=user_to_create.copy())
             del user_to_create['password']
             self.verify_user_created(user_to_create, response)
-
-    def test_activate_user(self):
-        user_code = {'pin_code': self.normal_user_2.pin_code}
-        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
-                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
-            response = self.web.post_activate_user('2',
-                                                   request_body=user_code)
-            self.assertEqual(None, response)
-
-    def test_activate_user_wrong_code(self):
-        user_code = {'pin_code': 'WRONG_CODE'}
-        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
-                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
-            response = self.web.post_activate_user('2',
-                                                   request_body=user_code)
-            self.assertTrue(UnAuthorizedException.bytes_message() in response)
 
     # ----------------------------------------------------------------
     # --- PUT

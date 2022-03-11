@@ -56,7 +56,6 @@ class ApiAuthenticationTests(unittest.TestCase):
             last_name='',
             role='SUPER',
             pin_code='6542',
-            apartment=None,
             accepted_terms=1,
             is_active=True
         )
@@ -69,7 +68,6 @@ class ApiAuthenticationTests(unittest.TestCase):
             last_name='',
             role='ADMIN',
             pin_code='0000',
-            apartment=None,
             accepted_terms=1,
             is_active=True
         )
@@ -80,7 +78,6 @@ class ApiAuthenticationTests(unittest.TestCase):
             last_name='1',
             role='USER',
             pin_code='1111',
-            apartment=None,
             language='en',
             accepted_terms=1,
             is_active=True
@@ -91,7 +88,6 @@ class ApiAuthenticationTests(unittest.TestCase):
             last_name='2',
             role='USER',
             pin_code='2222',
-            apartment=None,
             language='Nederlands',
             accepted_terms=0,
             is_active=True
@@ -103,7 +99,6 @@ class ApiAuthenticationTests(unittest.TestCase):
             last_name='3',
             role='USER',
             pin_code='some_random_string',
-            apartment=None,
             language='Francais',
             accepted_terms=1,
             is_active=True
@@ -115,7 +110,6 @@ class ApiAuthenticationTests(unittest.TestCase):
             last_name='1',
             role='COURIER',
             pin_code='some_random_string',
-            apartment=None,
             language='Nederlands',
             accepted_terms=1,
             is_active=True

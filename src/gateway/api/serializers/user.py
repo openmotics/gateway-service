@@ -41,7 +41,6 @@ class UserSerializer(object):
                 'last_name': dto_object.last_name,
                 'role': dto_object.role,
                 'language': dto_object.language,
-                'apartment': None,
                 'is_active': dto_object.is_active,
                 'accepted_terms': dto_object.accepted_terms,
                 'email': dto_object.email}  # type: Dict[str, Any]

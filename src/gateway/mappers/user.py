@@ -34,7 +34,6 @@ class UserMapper(object):
                            role=orm_object.role,
                            pin_code=orm_object.pin_code,
                            language=orm_object.language,
-                           apartment=None,
                            is_active=orm_object.is_active,
                            accepted_terms=orm_object.accepted_terms,
                            email=orm_object.email)

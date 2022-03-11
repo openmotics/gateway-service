@@ -22,7 +22,6 @@ System.import_libs()
 import fcntl
 import logging
 import os
-import six
 import sys
 import time
 from contextlib import contextmanager
@@ -192,30 +191,6 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(http_port=http_port)
     Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
     Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
-
-    # Rfid Device
-    logger.info('Checking if rfid device needs to be created')
-    rfid_device_file = None
-    if target_platform in Platform.EsafeTypes + [Platform.Type.ESAFE_DUMMY]:
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-        try:
-            rfid_device_file = config.get('OpenMotics', 'rfid_device')
-        except NoOptionError:
-            pass
-        except NoSectionError:  # This needs to be here for testing on Jenkins, there will be no config file
-            pass
-
-    # If the device exists, create the rfid device
-    rfid_device = None  # type: Optional[RfidDevice]
-    if target_platform == Platform.Type.ESAFE:
-        if rfid_device_file is not None and os.path.exists(rfid_device_file):
-            rfid_device = IdTronicM890(rfid_device_file)
-    elif target_platform == Platform.Type.ESAFE_DUMMY:
-        # Create an dummy rfid device
-        rfid_device = RfidDeviceDummy()
-    Injectable.value(rfid_reader_device=rfid_device)
-
 
     # TODO: Clean up dependencies more to reduce complexity
 

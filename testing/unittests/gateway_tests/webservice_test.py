@@ -89,7 +89,6 @@ class WebInterfaceTest(unittest.TestCase):
                 username='test user_1',
                 role='ADMIN',
                 pin_code='1234',
-                apartment=None,
                 accepted_terms=1
             ),
             UserDTO(
@@ -97,7 +96,6 @@ class WebInterfaceTest(unittest.TestCase):
                 username='test user_2',
                 role='USER',
                 pin_code='',
-                apartment=None,
                 accepted_terms=1
             )
         ]

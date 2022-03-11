@@ -40,7 +40,7 @@ class userSerializerTest(unittest.TestCase):
         data = UserSerializer.serialize(dto)
         self.assertEqual(set(), set(dto.loaded_fields))
         self.assertEqual(data,
-                         {'apartment': None,
+                         {
                           'username': None,
                           'first_name': '',
                           'last_name': '',
@@ -56,7 +56,7 @@ class userSerializerTest(unittest.TestCase):
         data = UserSerializer.serialize(dto)
         self.assertEqual({'username'}, set(dto.loaded_fields))
         self.assertEqual(data,
-                         {'apartment': None,
+                         {
                           'username': 'test',
                           'first_name': '',
                           'last_name': '',
@@ -73,7 +73,7 @@ class userSerializerTest(unittest.TestCase):
         self.assertEqual({'username', 'first_name', 'last_name'}, set(dto.loaded_fields))
         self.assertEqual('first.last', dto.username)
         self.assertEqual(data,
-                         {'apartment': None,
+                         {
                           'username': 'first.last',
                           'first_name': 'first',
                           'last_name': 'last',
@@ -89,7 +89,7 @@ class userSerializerTest(unittest.TestCase):
         data = UserSerializer.serialize(dto)
         self.assertEqual({'role'}, set(dto.loaded_fields))
         self.assertEqual(data,
-                         {'apartment': None,
+                         {
                           'username': None,
                           'first_name': '',
                           'last_name': '',
@@ -102,13 +102,13 @@ class userSerializerTest(unittest.TestCase):
 
         # full
         dto = UserDTO(id=37, first_name='first', last_name='last', role='USER',
-                      pin_code='1234', apartment=None, is_active=False, language='Nederlands',
+                      pin_code='1234', is_active=False, language='Nederlands',
                       accepted_terms=1, email='test@test.com')
         data = UserSerializer.serialize(dto)
-        fields = {'username', 'first_name', 'apartment', 'accepted_terms', 'language', 'is_active', 'last_name', 'role', 'id', 'pin_code', 'email'}
+        fields = {'username', 'first_name', 'accepted_terms', 'language', 'is_active', 'last_name', 'role', 'id', 'pin_code', 'email'}
         self.assertEqual(fields, set(dto.loaded_fields))
         self.assertEqual(data,
-                         {'apartment': None,
+                         {
                           'username': 'first.last',
                           'first_name': 'first',
                           'last_name': 'last',
@@ -119,15 +119,14 @@ class userSerializerTest(unittest.TestCase):
                           'accepted_terms': 1,
                           'email': 'test@test.com'})
 
-        # apartment
         dto = UserDTO(id=37, first_name='first', last_name='last', role='USER',
-                      pin_code='1234', apartment=None, is_active=False, language='Nederlands',
+                      pin_code='1234', is_active=False, language='Nederlands',
                       accepted_terms=1)
         data = UserSerializer.serialize(dto)
-        fields = {'username', 'first_name', 'apartment', 'accepted_terms', 'language', 'is_active', 'last_name', 'role', 'id', 'pin_code'}
+        fields = {'username', 'first_name', 'accepted_terms', 'language', 'is_active', 'last_name', 'role', 'id', 'pin_code'}
         self.assertEqual(fields, set(dto.loaded_fields))
         self.assertEqual(data,
-                         {'apartment': None,
+                         {
                           'username': 'first.last',
                           'first_name': 'first',
                           'last_name': 'last',
@@ -143,7 +142,6 @@ class userSerializerTest(unittest.TestCase):
             last_name='last',
             role='ADMIN',
             pin_code='1234',
-            apartment=None,
             language='en',
             accepted_terms=1,
             is_active=True,
@@ -166,12 +164,10 @@ class userSerializerTest(unittest.TestCase):
             'id': 37,
             'pin_code': '1234',
             'first_name': 'first',
-            'apartment': None,
             'language': 'en',
             'role': 'ADMIN',
             'email': 'test@test.com'
         }
-        # validate the basic use case without apartment
         user_dto = UserSerializer.deserialize(user_serial)
         self.assert_dto_match_serial(user_dto, user_serial, include_pin=True)
 
@@ -207,7 +203,6 @@ class userSerializerTest(unittest.TestCase):
             'last_name': 'last',
             'role': 'USER',
             'id': 37,
-            'apartment': None,
             'pin_code': '1234',
             'is_active': False,
         }
@@ -216,7 +211,6 @@ class userSerializerTest(unittest.TestCase):
                            last_name=serial['last_name'],
                            role=serial['role'],
                            id=serial['id'],
-                           apartment=serial['apartment'],
                            is_active=serial['is_active'],
                            pin_code=serial['pin_code'])
         expected.username = None
