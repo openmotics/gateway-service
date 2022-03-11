@@ -29,11 +29,10 @@ from gateway.dto import RealtimeEnergyDTO, ModuleDTO, TotalEnergyDTO, EnergyModu
 from gateway.enums import EnergyEnums
 from gateway.exceptions import InMaintenanceModeException, CommunicationFailure
 from gateway.mappers import EnergyModuleMapper
-from gateway.models import EnergyModule, Module, EnergyCT
+from gateway.models import EnergyModule, Module, EnergyCT, Database
 from gateway.energy.module_helper_energy import EnergyModuleHelper, PowerModuleHelper
 from gateway.energy.module_helper_p1c import P1ConcentratorHelper
 from gateway.energy.energy_api import DAY, NIGHT, EnergyAPI
-from peewee import prefetch
 from enums import HardwareType
 from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -94,25 +93,26 @@ class EnergyModuleController(BaseController):
     def _sync_time(self):
         # type: () -> None
         date = datetime.now()
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module) \
-                                     .where(Module.module_type != ModuleType.P1_CONCENTRATOR)  # type: List[EnergyModule]
-        for energy_module in energy_modules:
-            daynight = []  # type: List[int]
-            for ct in sorted(energy_module.cts, key=lambda c: c.number):
-                if EnergyModuleController._is_day_time(ct.times, date):
-                    daynight.append(DAY)
-                else:
-                    daynight.append(NIGHT)
-            if self._time_cache.get(energy_module.number) != daynight:
-                logger.info('Setting day/night for EnergyModule {0} to {1}'.format(energy_module.number, daynight))
-                try:
-                    self._energy_communicator.do_command(int(energy_module.module.address),
-                                                         EnergyAPI.set_day_night(energy_module.version),
-                                                         *daynight)
-                    self._time_cache[energy_module.number] = daynight
-                except CommunicationTimedOutException:
-                    logger.warning('Could not set day/night for EnergyModule {0}: Timed out'.format(energy_module.number))
+        with Database.get_session() as db:
+            energy_modules = db.query(EnergyModule)\
+                .where(Module.module_type != ModuleType.P1_CONCENTRATOR)\
+                .all()
+            for energy_module in energy_modules:
+                daynight = []  # type: List[int]
+                for ct in sorted(energy_module.cts, key=lambda c: c.number):
+                    if EnergyModuleController._is_day_time(ct.times, date):
+                        daynight.append(DAY)
+                    else:
+                        daynight.append(NIGHT)
+                if self._time_cache.get(energy_module.number) != daynight:
+                    logger.info('Setting day/night for EnergyModule {0} to {1}'.format(energy_module.number, daynight))
+                    try:
+                        self._energy_communicator.do_command(int(energy_module.module.address),
+                                                             EnergyAPI.set_day_night(energy_module.version),
+                                                             *daynight)
+                        self._time_cache[energy_module.number] = daynight
+                    except CommunicationTimedOutException:
+                        logger.warning('Could not set day/night for EnergyModule {0}: Timed out'.format(energy_module.number))
 
     @staticmethod
     def _is_day_time(times, date):  # type: (Optional[str], datetime) -> bool
@@ -196,22 +196,22 @@ class EnergyModuleController(BaseController):
             return {}
 
         output = {}
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module)  # type: List[EnergyModule]
-        for energy_module in energy_modules:
-            try:
-                helper = self._get_helper(version=energy_module.version)
-                day_counters = helper.get_day_counters(energy_module=energy_module)
-                night_counters = helper.get_night_counters(energy_module=energy_module)
-                output[str(energy_module.number)] = [TotalEnergyDTO(day=day_counters[port_id] or 0,
-                                                                    night=night_counters[port_id] or 0)
-                                                     for port_id in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version])]
-            except InMaintenanceModeException:
-                logger.info('Could not load total energy from {0}: In maintenance mode'.format(energy_module.number))
-            except CommunicationTimedOutException as ex:
-                logger.error('Communication timeout while fetching total energy from {0}: {1}'.format(energy_module.number, ex))
-            except Exception as ex:
-                logger.exception('Got exception while fetching total energy from {0}: {1}'.format(energy_module.number, ex))
+        with Database.get_session() as db:
+            energy_modules = db.query(EnergyModule).join(Module, isouter=True).all()
+            for energy_module in energy_modules:
+                try:
+                    helper = self._get_helper(version=energy_module.version)
+                    day_counters = helper.get_day_counters(energy_module=energy_module)
+                    night_counters = helper.get_night_counters(energy_module=energy_module)
+                    output[str(energy_module.number)] = [TotalEnergyDTO(day=day_counters[port_id] or 0,
+                                                                        night=night_counters[port_id] or 0)
+                                                         for port_id in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version])]
+                except InMaintenanceModeException:
+                    logger.info('Could not load total energy from {0}: In maintenance mode'.format(energy_module.number))
+                except CommunicationTimedOutException as ex:
+                    logger.error('Communication timeout while fetching total energy from {0}: {1}'.format(energy_module.number, ex))
+                except Exception as ex:
+                    logger.exception('Got exception while fetching total energy from {0}: {1}'.format(energy_module.number, ex))
         return output
 
     def get_realtime_energy(self):
@@ -223,18 +223,18 @@ class EnergyModuleController(BaseController):
             return {}
 
         output = {}
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module)  # type: List[EnergyModule]
-        for energy_module in energy_modules:
-            try:
-                data = self._get_helper(version=energy_module.version).get_realtime(energy_module)
-                output[str(energy_module.number)] = [data[port_id] for port_id in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version])]
-            except InMaintenanceModeException:
-                logger.info('Could not load realtime energy from {0}: In maintenance mode'.format(energy_module.number))
-            except CommunicationTimedOutException as ex:
-                logger.error('Communication timeout while fetching realtime energy from {0}: {1}'.format(energy_module.number, ex))
-            except Exception as ex:
-                logger.exception('Got exception while fetching realtime energy from {0}: {1}'.format(energy_module.number, ex))
+        with Database.get_session() as db:
+            energy_modules = db.query(EnergyModule).join(Module, isouter=True).all()
+            for energy_module in energy_modules:
+                try:
+                    data = self._get_helper(version=energy_module.version).get_realtime(energy_module)
+                    output[str(energy_module.number)] = [data[port_id] for port_id in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version])]
+                except InMaintenanceModeException:
+                    logger.info('Could not load realtime energy from {0}: In maintenance mode'.format(energy_module.number))
+                except CommunicationTimedOutException as ex:
+                    logger.error('Communication timeout while fetching realtime energy from {0}: {1}'.format(energy_module.number, ex))
+                except Exception as ex:
+                    logger.exception('Got exception while fetching realtime energy from {0}: {1}'.format(energy_module.number, ex))
         return output
 
     def get_modules_information(self):
@@ -243,63 +243,55 @@ class EnergyModuleController(BaseController):
             return []
 
         information = []
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module)  # type: List[EnergyModule]
-        for energy_module in energy_modules:
-            helper = self._get_helper(version=energy_module.version)
-            try:
+        with Database.get_session() as db:
+            energy_modules = db.query(EnergyModule).join(Module, isouter=True).all()
+            for energy_module in energy_modules:
+                helper = self._get_helper(version=energy_module.version)
                 try:
-                    online, firmware_version = helper.get_information(energy_module=energy_module)
-                except NotImplementedError:
-                    # TODO: Remove once the P1C part is implemented
-                    online, firmware_version = False, None
-                information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
-                                             address=energy_module.module.address,
-                                             module_type=energy_module.module.module_type,
-                                             hardware_type=HardwareType.PHYSICAL,
-                                             firmware_version=firmware_version,
-                                             order=energy_module.number,
-                                             online=online))
-            except Exception as ex:
-                logger.exception('Got exception while fetching module information from {0}: {1}'.format(energy_module.number, ex))
+                    try:
+                        online, firmware_version = helper.get_information(energy_module=energy_module)
+                    except NotImplementedError:
+                        # TODO: Remove once the P1C part is implemented
+                        online, firmware_version = False, None
+                    information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+                                                 address=energy_module.module.address,
+                                                 module_type=energy_module.module.module_type,
+                                                 hardware_type=HardwareType.PHYSICAL,
+                                                 firmware_version=firmware_version,
+                                                 order=energy_module.number,
+                                                 online=online))
+                except Exception as ex:
+                    logger.exception('Got exception while fetching module information from {0}: {1}'.format(energy_module.number, ex))
         return information
 
     def load_modules(self):  # type: () -> List[EnergyModuleDTO]
         if not self._enabled:
             return []
-
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module)  # type: List[EnergyModule]
-        energy_cts = EnergyCT.select()
-        merged_energy_modules = prefetch(energy_modules, energy_cts)
-
-        return [EnergyModuleMapper.orm_to_dto(energy_module)
-                for energy_module in merged_energy_modules]
+        with Database.get_session() as db:
+            energy_modules = db.query(EnergyModule)
+            return [EnergyModuleMapper.orm_to_dto(energy_module)
+                    for energy_module in energy_modules]
 
     def save_modules(self, energy_module_dtos):  # type: (List[EnergyModuleDTO]) -> None
         if not self._enabled:
             return
 
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module)  # type: List[EnergyModule]
-        energy_cts = EnergyCT.select()
-        merged_energy_modules = dict((module.number, module)
-                                     for module in prefetch(energy_modules, energy_cts))  # type: Dict[int, EnergyModule]
+        with Database.get_session() as db:
+            energy_modules = db.query(EnergyModule)
+            merged_energy_modules = dict((module.number, module)
+                                         for module in energy_modules)  # type: Dict[int, EnergyModule]
 
-        for energy_module_dto in energy_module_dtos:
-            energy_module = merged_energy_modules.get(energy_module_dto.id)
-            if energy_module is None:
-                continue
+            for energy_module_dto in energy_module_dtos:
+                energy_module = merged_energy_modules.get(energy_module_dto.id)
+                if energy_module is None:
+                    continue
 
-            EnergyModuleMapper.dto_to_orm(energy_module_dto=energy_module_dto,
-                                          energy_module_orm=energy_module)
+                EnergyModuleMapper.dto_to_orm(energy_module_dto=energy_module_dto,
+                                              energy_module_orm=energy_module)
 
-            helper = self._get_helper(energy_module.version)
-            helper.configure_cts(energy_module=energy_module)
-
-            for ct in energy_module.cts:
-                ct.save()
-            energy_module.save()
+                helper = self._get_helper(energy_module.version)
+                helper.configure_cts(energy_module=energy_module)
+            db.commit()
 
     def get_realtime_p1(self):  # type: () -> List[Dict[str, Any]]
         if not self._enabled:
@@ -307,16 +299,18 @@ class EnergyModuleController(BaseController):
 
         # TODO: Use DTO
         realtime = []
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module) \
-                                     .where(Module.module_type == ModuleType.P1_CONCENTRATOR)  # type: List[EnergyModule]
-        for energy_module in energy_modules:
-            try:
-                realtime += self._get_helper(energy_module.version).get_realtime_p1(energy_module)
-            except CommunicationFailure as ex:
-                logger.error('Got communication failure while fetching realtime P1C information from {0}: {1}'.format(energy_module.number, ex))
-            except Exception as ex:
-                logger.exception('Got exception while fetching realtime P1C information from {0}: {1}'.format(energy_module.number, ex))
+        with Database.get_session() as db:
+            energy_modules = db.query(EnergyModule)\
+                .where(Module.module_type == ModuleType.P1_CONCENTRATOR)\
+                .join(Module, isouter=True)\
+                .all()
+            for energy_module in energy_modules:
+                try:
+                    realtime += self._get_helper(energy_module.version).get_realtime_p1(energy_module)
+                except CommunicationFailure as ex:
+                    logger.error('Got communication failure while fetching realtime P1C information from {0}: {1}'.format(energy_module.number, ex))
+                except Exception as ex:
+                    logger.exception('Got exception while fetching realtime P1C information from {0}: {1}'.format(energy_module.number, ex))
         return realtime
 
     def start_address_mode(self):
@@ -337,9 +331,11 @@ class EnergyModuleController(BaseController):
     def calibrate_module_voltage(self, module_id, voltage):
         if not self._enabled:
             return
-
-        energy_module = EnergyModule.select().where(EnergyModule.number == module_id).first()
-        self._get_helper(energy_module.version).set_module_voltage(energy_module, voltage)
+        with Database.get_session() as db:
+            energy_module = db.query(EnergyModule)\
+                .where(EnergyModule.number == module_id)\
+                .one()
+            self._get_helper(energy_module.version).set_module_voltage(energy_module, voltage)
 
     def get_energy_time(self, module_id, input_id=None):
         # type: (int, Optional[int]) -> Dict[str, Dict[str, Any]]
@@ -347,16 +343,22 @@ class EnergyModuleController(BaseController):
             return {}
 
         # TODO: Use DTO
-        energy_module = EnergyModule.select().where(EnergyModule.number == module_id).first()
-        return self._get_helper(energy_module.version).get_energy_time(energy_module, input_id=input_id)
+        with Database.get_session() as db:
+            energy_module = db.query(EnergyModule)\
+                .where(EnergyModule.number == module_id)\
+                .one()
+            return self._get_helper(energy_module.version).get_energy_time(energy_module, input_id=input_id)
 
     def get_energy_frequency(self, module_id, input_id=None):
         if not self._enabled:
             return {}
 
         # TODO: Use DTO
-        energy_module = EnergyModule.select().where(EnergyModule.number == module_id).first()
-        return self._get_helper(energy_module.version).get_energy_frequency(energy_module, input_id=input_id)
+        with Database.get_session() as db:
+            energy_module = db.query(EnergyModule)\
+                .where(EnergyModule.number == module_id)\
+                .one()
+            return self._get_helper(energy_module.version).get_energy_frequency(energy_module, input_id=input_id)
 
     def do_raw_energy_command(self, address, mode, command, data):
         if not self._enabled:

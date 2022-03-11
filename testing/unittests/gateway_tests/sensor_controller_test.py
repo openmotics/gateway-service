@@ -20,7 +20,7 @@ import unittest
 import mock
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
-
+from sqlalchemy.pool import StaticPool
 from bus.om_bus_client import MessageClient
 from gateway.dto import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
     SensorStatusDTO
@@ -44,7 +44,7 @@ class SensorControllerTest(unittest.TestCase):
 
     def setUp(self):
         engine = create_engine(
-            'sqlite://', connect_args={'check_same_thread': False}
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
         )
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)

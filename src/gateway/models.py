@@ -22,7 +22,7 @@ import time
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, \
     Text, UniqueConstraint, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, scoped_session, sessionmaker
+from sqlalchemy.orm import relationship, scoped_session, sessionmaker, RelationshipProperty
 from sqlalchemy.schema import MetaData
 
 import constants
@@ -205,6 +205,8 @@ class EnergyModule(Base, MasterNumber):
     version = Column(Integer, nullable=False)
     name = Column(String(255), default='', nullable=False)
     module_id = Column(Integer, ForeignKey('module.id', ondelete="CASCADE"), unique=True, nullable=False)
+    module = relationship('Module', foreign_keys=[module_id])
+    cts = relationship("EnergyCT",  lazy='joined', innerjoin=False, back_populates="energy_module")  # type: RelationshipProperty[List[EnergyCT]]
 
 
 class EnergyCT(Base, MasterNumber):
@@ -217,6 +219,7 @@ class EnergyCT(Base, MasterNumber):
     times = Column(String(255), nullable=False)
     inverted = Column(Boolean, default=False, nullable=False)
     energy_module_id = Column(Integer, ForeignKey('energymodule.id', ondelete="CASCADE"), nullable=False)
+    energy_module = relationship("EnergyModule",  lazy='joined', innerjoin=False, back_populates="cts")  # type: RelationshipProperty[Optional[EnergyModule]]
 
 
 class Schedule(Base):

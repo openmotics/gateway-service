@@ -22,6 +22,7 @@ import mock
 import xmlrunner
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from gateway.models import Database, Base, Room
 from gateway.dto import RoomDTO
 from gateway.models import Database, Room
@@ -40,7 +41,7 @@ class RoomControllerTest(unittest.TestCase):
 
     def setUp(self):
         engine = create_engine(
-            'sqlite://', connect_args={'check_same_thread': False}
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
         )
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)

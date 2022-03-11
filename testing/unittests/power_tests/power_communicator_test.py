@@ -20,56 +20,61 @@ from __future__ import absolute_import
 
 import time
 import unittest
-
+from unittest import mock
 import xmlrunner
 from pytest import mark
-import os
-import tempfile
-
+import logging
 from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, ADDRESS_MODE, NORMAL_MODE
-from peewee import SqliteDatabase
 from gateway.enums import EnergyEnums
 from gateway.pubsub import PubSub
-from gateway.models import Module, EnergyModule, EnergyCT
+from gateway.models import Module, EnergyModule, EnergyCT, Base, Database
 from gateway.dto import ModuleDTO
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.energy.energy_communicator import InAddressModeException, EnergyCommunicator
 from serial_test import SerialMock, sin, sout
 from serial_utils import RS485, CommunicationTimedOutException
 from enums import HardwareType
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from logs import Logs
 
 MODELS = [Module, EnergyModule, EnergyCT]
 
 
 class EnergyCommunicatorTest(unittest.TestCase):
     """ Tests for EnergyCommunicator class """
-
     @classmethod
     def setUpClass(cls):
+        super(EnergyCommunicatorTest, cls).setUpClass()
         SetTestMode()
-        cls.db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls.db_filename)
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.energy.energy_communicator')
+        Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     @classmethod
     def tearDownClass(cls):
-        if os.path.exists(cls.db_filename):
-            os.remove(cls.db_filename)
+        super(EnergyCommunicatorTest, cls).tearDownClass()
 
     def setUp(self):
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+
+
+        self.addCleanup(session_mock.stop)
+
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         self.energy_data = []  # type: list
         self.serial = RS485(SerialMock(self.energy_data))
         SetUpTestInjections(energy_serial=self.serial)
         self.communicator = EnergyCommunicator()
-        self.test_db.bind(MODELS, bind_refs=True, bind_backrefs=True)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
-
-    def tearDown(self):
-        self.serial.stop()
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def test_do_command(self):
         """ Test for standard behavior EnergyCommunicator.do_command. """
@@ -165,18 +170,18 @@ class EnergyCommunicatorTest(unittest.TestCase):
         ])
         self.serial.start()
 
-        self.assertEqual(0, len(Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
-                                                      Module.hardware_type == HardwareType.PHYSICAL)))
-
+        with self.session as db:
+            self.assertEqual(0, db.query(Module).where(Module.source == ModuleDTO.Source.GATEWAY,
+                                                       Module.hardware_type == HardwareType.PHYSICAL).count())
         self.communicator.start_address_mode()
         time.sleep(0.5)
         self.assertTrue(self.communicator.in_address_mode())
         self.communicator.stop_address_mode()
         time.sleep(0.5)
-
-        modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
-                                        Module.hardware_type == HardwareType.PHYSICAL)
-        self.assertEqual(['2', '3', '4'], [module.address for module in modules])
+        with self.session as db:
+            modules = db.query(Module).where(Module.source == ModuleDTO.Source.GATEWAY,
+                                             Module.hardware_type == HardwareType.PHYSICAL).all()
+            self.assertEqual(['2', '3', '4'], [module.address for module in modules])
 
         self.assertFalse(self.communicator.in_address_mode())
 
