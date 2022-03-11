@@ -29,6 +29,7 @@ import constants
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, TypeVar
+    from sqlalchemy.orm import RelationshipProperty
     T = TypeVar('T')
 
 logger = logging.getLogger(__name__)
@@ -70,24 +71,30 @@ class Feature(Base):
     THERMOSTATS_GATEWAY = 'thermostats_gateway'
 
 
-class Input(Base):
+class MasterNumber(object):
+    number = Column(Integer, unique=True, nullable=False)
+
+    def __init__(self, number=None):
+        # type: (int) -> None
+        pass
+
+
+class Input(Base, MasterNumber):
     __tablename__ = 'input'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     event_enabled = Column(Boolean, default=False, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
-    room = relationship('Room', foreign_keys=[room_id])
+    room = relationship('Room', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
-class Output(Base):
+class Output(Base, MasterNumber):
     __tablename__ = 'output'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
     room = relationship('Room', foreign_keys=[room_id])
@@ -106,8 +113,8 @@ class Sensor(Base):
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
 
-    room = relationship('Room', foreign_keys=[room_id])
-    plugin = relationship('Plugin', foreign_keys=[plugin_id])
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
 
     class Sources(object):
         MASTER = 'master'
@@ -134,34 +141,31 @@ class Sensor(Base):
         PARTS_PER_MILLION = 'parts_per_million'
 
 
-class Shutter(Base):
+class Shutter(Base, MasterNumber):
     __tablename__ = 'shutter'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
     room = relationship('Room', foreign_keys=[room_id])
 
 
-class ShutterGroup(Base):
+class ShutterGroup(Base, MasterNumber):
     __tablename__ = 'shuttergroup'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
     room = relationship('Room', foreign_keys=[room_id])
 
 
-class PulseCounter(Base):
+class PulseCounter(Base, MasterNumber):
     __tablename__ = 'pulsecounter'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     name = Column(String(255), nullable=False)
     source = Column(String(255), nullable=False)  # Options: 'master' or 'gateway'
     persistent = Column(Boolean, nullable=False)
@@ -170,12 +174,11 @@ class PulseCounter(Base):
     room = relationship('Room', foreign_keys=[room_id])
 
 
-class GroupAction(Base):
+class GroupAction(Base, MasterNumber):
     __tablename__ = 'groupaction'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
 
 
 class Module(Base):
@@ -194,23 +197,21 @@ class Module(Base):
     update_success = Column(Boolean, nullable=True)
 
 
-class EnergyModule(Base):
+class EnergyModule(Base, MasterNumber):
     __tablename__ = 'energymodule'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     version = Column(Integer, nullable=False)
     name = Column(String(255), default='', nullable=False)
     module_id = Column(Integer, ForeignKey('module.id', ondelete="CASCADE"), unique=True, nullable=False)
 
 
-class EnergyCT(Base):
+class EnergyCT(Base, MasterNumber):
     __tablename__ = 'energyct'
     __table_args__ = (UniqueConstraint('number', 'energy_module_id'), {'sqlite_autoincrement': True})
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, nullable=False)
     name = Column(String(255), default='', nullable=False)
     sensor_type = Column(Integer, nullable=False)
     times = Column(String(255), nullable=False)
@@ -319,7 +320,7 @@ class Ventilation(Base):
     device_serial = Column(String(255), nullable=False)
 
 
-class ThermostatGroup(Base):
+class ThermostatGroup(Base, MasterNumber):
     __tablename__ = 'thermostatgroup'
     __table_args__ = {'sqlite_autoincrement': True}
 
@@ -328,7 +329,6 @@ class ThermostatGroup(Base):
         COOLING = 'cooling'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     name = Column(String(255), nullable=False)
     threshold_temperature = Column(Float, nullable=True, default=None)
     sensor_id = Column(Integer, ForeignKey('sensor.id', ondelete='SET NULL'), nullable=True)
@@ -395,7 +395,7 @@ class Valve(Base):
     output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), unique=True, nullable=False)
 
 
-class Thermostat(Base):
+class Thermostat(Base, MasterNumber):
     __tablename__ = 'thermostat'
     __table_args__ = {'sqlite_autoincrement': True}
 
@@ -404,7 +404,6 @@ class Thermostat(Base):
         EQUAL = 'equal'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     name = Column(String(255), default='Thermostat', nullable=False)
     state = Column(String(255), default='on', nullable=False)
     sensor_id = Column(Integer, ForeignKey('sensor.id', ondelete='SET NULL'), nullable=True)
@@ -577,12 +576,11 @@ class DaySchedule(Base):
         return last_value
 
 
-class Room(Base):
+class Room(Base, MasterNumber):
     __tablename__ = 'room'
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    number = Column(Integer, unique=True, nullable=False)
     name = Column(String(255), nullable=True)
 
 

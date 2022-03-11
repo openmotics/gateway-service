@@ -19,13 +19,13 @@ from __future__ import absolute_import
 
 import logging
 import time
-from gateway.models import Database
+
 from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
-from gateway.models import Database
+from gateway.models import Database, MasterNumber
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 
@@ -126,19 +126,20 @@ class BaseController(object):
 
     def _sync_orm_structure(self, structure):
         # type: (SyncStructure) -> None
-        db = Database.get_session()
-
-        orm_model = structure.orm_model
+        model_cls = structure.orm_model
         name = structure.name
         skip = structure.skip
 
+        assert issubclass(model_cls, MasterNumber)
+
         numbers = []
-        for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
-            if skip is not None and skip(dto):
-                continue
-            n = dto.id
-            numbers.append(n)
-            if not db.query(db.query(orm_model).filter(orm_model.number == n).exists()).scalar():
-                db.add(orm_model(number=n))
-        db.query(orm_model).where(orm_model.number.not_in(numbers)).delete()
-        db.commit()
+        with Database.get_session() as db:
+            for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
+                if skip is not None and skip(dto):
+                    continue
+                n = dto.id
+                numbers.append(n)
+                if not db.query(db.query(model_cls).filter(model_cls.number == n).exists()).scalar():
+                    db.add(model_cls(number=n))
+            db.query(model_cls).where(model_cls.number.notin_(numbers)).delete()
+            db.commit()

@@ -25,16 +25,17 @@ if False:  # MYPY
 
 
 class RoomMapper(object):
+    def __init__(self, db):
+        self._db = db
 
-    @staticmethod
-    def orm_to_dto(orm_object):  # type: (Room) -> RoomDTO
+    def orm_to_dto(self, orm_object):  # type: (Room) -> RoomDTO
         return RoomDTO(id=orm_object.number,
                        name=orm_object.name)
 
-    @staticmethod
-    def dto_to_orm(room_dto):  # type: (RoomDTO) -> Room
-        db = Database.get_session()
-        room = db.query(Room).where(Room.number.is_(room_dto.id)).one_or_none()
+    def dto_to_orm(self, room_dto):  # type: (RoomDTO) -> Room
+        room = self._db.query(Room) \
+            .where(Room.number.is_(room_dto.id)) \
+            .one_or_none()
         if room is None:
             room = Room(number=room_dto.id)
         if 'name' in room_dto.loaded_fields:

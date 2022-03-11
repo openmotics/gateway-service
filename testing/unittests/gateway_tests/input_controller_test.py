@@ -33,7 +33,6 @@ from logs import Logs
 
 
 class InputControllerTest(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         super(InputControllerTest, cls).setUpClass()
@@ -54,8 +53,8 @@ class InputControllerTest(unittest.TestCase):
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
-        self.db = session_factory()
-        session_mock = mock.patch.object(Database, 'get_session', return_value=self.db)
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
         session_mock.start()
         self.addCleanup(session_mock.stop)
 
@@ -79,16 +78,22 @@ class InputControllerTest(unittest.TestCase):
         with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
-            assert self.db.query(Input).where(Input.number == input_dto.id).count() == 1
+
+        with self.session as db:
+            assert db.query(Input).where(Input.number == input_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'input'}) in events
             assert len(events) == 1
 
     def test_full_loaded_inputs(self):
+        with self.session as db:
+            db.add_all([
+                Input(id=10, number=1, event_enabled=False),
+                Input(id=11, number=2, event_enabled=True)
+            ])
+            db.commit()
+
         master_dtos = {1: InputDTO(id=1, name='one'),
                        2: InputDTO(id=2, name='two')}
-        self.db.add_all([Input(id=10, number=1, event_enabled=False),
-                         Input(id=11, number=2, event_enabled=True)])
-        self.db.commit()
         with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: master_dtos.get(input_id)):
             dtos = self.controller.load_inputs()
@@ -97,11 +102,15 @@ class InputControllerTest(unittest.TestCase):
             self.assertIn(InputDTO(id=2, name='two', event_enabled=True), dtos)
 
     def test_get_last_inputs(self):
+        with self.session as db:
+            db.add_all([
+                Input(id=10, number=1, event_enabled=False),
+                Input(id=11, number=2, event_enabled=True)
+            ])
+            db.commit()
+
         master_dtos = {1: InputDTO(id=1, name='one'),
                        2: InputDTO(id=2, name='two')}
-        self.db.add_all([Input(id=10, number=1, event_enabled=False),
-                         Input(id=11, number=2, event_enabled=True)])
-        self.db.commit()
         with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: master_dtos.get(input_id)):
             fakesleep.reset(0)
@@ -135,6 +144,13 @@ class InputControllerTest(unittest.TestCase):
             self.assertEqual([2], last_inputs)
 
     def test_input_sync_change(self):
+        with self.session as db:
+            db.add_all([
+                Input(id=0, number=2),
+                Input(id=1, number=40, room=Room(id=2, number=3))
+            ])
+            db.commit()
+
         events = []
 
         def on_change(gateway_event):
@@ -143,9 +159,6 @@ class InputControllerTest(unittest.TestCase):
 
         inputs = {2: InputDTO(id=2),
                   40: InputDTO(id=40, module_type='I')}
-        self.db.add_all([Input(id=0, number=2),
-                         Input(id=1, number=40, room=Room(id=2, number=3))])
-        self.db.commit()
         with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: inputs.get(input_id)), \
              mock.patch.object(self.master_controller, 'load_input_status',
