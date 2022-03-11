@@ -309,6 +309,9 @@ class Ventilation(Base):
     __tablename__ = 'ventilation'
     __table_args__ = (UniqueConstraint('source', 'plugin_id', 'external_id'), {'sqlite_autoincrement': True})
 
+    class Sources(object):
+        PLUGIN = 'plugin'
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     source = Column(String(255), nullable=False)  # Options: 'gateway' or 'plugin'
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
@@ -318,6 +321,8 @@ class Ventilation(Base):
     device_vendor = Column(String(255), nullable=False)
     device_type = Column(String(255), nullable=False)
     device_serial = Column(String(255), nullable=False)
+
+    plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
 
 
 class ThermostatGroup(Base, MasterNumber):
