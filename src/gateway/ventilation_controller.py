@@ -20,11 +20,13 @@ from __future__ import absolute_import
 import logging
 import time
 
-from gateway.dto import VentilationDTO, VentilationStatusDTO
+from sqlalchemy import select
+
 from gateway.daemon_thread import DaemonThread
+from gateway.dto import VentilationDTO, VentilationStatusDTO
 from gateway.events import GatewayEvent
 from gateway.mappers import VentilationMapper
-from gateway.models import Ventilation
+from gateway.models import Database, Ventilation
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
@@ -37,7 +39,6 @@ logger = logging.getLogger(__name__)
 @Injectable.named('ventilation_controller')
 @Singleton
 class VentilationController(object):
-
     @Inject
     def __init__(self, pubsub=INJECTED):
         # type: (PubSub) -> None
@@ -116,31 +117,37 @@ class VentilationController(object):
 
     def load_ventilations(self):
         # type: () -> List[VentilationDTO]
-        return [VentilationMapper.orm_to_dto(ventilation)
-                for ventilation in Ventilation.select()]
+        with Database.get_session() as db:
+            mapper = VentilationMapper(db)
+            return [mapper.orm_to_dto(ventilation)
+                    for ventilation in db.query(Ventilation).all()]
 
     def load_ventilation(self, ventilation_id):
         # type: (int) -> VentilationDTO
-        ventilation = Ventilation.get(id=ventilation_id)
-        return VentilationMapper.orm_to_dto(ventilation)
+        with Database.get_session() as db:
+            ventilation = db.get(Ventilation, ventilation_id)
+            return VentilationMapper(db).orm_to_dto(ventilation)
 
     def save_ventilation(self, ventilation_dto):
         # type: (VentilationDTO) -> None
-        ventilation = VentilationMapper.dto_to_orm(ventilation_dto)
-        if ventilation.id is None:
-            logger.info('Registered new ventilation unit %s', ventilation)
-        changed = ventilation.save() > 0
-        ventilation_dto.id = ventilation.id
+        with Database.get_session() as db:
+            ventilation = VentilationMapper(db).dto_to_orm(ventilation_dto)
+            db.add(ventilation)
+            changed = ventilation in db.dirty
+            db.commit()
+            ventilation_dto.id = ventilation.id
         if changed:
             self._publish_config()
 
     def get_status(self):
         # type: () -> List[VentilationStatusDTO]
         status = []
-        for ventilation in Ventilation.select():
-            state_dto = self._status.get(ventilation.id)
-            if state_dto:
-                status.append(state_dto)
+        with Database.get_session() as db:
+            stmt = select(Ventilation.id)  # type: ignore
+            for ventilation_id in db.execute(stmt).scalars():
+                state_dto = self._status.get(ventilation_id)
+                if state_dto:
+                    status.append(state_dto)
         return status
 
     def set_status(self, status_dto):

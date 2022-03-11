@@ -24,18 +24,19 @@ from gateway.dto.ventilation import VentilationDTO, VentilationSourceDTO
 from gateway.models import Plugin, Ventilation
 
 if False:  # MYPY
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class VentilationMapper(object):
+    def __init__(self, db):
+        self._db = db
 
-    @staticmethod
-    def orm_to_dto(orm_object):
+    def orm_to_dto(self, orm_object):
         # type: (Ventilation) -> VentilationDTO
         source_dto = VentilationSourceDTO(None, type=orm_object.source)
-        if source_dto.is_plugin:
+        if orm_object.source == Ventilation.Sources.PLUGIN and orm_object.plugin:
             source_dto.id = orm_object.plugin.id
             source_dto.name = orm_object.plugin.name
         return VentilationDTO(orm_object.id,
@@ -47,17 +48,21 @@ class VentilationMapper(object):
                               device_type=orm_object.device_type,
                               device_serial=orm_object.device_serial)
 
-    @staticmethod
-    def dto_to_orm(ventilation_dto):  # type: (VentilationDTO) -> Ventilation
+    def dto_to_orm(self, ventilation_dto):  # type: (VentilationDTO) -> Ventilation
         lookup_kwargs = {}  # type: Dict[str,Any]
-        if ventilation_dto.id:
+        if ventilation_dto.id is not None:
             lookup_kwargs.update({'id': ventilation_dto.id})
+        if 'external_id' in ventilation_dto.loaded_fields:
+            lookup_kwargs.update({'external_id': ventilation_dto.external_id})
         if ventilation_dto.source.is_plugin:
-            plugin = Plugin.get(name=ventilation_dto.source.name)
+            plugin = self._db.query(Plugin) \
+                .filter_by(name=ventilation_dto.source.name) \
+                .one()  # type: Plugin
             lookup_kwargs.update({'plugin': plugin,
-                                  'source': ventilation_dto.source.type,
-                                  'external_id': ventilation_dto.external_id})
-        ventilation = Ventilation.get_or_none(**lookup_kwargs)
+                                  'source': ventilation_dto.source.type})
+        ventilation = self._db.query(Ventilation) \
+            .filter_by(**lookup_kwargs) \
+            .one_or_none()  # type: Optional[Ventilation]
         if ventilation is None:
             ventilation = Ventilation(**lookup_kwargs)
         if 'name' in ventilation_dto.loaded_fields:
