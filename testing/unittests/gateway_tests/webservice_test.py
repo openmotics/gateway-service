@@ -79,8 +79,7 @@ class WebInterfaceTest(unittest.TestCase):
                             module_controller=self.module_controller,
                             energy_module_controller=self.energy_module_controller,
                             uart_controller=mock.Mock(),
-                            update_controller=mock.Mock(),
-                            rebus_controller=None)
+                            update_controller=mock.Mock())
         self.web = WebInterface()
 
     def test_get_usernames(self):
@@ -90,7 +89,6 @@ class WebInterfaceTest(unittest.TestCase):
                 username='test user_1',
                 role='ADMIN',
                 pin_code='1234',
-                apartment=None,
                 accepted_terms=1
             ),
             UserDTO(
@@ -98,7 +96,6 @@ class WebInterfaceTest(unittest.TestCase):
                 username='test user_2',
                 role='USER',
                 pin_code='',
-                apartment=None,
                 accepted_terms=1
             )
         ]
@@ -412,7 +409,8 @@ class WebInterfaceTest(unittest.TestCase):
                 set_status.reset_mock()
 
     def test_get_modules_information(self):
-        master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
+        master_modules = [ModuleDTO(id=0,
+                                    source=ModuleDTO.Source.MASTER,
                                     module_type=ModuleType.OUTPUT,
                                     address='079.000.000.001',
                                     hardware_type=HardwareType.INTERNAL,
@@ -420,7 +418,8 @@ class WebInterfaceTest(unittest.TestCase):
                                     hardware_version='4',
                                     order=0,
                                     online=True)]
-        energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+        energy_modules = [ModuleDTO(id=0,
+                                    source=ModuleDTO.Source.GATEWAY,
                                     module_type=ModuleType.ENERGY,
                                     address='2',
                                     hardware_type=HardwareType.PHYSICAL,

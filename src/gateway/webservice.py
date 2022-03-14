@@ -25,13 +25,13 @@ import time
 import uuid
 
 import cherrypy
-import msgpack
 import requests
 import six
 import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
 from peewee import DoesNotExist
+from six.moves.urllib.parse import unquote_plus
 
 import constants
 import gateway
@@ -71,7 +71,6 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
-    from esafe.rebus.rebus_controller import RebusController
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -129,22 +128,26 @@ def log_access(f, mask=None):
         response = cherrypy.response
 
         params = {}
-        query_string = request.query_string
-        if query_string:
-            for entry in query_string.split('&'):
-                if '=' not in entry:
-                    continue
-                key, value = entry.split('=')
+        headers = ''
+        if access_logger.level == logging.DEBUG:
+            for key, value in request.params.items():
                 if mask is None or key not in mask:
-                    params[key] = value
+                    if isinstance(value, six.string_types):
+                        params[key] = unquote_plus(value)
+                        try:
+                            params[key] = json.loads(params[key])
+                        except ValueError:
+                            pass
+                    else:
+                        params[key] = value
                 else:
                     params[key] = '***'
-        headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
-                             for header in ['X-Request-Id', 'User-Agent']
-                             if header in request.headers)
+            headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
+                                 for header in ['X-Request-Id', 'User-Agent']
+                                 if header in request.headers)
 
         access_logger.debug(
-            '{0} - {1} - {2}{3} - Query parameters: {4}{5}'.format(
+            '{0} - {1} - {2}{3} - Parameters: {4}{5}'.format(
                 request.remote.ip,
                 request.method,
                 request.script_name, request.path_info,
@@ -393,7 +396,7 @@ class WebInterface(object):
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
                  uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
-                 update_controller=INJECTED, rebus_controller=INJECTED):
+                 update_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -420,8 +423,6 @@ class WebInterface(object):
         self._plugin_controller = None  # type: Optional[PluginController]
         self._metrics_collector = None  # type: Optional[MetricsCollector]
         self._metrics_controller = None  # type: Optional[MetricsController]
-
-        self._rebus_controller = rebus_controller  # type: Optional[RebusController]
 
         self._ws_metrics_registered = False
         self._energy_dirty = False
@@ -629,12 +630,6 @@ class WebInterface(object):
         port = self._maintenance_controller.open_maintenace_socket()
         return {'port': port}
 
-    @openmotics_api(auth=True, check=types(power_on=bool))
-    def reset_master(self, power_on=True):  # type: (bool) -> Dict[str, Any]
-        """ Perform a cold reset on the master. """
-        self._module_controller.reset_master(power_on=power_on)
-        return {}
-
     @openmotics_api(auth=True, plugin_exposed=False, check=types(action=str, size=int, data='json'))
     def raw_master_action(self, action, size, data=None):
         # type: (str, int, Optional[List[int]]) -> Dict[str,Any]
@@ -735,9 +730,6 @@ class WebInterface(object):
         }
         features |= self._module_controller.master_get_features()
         features |= self._thermostat_controller.get_features()
-
-        if self._rebus_controller is not None:
-            features.add('esafe')
 
         return {'features': list(features)}
 
@@ -2063,6 +2055,15 @@ class WebInterface(object):
                                                             functioncode=functioncode,
                                                             signed=signed)}
 
+    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, functioncode=int, number_of_registers=int))
+    def read_modbus_registers(self, slaveaddress, registeraddress, functioncode=3, number_of_registers=1):
+        if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
+            raise FeatureUnavailableException()
+        return {'data': self._uart_controller.read_registers(slaveaddress=slaveaddress,
+                                                             registeraddress=registeraddress,
+                                                             functioncode=functioncode,
+                                                             number_of_registers=number_of_registers)}
+
     @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, value=float, number_of_decimals=int, functioncode=int, signed=bool))
     def write_modbus_register(self, slaveaddress, registeraddress, value, number_of_decimals=0, functioncode=16, signed=False):
         if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
@@ -2073,6 +2074,15 @@ class WebInterface(object):
                                              number_of_decimals=number_of_decimals,
                                              functioncode=functioncode,
                                              signed=signed)
+        return {}
+
+    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, values=list))
+    def write_modbus_registers(self, slaveaddress, registeraddress, values):
+        if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
+            raise FeatureUnavailableException()
+        self._uart_controller.write_registers(slaveaddress=slaveaddress,
+                                              registeraddress=registeraddress,
+                                              values=values)
         return {}
 
     # Energy modules
@@ -2495,7 +2505,22 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def restart_services(self):
+        # type: () -> Dict[str, Any]
         return self._system_controller.restart_services()
+
+    @openmotics_api(auth=True, check=types(power_on=bool), plugin_exposed=False)
+    def reset_master(self, power_on=True):
+        # type: (bool) -> Dict[str, Any]
+        """ Perform a cold reset on the master. """
+        self._module_controller.reset_master(power_on=power_on)
+        return {}
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def reset_bus(self):
+        # type: () -> Dict[str, Any]
+        """ Perform a power reset of the slave bus(es). """
+        self._module_controller.reset_bus()
+        return {}
 
     @log_access
     @cherrypy.expose

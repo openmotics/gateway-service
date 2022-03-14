@@ -81,8 +81,8 @@ class InputMapper(object):
                     basic_actions += actions
                     if len(basic_actions) == 2 and basic_actions[0] in [163, 164]:
                         return 242 if basic_actions[0] == 163 else 241, []
-                if orm_object.basic_action_release.is_execute_group_action:
-                    basic_actions += [236, 0, 2, orm_object.basic_action_release.device_nr, 236, 255]
+            if orm_object.basic_action_release.is_execute_group_action:
+                basic_actions += [236, 0, 2, orm_object.basic_action_release.device_nr, 236, 255]
             if orm_object.input_link.enable_2s_press:
                 if orm_object.basic_action_2s_press.is_execute_group_action:
                     basic_actions = [207, orm_object.basic_action_2s_press.device_nr] + basic_actions
@@ -113,7 +113,8 @@ class InputMapper(object):
             return data
 
         # The input is configured, changing defaults
-        data['input_link'].update({'dimming_up': False,
+        data['input_link'].update({'output_id': 0,
+                                   'dimming_up': False,
                                    'enable_press_and_release': False,
                                    'enable_1s_press': False,
                                    'enable_2s_press': False,
@@ -170,7 +171,9 @@ class InputMapper(object):
                 if basic_actions[0] == 2:
                     data['basic_action_press'] = BasicAction(action_type=19, action=0, device_nr=basic_actions[1])
                 else:
-                    data['input_link']['enable_2s_press'] = True
+                    # An active 2s press will also implictly enable release, so the explicit release must be off
+                    data['input_link'].update({'enable_press_and_release': False,
+                                               'enable_2s_press': True})
                     data['basic_action_2s_press'] = BasicAction(action_type=19, action=0, device_nr=basic_actions[1])
             return data
 

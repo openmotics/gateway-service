@@ -19,13 +19,14 @@ Input DTO
 import time
 
 from gateway.dto.base import BaseDTO
+from gateway.dto.module import ModuleDTO
 
 if False:  # MYPY
     from typing import Optional, List, Any
 
 
 class InputDTO(BaseDTO):
-    def __init__(self, id, name='', module_type='I', action=None, basic_actions=None, invert=False, can=False, room=None, event_enabled=False, state=None):
+    def __init__(self, id, name='', module_type='I', action=None, basic_actions=None, invert=False, can=False, room=None, event_enabled=False, state=None, module=None):
         # The argument `basic_actions` is None since you should not set a reference type as default value
         self.id = id  # type: int
         self.name = name  # type: str
@@ -36,6 +37,7 @@ class InputDTO(BaseDTO):
         self.invert = invert  # type: bool
         self.can = can  # type: bool
         self.event_enabled = event_enabled  # type: bool
+        self.module = module  # type: Optional[ModuleDTO]
         self.state = state  # type: Optional[InputStatusDTO]
         if self.state:
             self.state.id = self.id

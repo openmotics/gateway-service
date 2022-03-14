@@ -107,7 +107,7 @@ class Cloud(object):
             data = {'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
                     'assertion': token.decode(),
                     'scope': 'device'}  # type: Dict[str, Any]
-            response = requests.post(self._build_url('/api/v1/authentication/oauth2/token'), data=data)
+            response = requests.post(self._build_url('/api/v1.1/authentication/oauth2/token'), data=data)
             response.raise_for_status()
             data = response.json()
             logger.info('Authenticated until %s', datetime.now() + timedelta(seconds=data['expires_in']))
@@ -847,7 +847,7 @@ class Util(object):
     config = ConfigParser()
     config.read(constants.get_config_file())
     vpn_supervisor = config.get('OpenMotics', 'vpn_supervisor') == 'True' if config.has_option('OpenMotics', 'vpn_supervisor') else True
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT or not vpn_supervisor:
+    if not vpn_supervisor:
         vpn_binary = 'openvpn'
         config_location = '/etc/openvpn/client/'
         start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)

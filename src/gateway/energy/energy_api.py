@@ -416,6 +416,17 @@ class EnergyAPI(object):
             raise UnsupportedException("Writing eeprom is not possible for the 8 port modules.")
         raise UnsupportedException()
 
+    @staticmethod
+    def set_board_options(version):
+        # type: (int) -> EnergyCommand
+        """
+        Set the board options
+        :param version: power api version
+        """
+        if version == EnergyEnums.Version.ENERGY_MODULE:
+            return EnergyCommand('S', 'SBO', '4B', '')
+        raise UnsupportedException()
+
     # Below are the address mode functions.
 
     @staticmethod

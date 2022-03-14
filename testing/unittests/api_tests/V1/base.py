@@ -76,8 +76,7 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
         else:
             token = None
         with mock.patch.object(self.users_controller, 'check_token', return_value=token), \
-                mock.patch.object(self.auth_controller, 'check_token', return_value=token), \
-                mock.patch.object(self.auth_controller, 'check_api_secret', wraps=lambda secret: secret == 'Test-Secret'):
+                mock.patch.object(self.auth_controller, 'check_token', return_value=token):
             headers = headers or {}
             headers = [(k, v) for k, v in headers.items()]
             if token is not None:

@@ -59,6 +59,8 @@ class MasterEvent(object):
 
     class APITypes(object):
         SET_LIGHTS = 'SET_LIGHTS'
+        SET_THERMOSTAT_MODE = 'SET_THERMOSTAT_MODE'
+        SET_THERMOSTAT_PRESET = 'SET_THERMOSTAT_PRESET'
 
     class SensorType(object):
         TEMPERATURE = 'TEMPERATURE'

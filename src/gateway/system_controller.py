@@ -97,9 +97,6 @@ class SystemController(object):
                 logger.error('Unexpected timezone path {0}, reset to UTC'.format(path))
                 self.set_timezone('UTC')
                 return 'UTC'
-            if path.startswith('/usr/share/zoneinfo/posix'):
-                # As seen on the buildroot os, the timezone info is all located in the posix folder within zoneinfo.
-                return path[26:]
             return path[20:]
         except Exception:
             logger.exception('Could not parse current timezone, reset to UTC')
@@ -333,15 +330,3 @@ class SystemController(object):
             watchdog.start()
         else:
             watchdog.stop()
-
-    def is_esafe_touchscreen_calibrated(self):
-        _ = self
-        return os.path.exists(constants.get_esafe_touchscreen_calibration_file())
-
-    def calibrate_esafe_touchscreen(self):
-        _ = self
-        try:
-            argv = ['TSLIB_CONSOLEDEVICE=none', 'ts_calibrate']
-            subprocess.check_output(argv)
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeError('Could not calibrate touchscreen: {}'.format(exc))

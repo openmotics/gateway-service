@@ -24,8 +24,7 @@ import mock
 import gateway.hal.master_controller_classic
 import master.classic.master_api
 import master.classic.master_communicator
-from gateway.dto import InputDTO, OutputDTO, OutputStatusDTO
-from gateway.dto.input import InputStatusDTO
+from gateway.dto import InputDTO, OutputDTO, OutputStatusDTO, InputStatusDTO, ModuleDTO
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -49,6 +48,8 @@ class MasterClassicControllerTest(unittest.TestCase):
         input_data = {'id': 1, 'module_type': 'I'}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data)
+        ], [
+            ModuleDTO(id=0, source=None, address=None, module_type=None, hardware_type=None)
         ])
         data = controller.get_input_module_type(1)
         self.assertEqual(data, 'I')
@@ -58,6 +59,8 @@ class MasterClassicControllerTest(unittest.TestCase):
                       'basic_actions': '', 'invert': 255, 'can': ' '}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data)
+        ], [
+            ModuleDTO(id=0, source=None, address=None, module_type=None, hardware_type=None)
         ])
         data = controller.load_input(1)
         self.assertEqual(data.id, 1)
@@ -67,6 +70,8 @@ class MasterClassicControllerTest(unittest.TestCase):
                       'basic_actions': '', 'invert': 255, 'can': ' '}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data)
+        ], [
+            ModuleDTO(id=0, source=None, address=None, module_type=None, hardware_type=None)
         ])
         self.assertRaises(TypeError, controller.load_input, 1)
 
@@ -78,6 +83,8 @@ class MasterClassicControllerTest(unittest.TestCase):
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data1),
             InputConfiguration.deserialize(input_data2)
+        ], [
+            ModuleDTO(id=0, source=None, address=None, module_type=None, hardware_type=None)
         ])
         inputs = controller.load_inputs()
         self.assertEqual([x.id for x in inputs], [1, 2])
@@ -90,6 +97,8 @@ class MasterClassicControllerTest(unittest.TestCase):
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data1),
             InputConfiguration.deserialize(input_data2)
+        ], [
+            ModuleDTO(id=0, source=None, address=None, module_type=None, hardware_type=None)
         ])
         inputs = controller.load_inputs()
         self.assertEqual([x.id for x in inputs], [1])
@@ -311,7 +320,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             controller.set_input(255, True)
 
 @Scope
-def get_classic_controller_dummy(inputs=None):
+def get_classic_controller_dummy(inputs=None, modules=None):
     communicator_mock = mock.Mock(spec=MasterCommunicator)
     eeprom_file = mock.Mock(EepromFile)
     eeprom_file.invalidate_cache.return_value = None
@@ -329,6 +338,8 @@ def get_classic_controller_dummy(inputs=None):
 
     controller = MasterClassicController()
     controller._master_version = (3, 143, 102)
+    controller._get_input_modules_information = mock.Mock()
+    controller._get_input_modules_information.return_value = modules
     return controller
 
 
