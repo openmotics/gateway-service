@@ -21,8 +21,6 @@ import copy
 import logging
 import time
 from threading import Lock
-from peewee import JOIN
-
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, OutputStatusDTO, GlobalFeedbackDTO, \
@@ -30,7 +28,7 @@ from gateway.dto import OutputDTO, OutputStatusDTO, GlobalFeedbackDTO, \
 from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
-from gateway.models import Output, Room
+from gateway.models import Database, Output, Room
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
@@ -133,37 +131,41 @@ class OutputController(BaseController):
         return list(self._cache.get_state().values())
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
-        output = Output.select(Room) \
-                       .join_from(Output, Room, join_type=JOIN.LEFT_OUTER) \
+        with Database.get_session() as db:
+            output = db.query(Output) \
+                       .join(Room, isouter=True) \
                        .where(Output.number == output_id) \
-                       .get()  # type: Output  # TODO: Load dict
-        output_dto = self._master_controller.load_output(output_id=output_id)
-        output_dto.room = output.room.number if output.room is not None else None
-        return output_dto
+                       .one()  # type: Output
+            output_dto = self._master_controller.load_output(output_id=output_id)
+            output_dto.room = output.room.number if output.room is not None else None
+            return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         output_dtos = []
-        for output in list(Output.select(Output, Room)
-                                 .join_from(Output, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
-            output_dto = self._master_controller.load_output(output_id=output.number)
-            output_dto.room = output.room.number if output.room is not None else None
-            output_dtos.append(output_dto)
-        self._cache.update_outputs(output_dtos)
+        with Database.get_session() as db:
+            for output in list(db.query(Output)
+                                 .join(Room, isouter=True)
+                                 .all()):
+                output_dto = self._master_controller.load_output(output_id=output.number)
+                output_dto.room = output.room.number if output.room is not None else None
+                output_dtos.append(output_dto)
+            self._cache.update_outputs(output_dtos)
         return output_dtos
 
     def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         outputs_to_save = []
-        for output_dto in outputs:
-            output = Output.get_or_none(number=output_dto.id)  # type: Output
-            if output is None:
-                logger.info('Ignored saving non-existing Output {0}'.format(output_dto.id))
-            if 'room' in output_dto.loaded_fields:
-                if output_dto.room is None:
-                    output.room = None
-                elif 0 <= output_dto.room <= 100:
-                    output.room, _ = Room.get_or_create(number=output_dto.room)
-                output.save()
-            outputs_to_save.append(output_dto)
+        with Database.get_session() as db:
+            for output_dto in outputs:
+                output = db.query(Output).where(number=output_dto.id).one_or_none()  # type: Output
+                if output is None:
+                    logger.info('Ignored saving non-existing Output {0}'.format(output_dto.id))
+                if 'room' in output_dto.loaded_fields:
+                    if output_dto.room is None:
+                        output.room = None
+                    elif 0 <= output_dto.room <= 100:
+                        output.room, _ = db.query(Room).where(Room.number == output_dto.room).one()
+                outputs_to_save.append(output_dto)
+            db.commit()
         self._master_controller.save_outputs(outputs_to_save)
 
     def load_dimmer_configuration(self):
