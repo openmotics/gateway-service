@@ -147,8 +147,7 @@ class Shutter(Base, MasterNumber):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
-
-    room = relationship('Room', foreign_keys=[room_id])
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
 class ShutterGroup(Base, MasterNumber):
@@ -157,8 +156,7 @@ class ShutterGroup(Base, MasterNumber):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
-
-    room = relationship('Room', foreign_keys=[room_id])
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
 class PulseCounter(Base, MasterNumber):
