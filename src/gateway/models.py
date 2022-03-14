@@ -351,7 +351,6 @@ class OutputToThermostatGroupAssociation(Base):
     output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), primary_key=True)
     thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), primary_key=True)
 
-    id = Column(Integer, nullable=False)
     index = Column(Integer, nullable=False)  # The index of this output in the config 0-3
     mode = Column(String(255), nullable=False)  # The mode this config is used for. Options: 'heating' or 'cooling'
     value = Column(Integer, nullable=False)  # The value that needs to be set on the output when in this mode (0-100)
@@ -361,7 +360,6 @@ class PumpToValveAssociation(Base):
     __tablename__ = 'pumptovalve'
     __table_args__ = {'sqlite_autoincrement': True}
 
-    id = Column(Integer, nullable=False)
     pump_id = Column(Integer, ForeignKey('pump.id', ondelete='CASCADE'), primary_key=True)
     valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
 
@@ -518,7 +516,6 @@ class ValveToThermostatAssociation(Base):
     thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), primary_key=True)
     valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
 
-    id = Column(Integer, nullable=False)
     mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)
     priority = Column(Integer, default=0, nullable=False)
 
