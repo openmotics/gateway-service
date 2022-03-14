@@ -20,7 +20,7 @@ import inspect
 import logging
 import ujson as json
 import struct
-from peewee import DoesNotExist
+from sqlalchemy.orm.exc import NoResultFound
 from threading import Lock
 from ioc import INJECTED, Inject
 from master.core.exceptions import InvalidMemoryChecksum
@@ -664,7 +664,7 @@ class IdField(object):
                 limit_info = 'Only one records available: {0}'.format(limits[0])
             else:
                 limit_info = 'Available records: {0} <= id <= {1}'.format(limits[0], limits[1])
-            raise DoesNotExist('Could not find {0}({1}). {2}'.format(class_name, '' if id is None else id, limit_info))
+            raise NoResultFound('Could not find {0}({1}). {2}'.format(class_name, '' if id is None else id, limit_info))
 
 
 class MemoryRelation(object):
