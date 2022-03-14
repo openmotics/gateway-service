@@ -114,16 +114,12 @@ def _openmotics_api_v1(f, *args, **kwargs):
 
 class AuthenticationLevel(Enum):
     NONE = 'none'  # Not authenticated at all on any level
-    HIGH = 'high'  # Authenticated with username/password or having X-API-Secret or both
+    HIGH = 'high'  # Authenticated with username/password
 
 
-@Inject
-def check_authentication_security_level(checked_token, required_level=None, authentication_controller=INJECTED):
-    # type: (AuthenticationToken, Optional[AuthenticationLevel], AuthenticationController) -> AuthenticationLevel
-    api_secret = cherrypy.request.headers.get('X-API-Secret')
+def check_authentication_security_level(checked_token, required_level=None):
+    # type: (AuthenticationToken, Optional[AuthenticationLevel]) -> AuthenticationLevel
     level = AuthenticationLevel.NONE
-    if authentication_controller.check_api_secret(api_secret):
-        level = AuthenticationLevel.HIGH
     if checked_token is not None and checked_token.login_method == LoginMethod.PASSWORD:
         level = AuthenticationLevel.HIGH
     if required_level is not None and level != required_level and required_level == AuthenticationLevel.HIGH:

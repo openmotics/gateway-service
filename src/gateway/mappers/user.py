@@ -20,7 +20,6 @@ from __future__ import absolute_import
 import json
 from gateway.dto import UserDTO
 from gateway.models import User
-from gateway.mappers.apartment import ApartmentMapper
 
 
 class UserMapper(object):
@@ -35,17 +34,9 @@ class UserMapper(object):
                            role=orm_object.role,
                            pin_code=orm_object.pin_code,
                            language=orm_object.language,
-                           apartment=None,
                            is_active=orm_object.is_active,
                            accepted_terms=orm_object.accepted_terms,
                            email=orm_object.email)
-        try:
-            apartment_orm = orm_object.apartment
-            if apartment_orm is not None:
-                apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
-                user_dto.apartment = apartment_dto
-        except:
-            pass
         # Copy over the hashed password from the database into the DTO
         user_dto.hashed_password = orm_object.password
         return user_dto
@@ -77,9 +68,6 @@ class UserMapper(object):
                 continue
             elif field == 'hashed_password':
                 user_orm.password = dto_object.hashed_password
-            elif field == 'apartment' and dto_object.apartment is not None:
-                apartment_orm = ApartmentMapper.dto_to_orm(dto_object.apartment)
-                user_orm.apartment = apartment_orm
             elif field not in ['username', 'hashed_password']:
                 setattr(user_orm, field, getattr(dto_object, field))
         return user_orm
