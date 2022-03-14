@@ -34,7 +34,7 @@ class RoomMapper(object):
 
     def dto_to_orm(self, room_dto):  # type: (RoomDTO) -> Room
         room = self._db.query(Room) \
-            .where(Room.number.is_(room_dto.id)) \
+            .where(Room.number == room_dto.id) \
             .one_or_none()
         if room is None:
             room = Room(number=room_dto.id)
