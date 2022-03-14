@@ -211,14 +211,14 @@ class ShutterController(BaseController):
         with Database.get_session() as db:
             shutters_to_save = []
             for shutter_dto in shutters:
-                shutter = db.query(Shutter).where(Shutter.number.is_(shutter_dto.id)).one_or_none()
+                shutter = db.query(Shutter).where(Shutter.number == shutter_dto.id).one_or_none()
                 if shutter is None:
                     logger.info('Ignored saving non-existing Shutter {0}'.format(shutter_dto.id))
                 if 'room' in shutter_dto.loaded_fields:
                     if shutter_dto.room is None:
                         shutter.room = None
                     elif 0 <= shutter_dto.room <= 100:
-                        room = db.query(Room).where(Room.number.is_(shutter_dto.room)).one_or_none()
+                        room = db.query(Room).where(Room.number == shutter_dto.room).one_or_none()
                         if room is None:
                             room = Room(number=shutter_dto.room)
                             db.add(room)
@@ -257,7 +257,7 @@ class ShutterController(BaseController):
                     if shutter_group_dto.room is None:
                         shutter_group.room = None
                     elif 0 <= shutter_group_dto.room <= 100:
-                        room = db.query(Room).where(Room.number.is_(shutter_group_dto.room)).one_or_none()
+                        room = db.query(Room).where(Room.number == shutter_group_dto.room).one_or_none()
                         if room is None:
                             room = Room(number=shutter_group_dto.room)
                             db.add(room)
