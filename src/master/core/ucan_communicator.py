@@ -68,25 +68,26 @@ class UCANCommunicator(object):
                         tries=tries,
                         warn=warn)
 
-    def is_ucan_in_bootloader(self, cc_address, ucan_address):  # type: (str, str) -> bool
+    def is_ucan_in_bootloader(self, cc_address, ucan_address, tries=2):  # type: (str, str, int) -> bool
         """
         Figures out whether a uCAN is in bootloader or application mode. This can be a rather slow call since it might rely on a communication timeout
         :param cc_address: The address of the CAN Control
         :param ucan_address:  The address of the uCAN
+        :param tries: Amount of times a ping is issued
         :return: Boolean, indicating whether the uCAN is in bootloader or not
         """
         try:
             self.ping(cc_address=cc_address,
                       ucan_address=ucan_address,
                       bootloader=False,
-                      tries=2,
+                      tries=tries,
                       warn=False)
             return False
         except CommunicationTimedOutException:
             self.ping(cc_address=cc_address,
                       ucan_address=ucan_address,
                       bootloader=True,
-                      tries=2,
+                      tries=tries,
                       warn=False)
             return True
 

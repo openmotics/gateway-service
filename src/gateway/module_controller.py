@@ -187,6 +187,10 @@ class ModuleController(BaseController):
         # type: (bool) -> None
         self._master_controller.cold_reset(power_on=power_on)
 
+    def reset_bus(self):
+        # type: () -> None
+        self._master_controller.power_cycle_bus()
+
     def raw_master_action(self, action, size, data=None):
         # type: (str, int, Optional[bytearray]) -> Dict[str, Any]
         return self._master_controller.raw_action(action, size, data=data)
@@ -200,9 +204,6 @@ class ModuleController(BaseController):
 
     def master_restore(self, data):
         return self._master_controller.restore(data)
-
-    def sync_master_time(self):  # type: () -> None
-        self._master_controller.sync_time()
 
     def flash_leds(self, led_type, led_id):
         if led_type == IndicateType.SENSOR:

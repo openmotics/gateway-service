@@ -190,9 +190,9 @@ class FrontpanelClassicController(FrontpanelController):
             # Push code if needed
             if code != self._last_i2c_led_code:
                 self._last_i2c_led_code = code
-                with open(FrontpanelClassicController.I2C_DEVICE, 'r+', 1) as i2c:
+                with open(FrontpanelClassicController.I2C_DEVICE, 'r+b', 0) as i2c:
                     fcntl.ioctl(i2c, FrontpanelClassicController.IOCTL_I2C_SLAVE, self._leds_i2c_address)
-                    i2c.write(chr(code))
+                    i2c.write(bytearray([code]))
         except Exception as ex:
             logger.error('Error while writing to i2c: {0}'.format(ex))
 

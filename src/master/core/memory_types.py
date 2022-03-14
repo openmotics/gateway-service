@@ -145,7 +145,7 @@ class MemoryModelDefinition(object):
         self._loaded_fields.add(field_name)
         return getattr(self, '_{0}'.format(field_name))
 
-    def save(self, activate=True):  # type: (bool) -> None
+    def save(self, commit=True):  # type: (bool) -> None
         for field_name in self._loaded_fields:
             container = getattr(self, '_{0}'.format(field_name))  # type: Union[MemoryFieldContainer, CompositionContainer]
             if self._verbose:
@@ -155,7 +155,7 @@ class MemoryModelDefinition(object):
                     field_name
                 ))
             container.save()
-        if activate:
+        if commit:
             MemoryCommitter.commit()
 
     @classmethod

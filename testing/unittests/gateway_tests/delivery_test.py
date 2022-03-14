@@ -22,6 +22,7 @@ import unittest
 import mock.mock
 from peewee import SqliteDatabase
 
+from esafe.rfid import RfidDevice
 from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO, SystemRFIDConfigDTO
 from esafe.rebus.rebus_controller import RebusController
@@ -56,6 +57,8 @@ class DeliveryControllerTest(unittest.TestCase):
         self.test_db.create_tables(MODELS)
         self.sys_config_controller = SystemConfigController()
         self.sys_config_controller.get_rfid_config = lambda: SystemRFIDConfigDTO(enabled=True, security_enabled=False, max_tags=2)
+        self.rfid_device = mock.Mock(RfidDevice)
+        SetUpTestInjections(rfid_reader_device=self.rfid_device)
         SetUpTestInjections(system_config_controller=self.sys_config_controller)
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)

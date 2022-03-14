@@ -72,7 +72,6 @@ class ThermostatMapper(object):
         # Schedules
         day_schedules = {schedule.index: schedule
                          for schedule in getattr(orm_object, '{0}_schedules'.format(mode))}
-        start_day_of_week = (orm_object.start / 86400 - 4) % 7  # 0: Monday, 1: Tuesday, ...
         for day_index, key in [(0, 'auto_mon'),
                                (1, 'auto_tue'),
                                (2, 'auto_wed'),
@@ -80,8 +79,7 @@ class ThermostatMapper(object):
                                (4, 'auto_fri'),
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
-            index = int((7 - start_day_of_week + day_index) % 7)
-            schedule = day_schedules[index].schedule_data if index in day_schedules else {}
+            schedule = day_schedules[day_index].schedule_data if day_index in day_schedules else {}
             setattr(dto, key, ThermostatScheduleMapper.schedule_to_dto(schedule, mode))
 
         # TODO: Map missing [pid_int, setp0, setp1, setp2]
@@ -96,6 +94,12 @@ class ThermostatMapper(object):
             thermostat = Thermostat(number=thermostat_dto.id, thermostat_group_id=thermostat_group.id, start=0)
         if 'name' in thermostat_dto.loaded_fields:
             thermostat.name = thermostat_dto.name
+        if 'thermostat_group' in thermostat_dto.loaded_fields:
+            if thermostat_dto.thermostat_group in (255, None):
+                thermostat_group = None
+            else:
+                thermostat_group = ThermostatGroup.get(number=thermostat_dto.thermostat_group)
+            thermostat.thermostat_group = thermostat_group
         if 'room' in thermostat_dto.loaded_fields:
             if thermostat_dto.room in (255, None):
                 room = None

@@ -108,10 +108,14 @@ class FrontpanelCoreController(FrontpanelController):
                     self._authorized_mode_buttons[0] = state == ButtonStates.PRESSED
                 elif button == Buttons.SETUP:
                     self._authorized_mode_buttons[1] = state == ButtonStates.PRESSED
+        elif core_event.type == MasterCoreEvent.Types.SYSTEM:
+            if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
+                # After a master start, the leds might be out-of-sync
+                self._set_leds_to_known_state()
 
     def start(self):
+        self._set_leds_to_known_state()  # First, set all leds to a known state
         super(FrontpanelCoreController, self).start()
-        # Start polling/writing threads
         self._check_buttons_thread = DaemonThread(name='buttonchecker',
                                                   target=self._check_buttons,
                                                   interval=0.25)
@@ -121,6 +125,12 @@ class FrontpanelCoreController(FrontpanelController):
         super(FrontpanelCoreController, self).stop()
         if self._check_buttons_thread is not None:
             self._check_buttons_thread.stop()
+
+    def _set_leds_to_known_state(self):
+        for led in FrontpanelCoreController.AVAILABLE_LEDS[self._platform]:
+            self._drive_led(led=led,
+                            state=self._led_states.get(led, LedStates.OFF),
+                            force=True)
 
     def _check_buttons(self):
         buttons_pressed = self._authorized_mode_buttons == [True, True]
@@ -208,10 +218,10 @@ class FrontpanelCoreController(FrontpanelController):
             state = LedStates.SOLID
         self._drive_led(led=Leds.CLOUD, state=state)
 
-    def _drive_led(self, led, state):
+    def _drive_led(self, led, state, force=False):
         if led not in FrontpanelCoreController.AVAILABLE_LEDS[self._platform]:
             return
-        if self._led_states.get(led) == state:
+        if force is False and self._led_states.get(led) == state:
             return
         try:
             self._master_controller.drive_led(led=led, state=state)

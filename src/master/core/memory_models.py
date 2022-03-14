@@ -167,6 +167,7 @@ class InputConfiguration(MemoryModelDefinition):
     module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id // 8)
     input_config = _InputConfigComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 7 + id % 8)))  # 81-238, 7-14
     dali_mapping = _DALIInputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 15 + id % 8)))  # 81-238, 15-22
+    pulse_counter_id = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 120 + id % 8))  # 81-238, 120-127
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 128 + id % 8 * 16), length=16)  # 81-238, 128-255
     input_link = _InputLink(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, id % 8 * 2)))  # 81-238, 0-15
     basic_action_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 16 + id % 8 * 6))  # 81-238, 16-63
@@ -177,15 +178,19 @@ class InputConfiguration(MemoryModelDefinition):
 
     @property
     def has_direct_output_link(self):
-        # There is a direct output link when all of the below entries are False
-        return (not self.input_link.enable_press_and_release and
-                not self.input_link.enable_1s_press and
-                not self.input_link.enable_2s_press and
-                not self.input_link.enable_double_press)
+        # There is a direct output link when none of the below entries are True
+        return not any([self.input_link.enable_press_and_release,
+                        self.input_link.enable_1s_press,
+                        self.input_link.enable_2s_press,
+                        self.input_link.enable_double_press])
 
     @property
     def in_use(self):
-        # An input is in use when any of the relevant `input_link` bits is not 0b1
+        if self.has_direct_output_link:
+            # If there's a direct output link, the output should be valid
+            return self.input_link.output_id < 1023
+        # In the other case (so one or more of the specific actions are True),
+        # check for a 255/255 situation (except the unused bits)
         raw_value = getattr(self, '_input_link')._field_container.decode()
         return (raw_value & 0b1011011111111111) != 0b1011011111111111
 

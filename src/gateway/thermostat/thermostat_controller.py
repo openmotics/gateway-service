@@ -12,6 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
+import logging
+from gateway.daemon_thread import DaemonThread
 
 if False:  # MYPY
     from gateway.dto import ThermostatAircoStatusDTO, ThermostatDTO, \
@@ -20,22 +23,32 @@ if False:  # MYPY
     from gateway.output_controller import OutputController
     from typing import List, Tuple, Optional, Set
 
+logger = logging.getLogger(__name__)
+
 
 class ThermostatController(object):
     GLOBAL_THERMOSTAT = 0
+    SYNC_CONFIG_INTERVAL = 900
 
     def __init__(self, output_controller):
         # type: (OutputController) -> None
         self._output_controller = output_controller
+        self._running = False
+        self._sync_thread = None  # type: Optional[DaemonThread]
 
     def get_features(self):  # type: () -> Set[str]
         raise NotImplementedError()
 
     def start(self):  # type: () -> None
-        raise NotImplementedError()
+        self._sync_thread = DaemonThread(name='thermostatsync',
+                                         target=self._sync,
+                                         delay=60,
+                                         interval=self.SYNC_CONFIG_INTERVAL)
+        self._sync_thread.start()
 
     def stop(self):  # type: () -> None
-        raise NotImplementedError()
+        if self._sync_thread is not None:
+            self._sync_thread.stop()
 
     def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
         # type: (int, Optional[float], Optional[float], Optional[float]) -> None
@@ -168,4 +181,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def load_airco_status(self):  # type: () -> ThermostatAircoStatusDTO
+        raise NotImplementedError()
+
+    def _sync(self):  # type: () -> None
         raise NotImplementedError()

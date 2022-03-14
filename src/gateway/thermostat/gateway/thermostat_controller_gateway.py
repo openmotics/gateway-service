@@ -23,6 +23,7 @@ from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, ScheduleDTO, \
 from gateway.enums import ThermostatMode, ThermostatState
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
+from gateway.hal.master_event import MasterEvent
 from gateway.mappers import ThermostatMapper
 from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
     Preset, Pump, PumpToValve, Schedule, Sensor, Thermostat, ThermostatGroup, \
@@ -51,7 +52,6 @@ class ThermostatControllerGateway(ThermostatController):
 
     THERMOSTAT_PID_UPDATE_INTERVAL = 60
     PUMP_UPDATE_INTERVAL = 30
-    SYNC_CONFIG_INTERVAL = 900
 
     @Inject
     def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED):
@@ -64,11 +64,11 @@ class ThermostatControllerGateway(ThermostatController):
         self._sync_auto_setpoints = True
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
         self._update_pumps_thread = None  # type: Optional[DaemonThread]
-        self._sync_thread = None  # type: Optional[DaemonThread]
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
 
         self._pubsub.subscribe_gateway_events(PubSub.GatewayTopics.SCHEDULER, self._handle_scheduler_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.THERMOSTAT, self._handle_master_event)
 
     def get_features(self):
         # type: () -> Set[str]
@@ -79,7 +79,6 @@ class ThermostatControllerGateway(ThermostatController):
         logger.info('Starting gateway thermostatcontroller...')
         if not self._running:
             self._running = True
-
             self._pid_loop_thread = DaemonThread(name='thermostatpid',
                                                  target=self._pid_tick,
                                                  interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
@@ -89,25 +88,20 @@ class ThermostatControllerGateway(ThermostatController):
                                                      target=self._update_pumps,
                                                      interval=self.PUMP_UPDATE_INTERVAL)
             self._update_pumps_thread.start()
-
-            self._sync_thread = DaemonThread(name='thermostatsync',
-                                             target=self._sync,
-                                             interval=self.SYNC_CONFIG_INTERVAL)
-            self._sync_thread.start()
+            super(ThermostatControllerGateway, self).start()
             logger.info('Starting gateway thermostatcontroller... Done')
         else:
             raise RuntimeError('GatewayThermostatController already running. Please stop it first.')
 
     def stop(self):  # type: () -> None
         if not self._running:
-            logger.warning('Stopping an already stopped GatewayThermostatController.')
+            logger.warning('Stopping an already stopped thermostatcontroller.')
         self._running = False
         if self._pid_loop_thread is not None:
             self._pid_loop_thread.stop()
         if self._update_pumps_thread is not None:
             self._update_pumps_thread.stop()
-        if self._sync_thread is not None:
-            self._sync_thread.stop()
+        super(ThermostatControllerGateway, self).stop()
 
     def _pid_tick(self):  # type: () -> None
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
@@ -131,13 +125,32 @@ class ThermostatControllerGateway(ThermostatController):
                 preset.save()
                 self.tick_thermostat(thermostat=thermostat)
 
+    def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.EXECUTE_GATEWAY_API:
+            if master_event.data['type'] == MasterEvent.APITypes.SET_THERMOSTAT_MODE:
+                state = master_event.data['data']['state']
+                mode = master_event.data['data']['mode']
+                for thermostat_group in ThermostatGroup.select():
+                    self.set_thermostat_group(thermostat_group_id=thermostat_group.number,
+                                              state=state, mode=mode)
+                logger.info('Changed the state/mode for all ThermostatGroups to {0}/{1} by master event'.format(state, mode))
+            elif master_event.data['type'] == MasterEvent.APITypes.SET_THERMOSTAT_PRESET:
+                preset = master_event.data['data']['preset']
+                if preset in Preset.ALL_TYPES:
+                    for thermostat in list(Thermostat.select()):
+                        self.set_current_preset(preset_type=preset,
+                                                thermostat_number=thermostat.number)
+                    logger.info('Changed preset for all Thermostats to {0} by master event'.format(preset))
+
     def refresh_config_from_db(self):  # type: () -> None
         self.refresh_thermostats_from_db()
         self._pump_valve_controller.refresh_from_db()
 
     def refresh_thermostats_from_db(self):  # type: () -> None
         self._sync_auto_presets()
+        removed_thermostats = set(self.thermostat_pids.keys())
         for thermostat in list(Thermostat.select()):
+            removed_thermostats.discard(thermostat.id)
             thermostat_pid = self.thermostat_pids.get(thermostat.number)
             if thermostat_pid is None:
                 thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
@@ -146,6 +159,8 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
+        for thermostat_id in removed_thermostats:
+            self.thermostat_pids.pop(thermostat_id, None)
         # FIXME: remove invalid pumps, database should cascade instead.
         Pump.delete().where(Pump.output.is_null()) \
             .execute()
@@ -164,10 +179,30 @@ class ThermostatControllerGateway(ThermostatController):
             logger.exception('Could not update pumps.')
 
     def _sync(self):  # type: () -> None
+        # refresh the config from the database
         try:
             self.refresh_config_from_db()
         except Exception:
             logger.exception('Could not get thermostat config.')
+
+        # use the same sync thread for periodically pushing out thermostat status events
+        self._publish_states()
+
+    def _publish_states(self):
+        # 1. publish thermostat group status events
+        for thermostat_group in ThermostatGroup.select():
+            try:
+                self._thermostat_group_changed(thermostat_group)
+            except Exception:
+                logger.exception('Could not publish thermostat group %s', thermostat_group)
+
+        # 2. publish thermostat unit status events
+        for thermostat_pid in self.thermostat_pids.values():
+            try:
+                status = thermostat_pid.get_status()
+                self._thermostat_changed(*status)
+            except Exception:
+                logger.exception('Could not publish %s', thermostat_pid)
 
     def _sync_auto_presets(self):
         # type: () -> None
@@ -311,7 +346,7 @@ class ThermostatControllerGateway(ThermostatController):
             except ValueError:
                 logger.info('Output {0} state not yet available'.format(output_number))
                 return 0  # Output state is not yet cached (during startup)
-            if output.dimmer is None:
+            if output.status is False or output.dimmer is None:
                 status_ = output.status
                 output_level = 0 if status_ is None else int(status_) * 100
             else:
@@ -364,7 +399,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                                 actual_temperature=actual_temperature,
                                                                 setpoint_temperature=setpoint_temperature,
                                                                 outside_temperature=outside_temperature,
-                                                                mode=0,  # TODO: Need to be fixed
+                                                                mode=thermostat_group.mode,
                                                                 state=thermostat.state,
                                                                 automatic=active_preset.type == Preset.Types.AUTO,
                                                                 setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
@@ -451,27 +486,36 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _save_thermostat_configurations(self, thermostats, mode):  # type: (List[ThermostatDTO], str) -> None
         for thermostat_dto in thermostats:
+            logger.debug('Updating thermostat %s', thermostat_dto)
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto)
             thermostat.save()
             update, remove = ThermostatMapper.get_valve_links(thermostat_dto, mode)
             for valve_to_thermostat in remove:
-                valve_to_thermostat.delete()
+                logger.debug('Removing valve %s of %s', valve_to_thermostat.valve, thermostat)
+                valve_to_thermostat.valve.delete_instance()
             for valve_to_thermostat in update:
+                logger.debug('Updating valve %s of %s', valve_to_thermostat.valve, thermostat)
                 valve_to_thermostat.valve.save()
                 valve_to_thermostat.save()
             if thermostat.sensor is None and thermostat.valves == []:
-                thermostat.delete()
+                logger.debug('Unconfigured thermostat %s', thermostat)
+                self.thermostat_pids.pop(thermostat.id, None)
+                thermostat.delete_instance()
             else:
                 update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, mode)
                 for day_schedule in remove:
-                    day_schedule.delete()
+                    logger.debug('Removing schedule %s of %s', day_schedule, thermostat)
+                    day_schedule.delete_instance()
                 for day_schedule in update:
+                    logger.debug('Updating schedule %s of %s', day_schedule, thermostat)
                     day_schedule.save()
                 # TODO: trigger update for schedules
                 update, remove = ThermostatMapper.get_preset_links(thermostat_dto, mode)
                 for preset in remove:
-                    preset.delete()
+                    logger.debug('Removing preset %s of %s', preset, thermostat)
+                    preset.delete_instance()
                 for preset in update:
+                    logger.debug('Updating preset %s of %s', preset, thermostat)
                     preset.save()
         self._thermostat_config_changed()
         if self._sync_thread:
@@ -618,8 +662,13 @@ class ThermostatControllerGateway(ThermostatController):
                         valve.delay = thermostat_group_dto.pump_delay
                         valve.save()
         self._thermostat_config_changed()
+        if self._sync_thread:
+            self._sync_thread.request_single_run()
 
     def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+        thermostats = Thermostat.select().where(Thermostat.thermostat_group_id << thermostat_group_ids)
+        if thermostats.exists():
+            raise ValueError('Refusing to delete a group that contains configured units: %s' % list(thermostats))
         ThermostatGroup.delete().where(ThermostatGroup.number << thermostat_group_ids) \
             .execute()
 

@@ -19,6 +19,7 @@ from __future__ import absolute_import
 
 import logging
 
+from datetime import datetime
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     GroupActionDTO, InputDTO, InputStatusDTO, MasterSensorDTO, ModuleDTO, \
     OutputDTO, OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
@@ -102,16 +103,20 @@ class MasterDummyController(MasterController):
                 'version': '%d.%d.%d' % (0, 0, 0),
                 'hw_version': 0}
 
+    def set_datetime(self, dt):
+        # type: (datetime) -> None
+        pass
+
+    def get_datetime(self):
+        # type: () -> datetime
+        return datetime.now()
+
     def get_modules(self):
         # type: () -> Dict[str,List[Any]]
         return {'outputs': [], 'inputs': [], 'shutters': [], 'can_inputs': []}
 
-    def get_modules_information(self, address=None):
-        # type: (Optional[str]) -> List[ModuleDTO]
-        if address:
-            raise NotImplementedError()
-        else:
-            return []
+    def get_modules_information(self):  # type: () -> List[ModuleDTO]
+        raise NotImplementedError()
 
     def load_inputs(self):
         # type: () -> List[InputDTO]

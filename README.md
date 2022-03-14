@@ -1,70 +1,82 @@
 # OpenMotics Gateway (backend)
 
-[![Build Status](https://travis-ci.org/openmotics/gateway.svg?branch=develop)](https://travis-ci.org/openmotics/gateway)
-
 This project is the OpenMotics Gateway backend. It provides an API used by the frontend, by the Cloud and by third party applications. 
 
 It is the glue between the OpenMotics Master (microcontroller) and the rest of the world.
 
-## Git workflow
-
-We use [git-flow](https://github.com/petervanderdoes/gitflow-avh) which implements [Vincent Driessen](http://nvie.com/posts/a-successful-git-branching-model/)'s
-branching model. This means our default branch is `develop`, and `master` contains production releases.
-
-When working on this repository, we advice to use following git-flow config:
-
-```
-Branch name for production releases: master
-Branch name for "next release" development: develop
-Feature branch prefix: feature/
-Bugfix branch prefix: bugfix/
-Release branch prefix: release/
-Hotfix branch prefix: hotfix/
-Support branch prefix: support/
-Version tag prefix: v
-```
-
-To set these configuration parameters:
-
-```
-git config gitflow.branch.master master
-git config gitflow.branch.develop develop
-git config gitflow.prefix.feature feature/
-git config gitflow.prefix.bugfix bugfix/
-git config gitflow.prefix.release release/
-git config gitflow.prefix.hotfix hotfix/
-git config gitflow.prefix.support support/
-git config gitflow.prefix.versiontag v
-```
 
 ## Running locally
 
 Some parts of the code can be run locally using a dummy master implementation.
 
-The openmotics service loads a config file from `./etc` or `$OPENMOTICS_PREFIX/etc`,
-where settings like the platform and ports can be overridden.
+### Environment
+
+The openmotics service loads a config file from `$OPENMOTICS_PREFIX/etc`
+where settings like the platform and ports can be overridden. This means that this environment variable
+must be set before starting the service.
+
+```
+OPENMOTICS_PREFIX=/some/directory/pointing/to/openmotics/gateway
+```
+
+**Tip**: Put this in a `.env` file and load it with `dotenv`.
+
+**Tip**: You also use `direnv` and `nix` to setup everything for you automatically. Use the following `.envrc` file. (equivalent to nix-shell + creating and activating a virtualenv)
+```
+dotenv
+use nix
+layout python python3
+```
+
+Don't forget to installing the python dependencies the first time:
+```
+pip install -r requirements-py3.txt
+```
+
+Copy the configuration/fixture files and generate self-signed certificates:
 
 ```sh
 mkdir -p etc static
-cp example/openmotics.conf etc
-python openmotics_service.py
+cd etc
+# copy the example config file, it can be further customized
+cp ../example/openmotics.conf .
+# Copy the fixtures, they can be further customized
+cp ../example/master_fixture.json .
+# generate self signed certificate
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout https.key -out https.crt -subj '/CN=om-developer'
 ```
 
-Extracting a frontend build to `./static` also gives access to the local protal interface.
+Starting the necessary services using foreman
+```
+foreman start
+```
 
-## Built With
+### Dummy master
 
-* [CherryPy](http://cherrypy.org/) - A Minimalist Python Web Framework
-* [Requests](http://docs.python-requests.org/en/master/) - HTTP for Humans
+The local running gateway will use a dummy master. The example master fixtures make a virtual input, relay and 0/1-10V module available for futher configuration.
 
-## Versioning
+While it behaves like a Brain(+) master, only a very limited set of features is available. The goal is not to
+emulate a real device, but give a user at least something to start with. The implemented features:
+* Some status calls can be executed (e.g. it will report a version & a time)
+* Everything can be configured just as normal (the full configuration space is available)
+* It is possible to link an input to an output
+* It is possible to turn on/off, toggle & dim outputs
+* It is possible to configure group actions. The only supported actions are turning on/off, toggling & dimming outputs
+* It is possible to configure an input to execute a group action on press and/or release
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the tags on this repository
+The implementation supports a persistent eeprom state (by default only the fixtures will be available when the service is (re)started).
+To enable this, add `dummy_eeprom_persistence = true` under the `OpenMotics` section in `openmotics.conf`. When enabled, the configuration
+state is stored inside `etc/master_eeprom.json`. This is a raw-format file and is not meant for manual manipulation. 
 
-## Authors
 
-* *Frederick Ryckbosch* - GitHub user: [fryckbos](https://github.com/fryckbos)
-* *Kenneth Henderick* - GitHub user: [khenderick](https://github.com/khenderick)
+On startup, and after the optional eeprom state is restored, he fixtures inside `master_fixture.json` are loaded if this file is present. 
+These fixtures represent the master ORM data format, and are designed to be manually specified.
+
+
+### Local frontend (optional) 
+
+Extracting the [frontend build](https://github.com/openmotics/frontend/releases/download/v1.13.5/gateway-frontend_1.13.5.tgz) to `./static` also gives access to the local portal interface.
+
 
 ## License
 

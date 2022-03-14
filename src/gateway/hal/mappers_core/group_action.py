@@ -112,6 +112,11 @@ class GroupActionMapper(object):
             elif action.action_type == 251:
                 if action.action == 0:
                     new_classic_actions += [{0: 171, 1: 172, 2: 173}[action.extra_parameter], min(255, action.device_nr)]
+                elif action.action == 1:
+                    if action.device_nr == 0 and action.extra_parameter in [1, 256, 257]:
+                        new_classic_actions += [80, {1: 0, 256: 1, 257: 2}[action.extra_parameter]]
+                    elif action.device_nr == 1 and action.extra_parameter in [0, 1]:
+                        new_classic_actions += [{0: 137, 1: 139}[action.extra_parameter], 0]
             elif action.action_type == 253:
                 if action.action == 0:
                     new_classic_actions += [72, 255]
@@ -178,7 +183,11 @@ class GroupActionMapper(object):
                 #  76: Switch OFF CAN power of all CAN controls (micro CAN's won't receive any power and will be switched off)
                 actions.append(BasicAction(action_type=253, action=1, device_nr=0))
             #  79: This Basic Action will set the CleanTimerQueue setting. When Basic actions are added to the timer queue (for delayed action for example), the Master processor will check for the same Basic actions and remove the previous one. When x=0 -> Clean Timer Queue is disabled, when x<>0 -> Clean Timer Queue is enabled (standard setting) - see #Delaying Instructions and see BA235
-            #  80 -> 91: Thermostat related
+            elif action_type == 80:
+                #  80: Sets the Cooling or Heating mode: x=0 -> Heating is enabled and Cooling is disabled, x=1 -> Cooling is enabled (but OFF) and Heating is disabled, x=2 -> Cooling is enabled (and ON) and Heating is disabled
+                # Note: This will send an event to the gateway; see `MasterControllerCore._handle_execute_event`
+                actions.append(BasicAction(action_type=251, action=1, device_nr=0, extra_parameter={0: 1, 1: 256, 2: 257}[action_number]))
+            # 81 -> 91: Thermostat related
             elif action_type == 100:
                 # 100: Roller/Shutter x up (only to be used in Large Installation mode, x<120)
                 actions.append(BasicAction(action_type=10, action=1, device_nr=action_number))
@@ -231,7 +240,15 @@ class GroupActionMapper(object):
             # 124: Increase free variable x (0-31) with 2
             # 125: Decrease free variable x (0-31) with 3
             # 126: Increase free variable x (0-31) with 3
-            # 128 -> 143: Thermostat related
+            # 128 -> 136: Thermostat related
+            elif action_type == 137:
+                # 137: Setpoint 3 for all thermostats - Away (Works in normal mode and in Thermostat Multi Tenant mode)
+                actions.append(BasicAction(action_type=251, action=1, device_nr=1, extra_parameter=0))
+            # 138: Thermostat related
+            elif action_type == 139:
+                # 139: Setpoint 5 for all thermostats - Party (Works in normal mode and in Thermostat Multi Tenant mode)
+                actions.append(BasicAction(action_type=251, action=1, device_nr=1, extra_parameter=1))
+            # 139 -> 143: Thermostat related
             # 144: Reserved (for Oled)
             # 145 -> 149: Thermostat related
             # 153: Light/Output x on with std timer and overrule/overwrite timer value when light is already switched on

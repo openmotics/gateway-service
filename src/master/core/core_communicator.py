@@ -23,7 +23,6 @@ import logging
 import select
 import struct
 import time
-import six
 from threading import Lock, Event, Timer
 from collections import Counter
 from six.moves.queue import Empty, Queue
@@ -63,7 +62,7 @@ class CoreCommunicator(object):
     END_OF_REPLY = bytearray(b'\r\n')
 
     BLOCKER_TIMEOUTS = {CommunicationBlocker.RESTART: 15.0,
-                        CommunicationBlocker.UPDATE: 600.0,
+                        CommunicationBlocker.UPDATE: 900.0,
                         CommunicationBlocker.VERSION_SCAN: 5.0,
                         CommunicationBlocker.FACTORY_RESET: 600.0}
     BLOCKER_ABORT = [CommunicationBlocker.UPDATE,
@@ -238,7 +237,7 @@ class CoreCommunicator(object):
 
             threshold = time.time() - self._debug_buffer_duration
             self._debug_buffer['write'][time.time()] = data
-            for t in self._debug_buffer['write'].keys():
+            for t in list(self._debug_buffer['write'].keys()):
                 if t < threshold:
                     del self._debug_buffer['write'][t]
 
@@ -433,7 +432,7 @@ class CoreCommunicator(object):
                 logger.debug('Reading from Core serial: %s', Printable(message))
                 threshold = time.time() - self._debug_buffer_duration
                 self._debug_buffer['read'][time.time()] = message
-                for t in self._debug_buffer['read'].keys():
+                for t in list(self._debug_buffer['read'].keys()):
                     if t < threshold:
                         del self._debug_buffer['read'][t]
 

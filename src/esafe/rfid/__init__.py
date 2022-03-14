@@ -19,3 +19,4 @@ RFID init file
 from esafe.rfid.idtronic_M890.idtronic_M890 import IdTronicM890
 from esafe.rfid.rfid_exception import RfidException
 from esafe.rfid.rfid_device import RfidDevice
+from esafe.rfid.rfid_device_dummy import RfidDeviceDummy
