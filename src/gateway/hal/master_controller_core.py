@@ -1077,7 +1077,7 @@ class MasterCoreController(MasterController):
             self._discover_mode_timer = None
 
     def _finish_module_discovery(self, reason):
-        # type: () -> None
+        # type: (str) -> None
         if self._new_modules_found:
             logger.info('New modules were discovered')
             self._memory_file.invalidate_cache(reason=reason)
