@@ -20,6 +20,7 @@ from __future__ import absolute_import
 import logging
 import time
 
+from threading import Lock
 from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
@@ -46,6 +47,7 @@ class SyncStructure(object):
 class BaseController(object):
 
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
+    SYNC_LOCK = Lock()
 
     @Inject
     def __init__(self, master_controller, maintenance_controller=INJECTED, pubsub=INJECTED, sync_interval=900):
@@ -68,7 +70,7 @@ class BaseController(object):
 
     def start(self):
         self._sync_orm_thread = DaemonThread(name='{0}sync'.format(self.__class__.__name__.lower()[:10]),
-                                             target=self._sync_orm,
+                                             target=self.run_sync_orm,
                                              interval=self._sync_orm_interval,
                                              delay=300)
         self._sync_orm_thread.start()
@@ -86,7 +88,8 @@ class BaseController(object):
             self._sync_orm_thread.request_single_run()
 
     def run_sync_orm(self):
-        self._sync_orm()
+        with BaseController.SYNC_LOCK:
+            self._sync_orm()
 
     def _sync_orm(self):
         # type: () -> bool

@@ -47,6 +47,7 @@ class CommunicationBlocker(object):
     UPDATE = 'UPDATE'
     VERSION_SCAN = 'VERSION_SCAN'
     FACTORY_RESET = 'FACTORY_RESET'
+    AUTO_DISCOVER = 'AUTO_DISCOVER'
 
 
 class CoreCommunicator(object):
@@ -62,16 +63,19 @@ class CoreCommunicator(object):
     END_OF_REPLY = bytearray(b'\r\n')
 
     BLOCKER_TIMEOUTS = {CommunicationBlocker.RESTART: 15.0,
+                        CommunicationBlocker.AUTO_DISCOVER: 60.0,
                         CommunicationBlocker.UPDATE: 900.0,
                         CommunicationBlocker.VERSION_SCAN: 5.0,
                         CommunicationBlocker.FACTORY_RESET: 600.0}
     BLOCKER_ABORT = [CommunicationBlocker.UPDATE,
                      CommunicationBlocker.FACTORY_RESET]
     BLOCKER_REASONS = {CommunicationBlocker.RESTART: 'Master restart',
+                       CommunicationBlocker.AUTO_DISCOVER: 'Auto discovery',
                        CommunicationBlocker.UPDATE: 'Master update',
                        CommunicationBlocker.VERSION_SCAN: 'Version scan',
                        CommunicationBlocker.FACTORY_RESET: 'Factory reset'}
     BLOCKERS = [CommunicationBlocker.RESTART,
+                CommunicationBlocker.AUTO_DISCOVER,
                 CommunicationBlocker.UPDATE,
                 CommunicationBlocker.VERSION_SCAN,
                 CommunicationBlocker.FACTORY_RESET]

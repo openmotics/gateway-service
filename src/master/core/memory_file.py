@@ -115,9 +115,6 @@ class MemoryFile(object):
         if core_event.type == Event.Types.SYSTEM:
             if core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
                 self._activation_event.set()
-        elif core_event.type == Event.Types.SLAVE_SEARCH:
-            if core_event.data['type'] in [Event.SearchType.DISABLED, Event.SearchType.STOPPED]:
-                self.invalidate_cache(reason='automatic discovery')
 
     def _get_write_cache(self):  # type: () -> Tuple[Dict[str, Dict[int, Dict[int, int]]], Lock]
         thread_id = threading.current_thread().ident or 0

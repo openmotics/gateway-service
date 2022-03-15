@@ -57,7 +57,10 @@ class ModuleController(BaseController):
 
         amounts = {None: 0, True: 0, False: 0}
         try:
-            # Master slave modules (update/insert/delete)
+            logger.info('ORM sync (Modules): Running auto discovery...')
+            self._master_controller.module_discover_auto()
+
+            logger.info('ORM sync (Modules): Sync master modules...')
             ids = []
             for dto in self._master_controller.get_modules_information():
                 module = Module.get_or_none(source=dto.source,
@@ -79,7 +82,8 @@ class ModuleController(BaseController):
                 amounts[dto.online] += 1
                 ids.append(module.id)
             Module.delete().where((Module.id.not_in(ids)) & (Module.source == ModuleDTO.Source.MASTER)).execute()  # type: ignore
-            # Energy modules (online update live metadata)
+
+            logger.info('ORM sync (Modules): Sync energy modules...')
             for dto in self._energy_module_controller.get_modules_information():
                 module = Module.get_or_none(source=dto.source,
                                             address=dto.address)
@@ -92,6 +96,7 @@ class ModuleController(BaseController):
                     module.last_online_update = int(time.time())
                     module.save()
                 amounts[dto.online] += 1
+
             logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
                 amounts[True], amounts[False], amounts[None]
             ))
@@ -164,6 +169,9 @@ class ModuleController(BaseController):
 
     def module_discover_stop(self):  # type: () -> None
         self._master_controller.module_discover_stop()
+
+    def module_discover_auto(self):  # type: () -> None
+        self._master_controller.module_discover_auto()
 
     def module_discover_status(self):  # type: () -> bool
         return self._master_controller.module_discover_status()
