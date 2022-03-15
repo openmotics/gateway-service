@@ -459,7 +459,7 @@ class MasterController(object):
     def module_discover_stop(self):  # type: () -> None
         raise NotImplementedError()
 
-    def module_discover_auto(self):  # type: () -> None
+    def module_discover_auto(self, wait=True):  # type: (bool) -> None
         raise NotImplementedError()
 
     def module_discover_status(self):  # type: () -> bool

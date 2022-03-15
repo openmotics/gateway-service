@@ -210,6 +210,7 @@ class MasterCoreController(MasterController):
                 elif search_type == MasterCoreEvent.SearchType.STOPPED:
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
                                                               active=False)
+                    self._guard_module_discovery(activate=False)
                     self._finish_module_discovery(reason='automatic discovery')
             elif core_event.type == MasterCoreEvent.Types.SYSTEM:
                 if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
@@ -1033,44 +1034,47 @@ class MasterCoreController(MasterController):
                                           extra_parameter=extra_parameter))
 
     def module_discover_start(self, timeout):  # type: (int) -> None
-        def _stop(): self.module_discover_stop()
-
         with self._discovery_log_lock:
             self._discovery_log = []
-
+        self._guard_module_discovery(activate=True, timeout=timeout)
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
                                           extra_parameter=0))
 
-        if self._discover_mode_timer is not None:
-            self._discover_mode_timer.cancel()
-        self._discover_mode_timer = Timer(timeout, _stop)
-        self._discover_mode_timer.start()
-
     def module_discover_stop(self):  # type: () -> None
-        if self._discover_mode_timer is not None:
-            self._discover_mode_timer.cancel()
-            self._discover_mode_timer = None
-
+        self._guard_module_discovery(activate=False)
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
                                           extra_parameter=255))
         self._finish_module_discovery(reason='manual discovery')
 
-    def module_discover_auto(self, wait=True):  # type: () -> None
+    def module_discover_auto(self, wait=True):  # type: (bool) -> None
         global_configuration = GlobalConfiguration()
-        if global_configuration.automatic_module_discovery.automatic_discovery_enabled:
-            self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
-                                                      active=True)
-            self._do_basic_action(BasicAction(action_type=200,
-                                              action=0,
-                                              extra_parameter=1),
-                                  bypass_blockers=[CommunicationBlocker.AUTO_DISCOVER])
-            if wait:
-                self._master_communicator.wait_for_blockers()
+        if not global_configuration.automatic_module_discovery.automatic_discovery_enabled:
+            return
+        guard_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[CommunicationBlocker.AUTO_DISCOVER] * 0.9
+        self._guard_module_discovery(activate=True, timeout=guard_timeout)
+        self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
+                                                  active=True)
+        self._do_basic_action(BasicAction(action_type=200,
+                                          action=0,
+                                          extra_parameter=1),
+                              bypass_blockers=[CommunicationBlocker.AUTO_DISCOVER])
+        if wait:
+            self._master_communicator.wait_for_blockers()
 
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None
+
+    def _guard_module_discovery(self, activate, timeout=300):  # type: (bool, int) -> None
+        if activate:
+            if self._discover_mode_timer is not None:
+                self._discover_mode_timer.cancel()
+            self._discover_mode_timer = Timer(timeout, self.module_discover_stop)
+            self._discover_mode_timer.start()
+        elif self._discover_mode_timer is not None:
+            self._discover_mode_timer.cancel()
+            self._discover_mode_timer = None
 
     def _finish_module_discovery(self, reason):
         # type: () -> None
