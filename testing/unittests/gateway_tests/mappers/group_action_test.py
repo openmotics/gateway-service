@@ -31,23 +31,28 @@ class GroupActionCoreMapperTest(unittest.TestCase):
 
     def test_mappings(self):
         normal_scenarios = [([160, 5], [(0, 0, 5)]),  # Turn output 5 off
-                             ([161, 5], [(0, 1, 5)]),  # Turn output 5 on
-                             ([162, 5], [(0, 16, 5)]),  # Toggle output 5
-                             ([240, 0, 243, 5, 240, 255], [(100, 0), (100, 10, 5), (100, 255)]),  # If output 5 is on
-                             ([240, 0, 247, 5, 249, 10, 240, 255], [(100, 0), (100, 19, 5, 10), (100, 255)]),  # If temp sensor 5 > 10
-                             ([240, 0, 247, 37, 248, 10, 240, 255], [(100, 0), (100, 23, 5, 10), (100, 255)]),  # If hum sensor 5 == 10
-                             ([240, 0, 247, 69, 250, 10, 240, 255], [(100, 0), (100, 27, 5, 10), (100, 255)]),  # If brightness sensor 5 < 10
-                             ([240, 0, 247, 228, 249, 10, 240, 255], [(100, 0), (100, 40, 10), (100, 255)]),  # If hour > 10
-                             ([240, 0, 247, 229, 248, 10, 240, 255], [(100, 0), (100, 44, 10), (100, 255)]),  # If minutes == 10
-                             ([240, 0, 247, 230, 250, 3, 240, 255], [(100, 0), (100, 48, 3), (100, 255)]),  # If day < 3
-                             ([171, 5], [(251, 0, 5, 0)]),  # Turn off all lights on floor 5
-                             ([172, 5], [(251, 0, 5, 1)]),  # Turn on all lights on floor 5
-                             ([173, 5], [(251, 0, 5, 2)]),   # Toggle all lights on floor 5
-                             ([171, 255], [(251, 0, 65535, 0)]),  # Turn off all lights (on all floors)
-                             ([172, 255], [(251, 0, 65535, 1)]),  # Turn on all lights (on all floors)
-                             ([173, 255], [(251, 0, 65535, 2)]),  # Toggle all lights (on all floors)
-                             ([116, 5], [(1, 250, 5, 1)]),  # Disable input 5
-                             ([117, 5], [(1, 250, 5, 0)])]  # Enable input 5
+                            ([161, 5], [(0, 1, 5)]),  # Turn output 5 on
+                            ([162, 5], [(0, 16, 5)]),  # Toggle output 5
+                            ([240, 0, 243, 5, 240, 255], [(100, 0), (100, 10, 5), (100, 255)]),  # If output 5 is on
+                            ([240, 0, 247, 5, 249, 10, 240, 255], [(100, 0), (100, 19, 5, 10), (100, 255)]),  # If temp sensor 5 > 10
+                            ([240, 0, 247, 37, 248, 10, 240, 255], [(100, 0), (100, 23, 5, 10), (100, 255)]),  # If hum sensor 5 == 10
+                            ([240, 0, 247, 69, 250, 10, 240, 255], [(100, 0), (100, 27, 5, 10), (100, 255)]),  # If brightness sensor 5 < 10
+                            ([240, 0, 247, 228, 249, 10, 240, 255], [(100, 0), (100, 40, 10), (100, 255)]),  # If hour > 10
+                            ([240, 0, 247, 229, 248, 10, 240, 255], [(100, 0), (100, 44, 10), (100, 255)]),  # If minutes == 10
+                            ([240, 0, 247, 230, 250, 3, 240, 255], [(100, 0), (100, 48, 3), (100, 255)]),  # If day < 3
+                            ([171, 5], [(251, 0, 5, 0)]),  # Turn off all lights on floor 5
+                            ([172, 5], [(251, 0, 5, 1)]),  # Turn on all lights on floor 5
+                            ([173, 5], [(251, 0, 5, 2)]),   # Toggle all lights on floor 5
+                            ([171, 255], [(251, 0, 65535, 0)]),  # Turn off all lights (on all floors)
+                            ([172, 255], [(251, 0, 65535, 1)]),  # Turn on all lights (on all floors)
+                            ([173, 255], [(251, 0, 65535, 2)]),  # Toggle all lights (on all floors)
+                            ([80, 0], [(251, 1, 0, 1)]),    # Set thermostats state/mode
+                            ([80, 1], [(251, 1, 0, 256)]),  # Set thermostats state/mode
+                            ([80, 2], [(251, 1, 0, 257)]),  # Set thermostats state/mode
+                            ([137, 0], [(251, 1, 1, 0)]),  # Set thermostats to away
+                            ([139, 0], [(251, 1, 1, 1)]),  # Set thermostats to party
+                            ([116, 5], [(1, 250, 5, 1)]),  # Disable input 5
+                            ([117, 5], [(1, 250, 5, 0)])]  # Enable input 5
         incompatible_scenarios = [([255, 255], [], (True, [])),  # Classic actions that are not supported on the Core
                                   (None, [(255, 255)], (False, []))]  # Core actions that are not supported on the Classic
         for scenario in normal_scenarios + incompatible_scenarios:

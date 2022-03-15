@@ -20,6 +20,7 @@ import time
 
 from gateway.dto.base import BaseDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
+from gateway.dto.module import ModuleDTO
 
 if False:  # MYPY
     from typing import Any, Optional
@@ -33,7 +34,8 @@ class OutputDTO(BaseDTO):
                  can_led_4=None,  # type: Optional[FeedbackLedDTO]
                  room=None,
                  lock_bit_id=None,
-                 state=None):
+                 state=None,
+                 module=None):
         self.id = id  # type: int
         self.name = name  # type: str
         self.module_type = module_type  # type: str
@@ -41,6 +43,7 @@ class OutputDTO(BaseDTO):
         self.output_type = output_type  # type: int
         self.room = room  # type: Optional[int]
         self.lock_bit_id = lock_bit_id  # type: Optional[int]
+        self.module = module  # type: Optional[ModuleDTO]
         self.state = state
         if self.state:
             self.state.id = self.id

@@ -29,19 +29,16 @@ from peewee import SqliteDatabase
 
 import platform_utils
 from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod, AuthenticationToken
-from gateway.delivery_controller import DeliveryController
-from gateway.dto import UserDTO, RfidDTO
+from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.exceptions import GatewayException, StateException
 from gateway.mappers.user import UserMapper
-from gateway.models import User, RFID, Delivery
-from gateway.rfid_controller import RfidController
-from gateway.system_config_controller import SystemConfigController
+from gateway.models import User, Delivery
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 from platform_utils import Platform
 
-MODELS = [User, RFID, Delivery]
+MODELS = [User, Delivery]
 
 
 class UserControllerTest(unittest.TestCase):
@@ -64,25 +61,19 @@ class UserControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        self.sys_conf_controller = mock.Mock(SystemConfigController)
         self.get_platform_patch = mock.patch('platform_utils.Platform.get_platform')
         self.get_platform_mock = self.get_platform_patch.start()
         self.get_platform_mock.return_value = 'CLASSIC'
         Platform.get_platform = self.get_platform_mock
 
-        SetUpTestInjections(system_config_controller=self.sys_conf_controller)
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
                             token_timeout=UserControllerTest.TOKEN_TIMEOUT)
         SetUpTestInjections(token_store=TokenStore())
-        self.rfid_controller = RfidController()
-        SetUpTestInjections(rfid_controller=self.rfid_controller)
         self.auth_controller = AuthenticationController()
         self.pubsub = mock.Mock()
         SetUpTestInjections(authentication_controller=self.auth_controller, pubsub=self.pubsub)
         self.controller = UserController()
         SetUpTestInjections(user_controller=self.controller)
-        self.delivery_controller = DeliveryController()
-        SetUpTestInjections(delivery_controller=self.delivery_controller)
         self.auth_controller.set_user_controller(self.controller)
         self.controller.start()
 
@@ -528,38 +519,6 @@ class UserControllerTest(unittest.TestCase):
         except GatewayException as ex:
             self.assertIn(UserEnums.DeleteErrors.LAST_ACCOUNT, ex.message)
 
-        # verify that a user with a delivery cannot be deleted
-        user_to_add = User(
-            username='test',
-            password=UserDTO._hash_password('test'),
-            pin_code='1234',
-            role=User.UserRoles.USER,
-            accepted_terms=True,
-            language='en'
-        )
-        user_to_add.save()
-        loaded_user = self.controller.load_user(user_id=user_to_add.id)
-        delivery_to_add = Delivery(
-            type='DELIVERY',
-            timestamp_delivery='now',
-            timestamp_pickup=None,
-            courier_firm='OTHER',
-            signature_delivery='',
-            signature_pickup='',
-            parcelbox_rebus_id=32,
-            user_delivery=None,
-            user_pickup_id=user_to_add.id
-        )
-        delivery_to_add.save()
-
-        with self.assertRaises(StateException):
-            self.controller.remove_user(loaded_user)
-
-        # assert that a picked up delivery is not binding to removal
-        delivery_to_add.timestamp_pickup = 'now'
-        delivery_to_add.save()
-        self.controller.remove_user(loaded_user)
-        self.assertEqual(1, self.controller.get_number_of_users())
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
@@ -665,38 +624,6 @@ class UserControllerTest(unittest.TestCase):
         self.assertFalse(success)
         self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
 
-    def test_login_rfid_tags(self):
-        user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)
-        user_dto.set_password('test')
-        user_dto = self.controller.save_user(user_dto)
-        self.assertEqual(2, self.controller.get_number_of_users())
-
-        # add an rfid to fred to test the login
-        rfid_dto = RfidDTO(tag_string='rfid-test-tag', label='test-badge', user=user_dto, enter_count=-1, uid_manufacturer='test-uid-manufact')
-        self.rfid_controller.save_rfid(rfid_dto)
-
-        success, data = self.controller.authentication_controller.login_with_rfid_tag('rfid-test-tag', accept_terms=True)
-        self.assertTrue(success)
-        self.assertEqual(data.user.username, 'fred')
-        self.assertEqual(LoginMethod.RFID, data.login_method)
-
-        success, data = self.controller.authentication_controller.login_with_rfid_tag('9876', accept_terms=True)
-        self.assertFalse(success)
-        self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
-
-        # Add in a third user
-        user_pol_dto = UserDTO(username='pol', pin_code='9876', role=User.UserRoles.USER)
-        user_pol_dto.set_password('test')
-        user_pol_dto = self.controller.save_user(user_pol_dto)
-        self.assertEqual(3, self.controller.get_number_of_users())
-        # add an rfid to pol to test the login
-        rfid_pol_dto = RfidDTO(tag_string='rfid-test-tag-pol', label='test-badge', user=user_pol_dto, enter_count=-1, uid_manufacturer='test-uid-manufact_pol')
-        self.rfid_controller.save_rfid(rfid_pol_dto)
-
-        success, data = self.controller.authentication_controller.login_with_rfid_tag('rfid-test-tag-pol', accept_terms=True)
-        self.assertTrue(success)
-        self.assertEqual(data.user.username, 'pol')
-        self.assertEqual(LoginMethod.RFID, data.login_method)
 
     def test_impersonate_happy(self):
         user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)

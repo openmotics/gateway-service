@@ -23,12 +23,11 @@ from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional, Any
-    from gateway.dto.apartment import ApartmentDTO
 
 
 class UserDTO(BaseDTO):
     def __init__(self, id=None, username=None, first_name='', last_name='', role=None,
-                 pin_code=None, apartment=None, language='en', accepted_terms=0,
+                 pin_code=None, language='en', accepted_terms=0,
                  is_active=None, email=None):
         self.id = id  # type: Optional[int]
         self.username = username  # type: str
@@ -40,7 +39,6 @@ class UserDTO(BaseDTO):
         self.last_name = last_name  # type: str
         self.role = role  # type: str
         self.pin_code = pin_code  # type: str
-        self.apartment = apartment  # type: Optional[ApartmentDTO]
         self.hashed_password = ''  # type: str
         self.language = language  # type: str
         self.is_active = is_active  # type: bool
@@ -89,7 +87,6 @@ class UserDTO(BaseDTO):
                 self.last_name == other.last_name and
                 self.role == other.role and
                 self.pin_code == other.pin_code and
-                self.apartment == other.apartment and
                 self.is_active == other.is_active and
                 self.accepted_terms == other.accepted_terms and
                 self.email == other.email)

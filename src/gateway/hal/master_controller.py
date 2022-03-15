@@ -409,7 +409,7 @@ class MasterController(object):
     def get_modules(self):
         raise NotImplementedError()
 
-    def get_modules_information(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
+    def get_modules_information(self):  # type: () -> List[ModuleDTO]
         raise NotImplementedError()
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None

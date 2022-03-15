@@ -187,6 +187,10 @@ class ModuleController(BaseController):
         # type: (bool) -> None
         self._master_controller.cold_reset(power_on=power_on)
 
+    def reset_bus(self):
+        # type: () -> None
+        self._master_controller.power_cycle_bus()
+
     def raw_master_action(self, action, size, data=None):
         # type: (str, int, Optional[bytearray]) -> Dict[str, Any]
         return self._master_controller.raw_action(action, size, data=data)
