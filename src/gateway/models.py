@@ -20,12 +20,15 @@ import logging
 import time
 
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, \
-    Text, UniqueConstraint, create_engine
+    Text, UniqueConstraint, create_engine, and_
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, scoped_session, sessionmaker, RelationshipProperty
 from sqlalchemy.schema import MetaData
 
 import constants
+
+_ = and_, NoResultFound  # For easier import
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, TypeVar

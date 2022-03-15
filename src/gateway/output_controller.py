@@ -163,7 +163,7 @@ class OutputController(BaseController):
                     if output_dto.room is None:
                         output.room = None
                     elif 0 <= output_dto.room <= 100:
-                        output.room, _ = db.query(Room).where(Room.number == output_dto.room).one()
+                        output.room = db.query(Room).where(Room.number == output_dto.room).one()
                 outputs_to_save.append(output_dto)
             db.commit()
         self._master_controller.save_outputs(outputs_to_save)
