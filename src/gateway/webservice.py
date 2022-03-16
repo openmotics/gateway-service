@@ -25,13 +25,13 @@ import time
 import uuid
 
 import cherrypy
-import msgpack
 import requests
 import six
 import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
 from peewee import DoesNotExist
+from six.moves.urllib.parse import unquote_plus
 
 import constants
 import gateway
@@ -71,7 +71,6 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
-    from esafe.rebus.rebus_controller import RebusController
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -129,22 +128,26 @@ def log_access(f, mask=None):
         response = cherrypy.response
 
         params = {}
-        query_string = request.query_string
-        if query_string:
-            for entry in query_string.split('&'):
-                if '=' not in entry:
-                    continue
-                key, value = entry.split('=')
+        headers = ''
+        if access_logger.level == logging.DEBUG:
+            for key, value in request.params.items():
                 if mask is None or key not in mask:
-                    params[key] = value
+                    if isinstance(value, six.string_types):
+                        params[key] = unquote_plus(value)
+                        try:
+                            params[key] = json.loads(params[key])
+                        except ValueError:
+                            pass
+                    else:
+                        params[key] = value
                 else:
                     params[key] = '***'
-        headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
-                             for header in ['X-Request-Id', 'User-Agent']
-                             if header in request.headers)
+            headers = ' - '.join('{0}: {1}'.format(header, request.headers[header])
+                                 for header in ['X-Request-Id', 'User-Agent']
+                                 if header in request.headers)
 
         access_logger.debug(
-            '{0} - {1} - {2}{3} - Query parameters: {4}{5}'.format(
+            '{0} - {1} - {2}{3} - Parameters: {4}{5}'.format(
                 request.remote.ip,
                 request.method,
                 request.script_name, request.path_info,
@@ -393,7 +396,7 @@ class WebInterface(object):
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
                  uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
-                 update_controller=INJECTED, rebus_controller=INJECTED):
+                 update_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -420,8 +423,6 @@ class WebInterface(object):
         self._plugin_controller = None  # type: Optional[PluginController]
         self._metrics_collector = None  # type: Optional[MetricsCollector]
         self._metrics_controller = None  # type: Optional[MetricsController]
-
-        self._rebus_controller = rebus_controller  # type: Optional[RebusController]
 
         self._ws_metrics_registered = False
         self._energy_dirty = False
@@ -735,9 +736,6 @@ class WebInterface(object):
         }
         features |= self._module_controller.master_get_features()
         features |= self._thermostat_controller.get_features()
-
-        if self._rebus_controller is not None:
-            features.add('esafe')
 
         return {'features': list(features)}
 

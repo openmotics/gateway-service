@@ -60,9 +60,6 @@ class Users(RestAPIEndpoint):
         self.route_dispatcher.connect('post_user', '',
                                       controller=self, action='post_user',
                                       conditions={'method': ['POST']})
-        self.route_dispatcher.connect('post_activate_user', '/:user_id/activate',
-                                      controller=self, action='post_activate_user',
-                                      conditions={'method': ['POST']})
         # --- PUT ---
         self.route_dispatcher.connect('put_user', '/:user_id',
                                       controller=self, action='put_update_user',
@@ -159,24 +156,6 @@ class Users(RestAPIEndpoint):
         user_dto_serial['pin_code'] = user_dto.pin_code
         return ApiResponse(body=user_dto_serial)
 
-    @openmotics_api_v1(auth=False, pass_role=False, expect_body_type='JSON')
-    def post_activate_user(self, user_id, request_body):
-        # request to activate a certain user
-        request_code = request_body.get('pin_code') or request_body.get('rfid_tag')
-        if request_code is None:
-            raise WrongInputParametersException('when activating, a pin code or rfid tag is expected.')
-
-        user_dto = self.user_controller.load_user(user_id)
-        is_rfid = 'rfid_tag' in request_code
-        if not is_rfid and user_dto and request_code != user_dto.pin_code:
-            raise UnAuthorizedException('pin code is not correct to authenticate the user')
-        elif is_rfid:
-            # TODO: Add the rfid check
-            raise NotImplementedException('Rfid token check not implemented yet')
-        # if all checks are passed, activate the user
-        self.user_controller.activate_user(user_id)
-        return ApiResponse(status_code=204)
-
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, pass_security_level=True, expect_body_type='JSON', check={'user_id': int})
     def put_update_user(self, user_id, auth_token, auth_security_level, request_body=None):
         user_json = request_body
@@ -184,17 +163,16 @@ class Users(RestAPIEndpoint):
             if auth_token.user.id != user_id:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot change another user. Requested user_id: {}, authenticated as: {}'.format(user_id, auth_token.user.id))
 
-        # check if the pin code or rfid tag is changed
-        if 'pin_code' in user_json or 'rfid' in user_json:
+        if 'pin_code' in user_json:
             if auth_security_level is not AuthenticationLevel.HIGH:
-                raise UnAuthorizedException('Cannot change the pin code or rfid data: You need a HIGH security level')
+                raise UnAuthorizedException('Cannot change the pin code data: You need a HIGH security level')
 
         user_dto_orig = self.user_controller.load_user(user_id, clear_password=False)
         if user_dto_orig is None:
             raise ItemDoesNotExistException('Cannot update a user that does not exists')
         user_dto = UserSerializer.deserialize(user_json)
         # only allow a subset of fields to be altered
-        for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment', 'email', 'is_active']:
+        for field in ['first_name', 'last_name', 'pin_code', 'language', 'email', 'is_active']:
             if field in user_dto.loaded_fields:
                 setattr(user_dto_orig, field, getattr(user_dto, field))
         saved_user = self.user_controller.save_user(user_dto_orig)

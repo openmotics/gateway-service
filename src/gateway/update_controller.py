@@ -120,8 +120,7 @@ class UpdateController(object):
                            Platform.Type.CLASSIC: ['gateway_service', 'gateway_frontend',
                                                    'master_classic',
                                                    'energy', 'p1_concentrator',
-                                                   'input', 'output', 'dimmer', 'can'],
-                           Platform.Type.ESAFE: ['gateway_service']}
+                                                   'input', 'output', 'dimmer', 'can']}
 
     if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
         OPENVPN_CONFIG = '/etc/openvpn/vpn.conf'
@@ -371,16 +370,15 @@ class UpdateController(object):
                 logger.info('Installing pip dependencies')
                 os.makedirs(os.path.join(new_version_folder, 'python-deps'))
                 operating_system = System.get_operating_system()['ID']
-                if operating_system != System.OS.BUILDROOT:
-                    temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
-                    UpdateController._execute(
-                        command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
-                            temp_dir, new_version_folder, operating_system
-                        ),
-                        logger=logger,
-                        shell=True
-                    )
-                    os.rmdir(temp_dir)
+                temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
+                UpdateController._execute(
+                    command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
+                        temp_dir, new_version_folder, operating_system
+                    ),
+                    logger=logger,
+                    shell=True
+                )
+                os.rmdir(temp_dir)
 
             UpdateController._touch(running_marker)  # Make sure the running marker exists
 

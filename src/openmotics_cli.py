@@ -101,6 +101,13 @@ def cmd_shell(args):
         from gateway.events import GatewayEvent
         from gateway.hal.master_event import MasterEvent
         from gateway.pubsub import PubSub
+        from platform_utils import Platform
+        if Platform.get_platform() in Platform.CoreTypes:
+            @Inject
+            def _load(ucan_communicator=INJECTED):
+                return ucan_communicator
+            ucan_communicator = _load()
+
         IPython.embed(header='''
         Interact with injected controllers using eg. master_controller
 

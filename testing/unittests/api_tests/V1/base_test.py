@@ -177,9 +177,6 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
         resp = self.GET('/rest/auth/level/high', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
         self.assertStatus('200 OK')
 
-        resp = self.GET('/rest/auth/level/high', login_user=None, login_method=LoginMethod.PASSWORD, headers={'X-API-Secret': 'Test-Secret'})
-        self.assertStatus('200 OK')
-
     def test_post(self):
         resp = self.POST('/rest', login_user=None)
         self.assertStatus('200 OK')

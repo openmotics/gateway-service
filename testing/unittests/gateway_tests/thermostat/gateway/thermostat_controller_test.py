@@ -27,6 +27,7 @@ from gateway.dto import OutputStatusDTO, PumpGroupDTO, ScheduleDTO, \
     SensorStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
     ThermostatGroupStatusDTO, ThermostatScheduleDTO, ThermostatStatusDTO
 from gateway.events import GatewayEvent
+from gateway.hal.master_event import MasterEvent
 from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
     Preset, Pump, PumpToValve, Room, Sensor, Thermostat, ThermostatGroup, \
     Valve, ValveToThermostat
@@ -481,3 +482,52 @@ class ThermostatControllerTest(unittest.TestCase):
                                  Preset.Types.VACATION: 9.0,
                                  Preset.Types.PARTY: 10.0}.items():
             self.assertEqual(expected, thermostat.get_preset(preset).heating_setpoint)
+
+    def test_processing_master_event(self):
+        now = datetime.now()
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
+        Thermostat.create(number=1,
+                          name='thermostat 1',
+                          sensor=sensor,
+                          pid_heating_p=200,
+                          pid_heating_i=100,
+                          pid_heating_d=50,
+                          pid_cooling_p=200,
+                          pid_cooling_i=100,
+                          pid_cooling_d=50,
+                          automatic=True,
+                          room=None,
+                          start=0,
+                          valve_config='equal',
+                          thermostat_group=self._thermostat_group)
+        thermostat_dto = self.controller.load_heating_thermostat(thermostat_id=1)
+        self.controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
+        self.scheduling_controller.last_thermostat_setpoint.return_value = (datetime(now.year, now.month, now.day, 0), 21.5)
+
+        self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                         data={'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
+                                                               'data': {'state': 'on',
+                                                                        'mode': 'cooling'}}))
+        thermostat = Thermostat.get(number=1)
+        self.assertEqual('on', thermostat.state)
+        self.assertEqual('cooling', thermostat.thermostat_group.mode)
+
+        self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                         data={'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
+                                                               'data': {'state': 'off',
+                                                                        'mode': 'heating'}}))
+        thermostat = Thermostat.get(number=1)
+        self.assertEqual('off', thermostat.state)
+        self.assertEqual('heating', thermostat.thermostat_group.mode)
+
+        self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                         data={'type': MasterEvent.APITypes.SET_THERMOSTAT_PRESET,
+                                                               'data': {'preset': 'away'}}))
+        thermostat = Thermostat.get(number=1)
+        self.assertEqual('away', thermostat.active_preset.type)
+
+        self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                         data={'type': MasterEvent.APITypes.SET_THERMOSTAT_PRESET,
+                                                               'data': {'preset': 'party'}}))
+        thermostat = Thermostat.get(number=1)
+        self.assertEqual('party', thermostat.active_preset.type)
