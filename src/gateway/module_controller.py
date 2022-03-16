@@ -173,8 +173,8 @@ class ModuleController(BaseController):
     def module_discover_stop(self):  # type: () -> None
         self._master_controller.module_discover_stop()
 
-    def module_discover_auto(self):  # type: () -> bool
-        return self._master_controller.module_discover_auto()
+    def module_discover_auto(self, wait=True):  # type: (bool) -> bool
+        return self._master_controller.module_discover_auto(wait=wait)
 
     def module_discover_status(self):  # type: () -> bool
         return self._master_controller.module_discover_status()
