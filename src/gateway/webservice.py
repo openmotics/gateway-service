@@ -656,8 +656,8 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def module_discover_auto(self):  # type: () -> Dict[str, str]
         """ Triggers auto module discovery on the master """
-        self._module_controller.module_discover_auto()
-        return {'status': 'OK'}
+        executed = self._module_controller.module_discover_auto()
+        return {'status': 'EXECUTED' if executed else 'SKIPPED'}
 
     @openmotics_api(auth=True)
     def module_discover_status(self):  # type: () -> Dict[str, bool]

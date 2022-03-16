@@ -204,13 +204,15 @@ class MasterCoreController(MasterController):
             elif core_event.type == MasterCoreEvent.Types.SLAVE_SEARCH:
                 search_type = core_event.data.get('type')
                 if search_type == MasterCoreEvent.SearchType.ACTIVE:
+                    guard_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[CommunicationBlocker.AUTO_DISCOVER] * 0.9
                     self._new_modules_found = False
+                    self._guard_module_discovery(activate=True, timeout=guard_timeout)
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
                                                               active=True)
                 elif search_type == MasterCoreEvent.SearchType.STOPPED:
+                    self._guard_module_discovery(activate=False)
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
                                                               active=False)
-                    self._guard_module_discovery(activate=False)
                     self._finish_module_discovery(reason='automatic discovery')
             elif core_event.type == MasterCoreEvent.Types.SYSTEM:
                 if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
@@ -1036,6 +1038,7 @@ class MasterCoreController(MasterController):
     def module_discover_start(self, timeout):  # type: (int) -> None
         with self._discovery_log_lock:
             self._discovery_log = []
+        self._new_modules_found = False
         self._guard_module_discovery(activate=True, timeout=timeout)
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
@@ -1048,10 +1051,10 @@ class MasterCoreController(MasterController):
                                           extra_parameter=255))
         self._finish_module_discovery(reason='manual discovery')
 
-    def module_discover_auto(self, wait=True):  # type: (bool) -> None
+    def module_discover_auto(self, wait=True):  # type: (bool) -> bool
         global_configuration = GlobalConfiguration()
         if not global_configuration.automatic_module_discovery.automatic_discovery_enabled:
-            return
+            return False
         guard_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[CommunicationBlocker.AUTO_DISCOVER] * 0.9
         self._guard_module_discovery(activate=True, timeout=guard_timeout)
         self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
@@ -1062,6 +1065,7 @@ class MasterCoreController(MasterController):
                               bypass_blockers=[CommunicationBlocker.AUTO_DISCOVER])
         if wait:
             self._master_communicator.wait_for_blockers()
+        return True
 
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None

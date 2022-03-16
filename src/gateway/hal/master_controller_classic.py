@@ -1498,8 +1498,8 @@ class MasterClassicController(MasterController):
         with self._module_log_lock:
             self._module_log = []
 
-    def module_discover_auto(self, wait=True):  # type: (bool) -> None
-        return  # Consider this immediately done
+    def module_discover_auto(self, wait=True):  # type: (bool) -> bool
+        return False  # Consider this immediately skipped
 
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None

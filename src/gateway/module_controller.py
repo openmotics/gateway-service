@@ -58,7 +58,10 @@ class ModuleController(BaseController):
         amounts = {None: 0, True: 0, False: 0}
         try:
             logger.info('ORM sync (Modules): Running auto discovery...')
-            self._master_controller.module_discover_auto()
+            executed = self._master_controller.module_discover_auto()
+            logger.info('ORM sync (Modules): Running auto discovery... {0}'.format(
+                'Executed' if executed else 'Skipped'
+            ))
 
             logger.info('ORM sync (Modules): Sync master modules...')
             ids = []
@@ -170,8 +173,8 @@ class ModuleController(BaseController):
     def module_discover_stop(self):  # type: () -> None
         self._master_controller.module_discover_stop()
 
-    def module_discover_auto(self):  # type: () -> None
-        self._master_controller.module_discover_auto()
+    def module_discover_auto(self):  # type: () -> bool
+        return self._master_controller.module_discover_auto()
 
     def module_discover_status(self):  # type: () -> bool
         return self._master_controller.module_discover_status()
