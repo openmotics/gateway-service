@@ -74,6 +74,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0, None]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 21.0}) in events
@@ -112,6 +113,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[84.0, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[21.0, None, None]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
@@ -151,6 +153,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
@@ -181,7 +184,9 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[84.0, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[21.0, None, None]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()  # recover after failed sync
             self.pubsub._publish_all_events(blocking=False)
 
@@ -354,6 +359,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[84.0, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[21.0, None, None]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
             values = {s.id: s for s in self.controller.get_sensors_status()}
@@ -389,6 +395,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[84.0, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, None, None]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             values = self.controller.get_brightness_status()
         assert values[sensor.id] == 84.0
@@ -403,6 +410,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, None, None]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             values = self.controller.get_humidity_status()
         assert values[sensor.id] == 49.0
@@ -418,6 +426,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[84.0, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[21.0, 20.5, None]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             values = self.controller.get_temperature_status()
         assert values[sensor.id] == 21.0

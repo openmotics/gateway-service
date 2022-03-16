@@ -101,6 +101,7 @@ class MasterCoreController(MasterController):
         self._last_health_warning = 0
         self._last_health_warning_timestamp = 0.0
         self._pulse_counter_values = {}  # type: Dict[int, Optional[int]]
+        self._new_modules_found = False
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
@@ -141,7 +142,7 @@ class MasterCoreController(MasterController):
 
     def _handle_new_module(self, data):
         # type: (Dict[str, Any]) -> None
-        # This repackages an API `event` to a more uniform handled `MasterCoreEvent`
+        self._new_modules_found = True
         core_event = MasterCoreEvent.build(event_type=MasterCoreEvent.Types.MODULE_DISCOVERY,
                                            event_data={'discovery_type': MasterCoreEvent.DiscoveryTypes.NEW,
                                                        'module_type': {0: ModuleType.OUTPUT,
@@ -200,18 +201,30 @@ class MasterCoreController(MasterController):
                 if core_event.data.get('type') == MasterCoreEvent.ResetTypes.HEALTH_CHECK:
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
                                                               active=True)
+            elif core_event.type == MasterCoreEvent.Types.SLAVE_SEARCH:
+                search_type = core_event.data.get('type')
+                if search_type == MasterCoreEvent.SearchType.ACTIVE:
+                    guard_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[CommunicationBlocker.AUTO_DISCOVER] * 0.9
+                    self._new_modules_found = False
+                    self._guard_module_discovery(activate=True, timeout=guard_timeout)
+                    self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
+                                                              active=True)
+                elif search_type == MasterCoreEvent.SearchType.STOPPED:
+                    self._guard_module_discovery(activate=False)
+                    self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
+                                                              active=False)
+                    self._finish_module_discovery(reason='automatic discovery')
             elif core_event.type == MasterCoreEvent.Types.SYSTEM:
                 if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.RESTART,
                                                               active=False)
             elif core_event.type == MasterCoreEvent.Types.FACTORY_RESET:
                 phase = core_event.data.get('phase')
-                if phase == MasterCoreEvent.FactoryResetPhase.STARTED:
+                active_map = {MasterCoreEvent.FactoryResetPhase.STARTED: True,
+                              MasterCoreEvent.FactoryResetPhase.COMPLETED: False}
+                if phase in active_map:
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.FACTORY_RESET,
-                                                              active=True)
-                elif phase == MasterCoreEvent.FactoryResetPhase.COMPLETED:
-                    self._master_communicator.report_blockage(blocker=CommunicationBlocker.FACTORY_RESET,
-                                                              active=False)
+                                                              active=active_map[phase])
             elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
                 # TODO: Add partial EEPROM invalidation to speed things up
                 address_letter = chr(int(core_event.data['address'].split('.')[0]))
@@ -370,9 +383,13 @@ class MasterCoreController(MasterController):
         max_specs = self._master_communicator.do_command(command=CoreAPI.general_configuration_max_specs(),
                                                          fields={})
         global_configuration = GlobalConfiguration()
+        amd = global_configuration.automatic_module_discovery
         logger.info('General core information:')
         logger.info('* Modules:')
-        logger.info('  * Auto discovery: {0}'.format(global_configuration.automatic_module_discovery))
+        logger.info('  * Auto discovery:')
+        logger.info('    * Enabled: {0}'.format('Yes' if amd.automatic_discovery_enabled else 'No'))
+        logger.info('    * New slave firmware: {0}'.format('Yes' if amd.new_slave_firmware_used else 'No'))
+        logger.info('    * Full handshake: {0}'.format('Yes' if amd.full_handshake else 'No'))
         logger.info('  * Output: {0}/{1}'.format(_default_if_255(global_configuration.number_of_output_modules, 0),
                                                  max_specs['output']))
         logger.info('  * Input: {0}/{1}'.format(_default_if_255(global_configuration.number_of_input_modules, 0),
@@ -1019,36 +1036,56 @@ class MasterCoreController(MasterController):
                                           extra_parameter=extra_parameter))
 
     def module_discover_start(self, timeout):  # type: (int) -> None
-        def _stop(): self.module_discover_stop()
-
         with self._discovery_log_lock:
             self._discovery_log = []
-
+        self._new_modules_found = False
+        self._guard_module_discovery(activate=True, timeout=timeout)
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
                                           extra_parameter=0))
 
-        if self._discover_mode_timer is not None:
-            self._discover_mode_timer.cancel()
-        self._discover_mode_timer = Timer(timeout, _stop)
-        self._discover_mode_timer.start()
-
     def module_discover_stop(self):  # type: () -> None
-        if self._discover_mode_timer is not None:
-            self._discover_mode_timer.cancel()
-            self._discover_mode_timer = None
-
+        self._guard_module_discovery(activate=False)
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
                                           extra_parameter=255))
-        self._broadcast_module_discovery()
+        self._finish_module_discovery(reason='manual discovery')
+
+    def module_discover_auto(self, wait=True):  # type: (bool) -> bool
+        global_configuration = GlobalConfiguration()
+        if not global_configuration.automatic_module_discovery.automatic_discovery_enabled:
+            return False
+        guard_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[CommunicationBlocker.AUTO_DISCOVER] * 0.9
+        self._guard_module_discovery(activate=True, timeout=guard_timeout)
+        self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
+                                                  active=True)
+        self._do_basic_action(BasicAction(action_type=200,
+                                          action=0,
+                                          extra_parameter=1),
+                              bypass_blockers=[CommunicationBlocker.AUTO_DISCOVER])
+        if wait:
+            self._master_communicator.wait_for_blockers()
+        return True
 
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None
 
-    def _broadcast_module_discovery(self):
-        # type: () -> None
-        self._memory_file.invalidate_cache(reason='manual discovery')
+    def _guard_module_discovery(self, activate, timeout=300):  # type: (bool, int) -> None
+        if activate:
+            if self._discover_mode_timer is not None:
+                self._discover_mode_timer.cancel()
+            self._discover_mode_timer = Timer(timeout, self.module_discover_stop)
+            self._discover_mode_timer.start()
+        elif self._discover_mode_timer is not None:
+            self._discover_mode_timer.cancel()
+            self._discover_mode_timer = None
+
+    def _finish_module_discovery(self, reason):
+        # type: (str) -> None
+        if self._new_modules_found:
+            logger.info('New modules were discovered')
+            self._memory_file.invalidate_cache(reason=reason)
+            self._new_modules_found = False
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         with self._discovery_log_lock:
@@ -1364,22 +1401,26 @@ class MasterCoreController(MasterController):
     def add_virtual_output_module(self):
         # type: () -> None
         self._add_virtual_module(OutputModuleConfiguration, 'output', 'o')
-        self._broadcast_module_discovery()
+        self._new_modules_found = True
+        self._finish_module_discovery(reason='virtual module added')
 
     def add_virtual_dim_control_module(self):
         # type: () -> None
         self._add_virtual_module(OutputModuleConfiguration, 'output', 'd')
-        self._broadcast_module_discovery()
+        self._new_modules_found = True
+        self._finish_module_discovery(reason='virtual module added')
 
     def add_virtual_input_module(self):
         # type: () -> None
         self._add_virtual_module(InputModuleConfiguration, 'input', 'i')
-        self._broadcast_module_discovery()
+        self._new_modules_found = True
+        self._finish_module_discovery(reason='virtual module added')
 
     def add_virtual_sensor_module(self):
         # type: () -> None
         self._add_virtual_module(SensorModuleConfiguration, 'sensor', 't')
-        self._broadcast_module_discovery()
+        self._new_modules_found = True
+        self._finish_module_discovery(reason='virtual module added')
 
     def _add_virtual_module(self, configuration_type, module_type_name, module_type):
         # type: (Union[Type[OutputModuleConfiguration], Type[InputModuleConfiguration], Type[SensorModuleConfiguration]], str, str) -> None

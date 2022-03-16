@@ -40,6 +40,11 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
         enable_fram_error_logging = CompositeBitField(bit=2)
         enable_health_check = CompositeBitField(bit=3)
 
+    class _DiscoveryComposition(CompositeMemoryModelDefinition):
+        automatic_discovery_enabled = CompositeBitField(bit=0)
+        new_slave_firmware_used = CompositeBitField(bit=1)
+        full_handshake = CompositeBitField(bit=2)
+
     hardware_detection = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0))  # 0, 0
     number_of_output_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1))  # 0, 1
     number_of_input_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2))  # 0, 2
@@ -51,7 +56,7 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     scan_time_rs485_bus = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 8))  # 0, 8
     number_of_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 9))  # 0, 9
     scan_time_rs485_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 10))  # 0, 10
-    automatic_module_discovery = MemoryBooleanField(MemoryTypes.EEPROM, address_spec=(0, 11), true_value=255, false_value=0, fallback=True)  # 0, 11
+    automatic_module_discovery = _DiscoveryComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 11)))  # 0, 11
     can_bus_termination = MemoryBooleanField(MemoryTypes.EEPROM, address_spec=(0, 12), true_value=255, false_value=0, fallback=True)  # 0, 12
     debug = _DebugComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 13)))  # 0, 13
     groupaction_all_outputs_off = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 50))  # 0, 50-51
