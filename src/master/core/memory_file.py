@@ -250,7 +250,7 @@ class MemoryFile(object):
             )
             self._activation_event.wait(timeout=60.0)
             logger.info('MEMORY: Activated')
-            self._notify_eeprom_changed()
+            self._notify_eeprom_changed(activation=True)
 
     def invalidate_cache(self, reason):  # type: (str) -> None
         for page in range(MemoryFile.SIZES[MemoryTypes.EEPROM][0]):
@@ -258,8 +258,8 @@ class MemoryFile(object):
         for page in range(MemoryFile.SIZES[MemoryTypes.FRAM][0]):
             self._fram_cache.pop(page, None)
         logger.info('MEMORY: Cache cleared ({0})'.format(reason))
-        self._notify_eeprom_changed()
+        self._notify_eeprom_changed(activation=False)
 
-    def _notify_eeprom_changed(self):
-        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+    def _notify_eeprom_changed(self, activation):
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {'activation': activation})
         self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
