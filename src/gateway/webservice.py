@@ -2057,6 +2057,23 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(args='json'))
     def read_modbus_registers(self, args):
+        """
+        :param args: this should be a list of one or multiple dictionaries with the keys slaveaddress and read_configs,
+                     this list contains all different modbus devices a read will be executed on. The value of the
+                     slaveaddress key has to be the address of the modbus device. The value of the read_configs key is a
+                     list of one or multiple dictionaries with main key registeraddress, this list contains all
+                     different registers of the modbus device and additional parameters a read will be executed on.
+                     Additional parameters within this list, are number_of_registers (default 1) and functioncode
+                     (default 3).
+        :return: A dict with as keys the different slaveaddresses will be returned. The value of these keys will be a
+                 dict with as keys the different registeraddresses. The value of these keys contains the data of these
+                 specific registers. If number_of_registers > 1, the value will be a list containing all the values.
+
+        Caution when using this function, number_of_registers should only be used if the modbus device explicitly says
+        a value can be found spanning multiple registers. If a lot of registers will be read with the same additional
+        parameters, the value of registeraddress can be a string existing of '-' or ','/';' to define a range of
+        registers.
+        """
         if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
             raise FeatureUnavailableException()
         return {'data': self._uart_controller.read_registers(args)}
