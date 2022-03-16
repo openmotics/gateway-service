@@ -19,7 +19,7 @@ Schedule Mapper
 from __future__ import absolute_import
 import json
 from gateway.dto import ScheduleDTO
-from gateway.models import Schedule
+from gateway.models import Schedule, Session
 
 if False:  # MYPY
     from typing import List, Optional, Any
@@ -45,8 +45,8 @@ class ScheduleMapper(object):
                            arguments=arguments)
 
     @staticmethod
-    def dto_to_orm(schedule_dto):  # type: (ScheduleDTO) -> Schedule
-        schedule = Schedule.get_or_none(id=schedule_dto.id)
+    def dto_to_orm(db, schedule_dto):  # type: (Session, ScheduleDTO) -> Schedule
+        schedule = db.query(Schedule).where(Schedule.id == schedule_dto.id).one_or_none()
         if schedule is None:
             mandatory_fields = {'name', 'start', 'action'}
             if not mandatory_fields.issubset(set(schedule_dto.loaded_fields)):

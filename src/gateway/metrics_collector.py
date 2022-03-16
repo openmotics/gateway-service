@@ -427,17 +427,6 @@ class MetricsCollector(object):
                 except Exception as ex:
                     logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
 
-                # get database metrics
-                try:
-                    for model, counter in six.iteritems(Database.get_metrics()):
-                        try:
-                            key = 'db_{0}'.format(model)
-                            values[key] = int(counter)
-                        except Exception as ex:
-                            logger.error('Error loading database metric: {0}'.format(ex))
-                except Exception as ex:
-                    logger.error('Error loading database metrics: {0}'.format(ex))
-
                 self._enqueue_metrics(metric_type=metric_type,
                                       values=values,
                                       tags={'name': 'gateway',
@@ -908,10 +897,6 @@ class MetricsCollector(object):
         >                                    "unit": "kWh"}]}
         """
         pulse_persistence = self._pulse_counter_controller.get_persistence()  # type: Dict[int, bool]
-        db_definitions = [{'name': database_model,
-                           'description': database_model,
-                           'type': 'counter',
-                           'unit': ''} for database_model in Database.get_models()]
         return [
             # system
             {'type': 'system',
@@ -1095,7 +1080,7 @@ class MetricsCollector(object):
                          {'name': 'cloud_time_ago_try',
                           'description': 'Time passed since the last try sending metrics to the Cloud',
                           'type': 'gauge',
-                          'unit': 'seconds'}] + db_definitions},
+                          'unit': 'seconds'}]},
             # inputs / events
             {'type': 'event',
              'tags': ['type', 'id', 'name'],

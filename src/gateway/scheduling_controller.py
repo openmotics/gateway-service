@@ -35,7 +35,7 @@ from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
 from gateway.dto.schedule import BaseScheduleDTO
 from gateway.events import GatewayEvent
 from gateway.mappers import ScheduleMapper
-from gateway.models import DaySchedule, Schedule
+from gateway.models import DaySchedule, Schedule, Database
 from gateway.pubsub import PubSub
 from gateway.webservice import params_parser
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -119,15 +119,16 @@ class SchedulingController(object):
     def _sync_configuration(self):
         # type: () -> None
         stale_schedules = {k: v for k, v in self._schedules.items()}
-        for schedule in list(Schedule.select()):
-            schedule_dto = ScheduleMapper.orm_to_dto(schedule)
-            if self._schedules.get(schedule.id) != schedule_dto:
-                self._submit_schedule(schedule_dto)
-            stale_schedules.pop(schedule.id, None)
-            self._update_status(schedule_dto)
-        for schedule_dto in stale_schedules.values():
-            self._abort(schedule_dto)
-            self._schedules.pop(schedule_dto.id, None)
+        with Database.get_session() as db:
+            for schedule in db.query(Schedule).all():
+                schedule_dto = ScheduleMapper.orm_to_dto(schedule)
+                if self._schedules.get(schedule.id) != schedule_dto:
+                    self._submit_schedule(schedule_dto)
+                stale_schedules.pop(schedule.id, None)
+                self._update_status(schedule_dto)
+            for schedule_dto in stale_schedules.values():
+                self._abort(schedule_dto)
+                self._schedules.pop(schedule_dto.id, None)
 
     def _submit_schedule(self, schedule_dto):
         # type: (ScheduleDTO) -> None
@@ -171,15 +172,19 @@ class SchedulingController(object):
 
     def save_schedules(self, schedules):
         # type: (List[ScheduleDTO]) -> None
-        for schedule_dto in schedules:
-            schedule = ScheduleMapper.dto_to_orm(schedule_dto)
-            self._validate(schedule)
-            schedule.save()
+        with Database.get_session() as db:
+            for schedule_dto in schedules:
+                schedule = ScheduleMapper.dto_to_orm(db, schedule_dto)
+                self._validate(schedule)
+                db.add(schedule)
+            db.commit()
         self.refresh_schedules()
 
     def remove_schedules(self, schedules):
         # type: (List[ScheduleDTO]) -> None
-        Schedule.delete().where(Schedule.id.in_([s.id for s in schedules])).execute()
+        with Database.get_session() as db:
+            db.query(Schedule).where(Schedule.id.in_([s.id for s in schedules])).delete()
+            db.commit()
         self.refresh_schedules()
 
     def update_thermostat_setpoints(self, thermostat_id, mode, day_schedules):
@@ -264,8 +269,10 @@ class SchedulingController(object):
         if schedule_dto.has_ended:
             schedule_dto.next_execution = None
             schedule_dto.status = 'COMPLETED'
-            schedule = ScheduleMapper.dto_to_orm(schedule_dto)
-            schedule.save()
+            with Database.get_session() as db:
+                schedule = ScheduleMapper.dto_to_orm(db, schedule_dto)
+                db.add(schedule)
+                db.commit()
         else:
             try:
                 job = self._scheduler.get_job(schedule_dto.job_id)
