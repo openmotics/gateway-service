@@ -182,6 +182,7 @@ class UARTController(object):
     @require_mode(Mode.MODBUS)
     def write_registers(self, slaveaddress, registeraddress, values):
         # type: (int, int, list) -> None
+        logger.info(values)
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
             self._execute_modbus(client.write_registers,
@@ -200,14 +201,21 @@ class UARTController(object):
                                         signed=signed)
 
     @require_mode(Mode.MODBUS)
-    def read_registers(self, slaveaddress, registeraddress, number_of_registers=1, functioncode=3):
-        # type: (int, int, int, int) -> list
+    def read_registers(self, args):
+        # type: (list) -> dict
+        output = {}
         with self._modbus_lock:
-            client = self._get_modbus_client(slaveaddress)
-            return self._execute_modbus(action=client.read_registers,
-                                        registeraddress=registeraddress,
-                                        number_of_registers=number_of_registers,
-                                        functioncode=functioncode)
+            for arg in args:
+                client = self._get_modbus_client(arg.get('slaveaddress'))
+                reg_output = {}
+                for config in arg.get('read_configs'):
+                    data = self._execute_modbus(action=client.read_registers,
+                                                registeraddress=config.get('registeraddress'),
+                                                number_of_registers=config.get('number_of_registers', 1),
+                                                functioncode=config.get('functioncode', 3))
+                    reg_output[config.get('registeraddress')] = data
+            output[arg.get('slaveaddress')] = reg_output
+        return output
 
     def _execute_modbus(self, action, **kwargs):
         try:

@@ -2055,14 +2055,11 @@ class WebInterface(object):
                                                             functioncode=functioncode,
                                                             signed=signed)}
 
-    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, functioncode=int, number_of_registers=int))
-    def read_modbus_registers(self, slaveaddress, registeraddress, functioncode=3, number_of_registers=1):
+    @openmotics_api(auth=True, check=types(args='json'))
+    def read_modbus_registers(self, args):
         if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
             raise FeatureUnavailableException()
-        return {'data': self._uart_controller.read_registers(slaveaddress=slaveaddress,
-                                                             registeraddress=registeraddress,
-                                                             functioncode=functioncode,
-                                                             number_of_registers=number_of_registers)}
+        return {'data': self._uart_controller.read_registers(args)}
 
     @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, value=float, number_of_decimals=int, functioncode=int, signed=bool))
     def write_modbus_register(self, slaveaddress, registeraddress, value, number_of_decimals=0, functioncode=16, signed=False):
