@@ -27,7 +27,7 @@ import six
 
 import constants
 from gateway.events import GatewayEvent
-from gateway.models import Config, Plugin
+from gateway.models import Config, Plugin, Database
 from ioc import INJECTED, Inject, Injectable, Singleton
 from plugins.runner import PluginRunner, RunnerWatchdog
 
@@ -232,12 +232,13 @@ class PluginController(object):
         Get a list of all installed plugins.
         """
         plugins = []
-        for plugin_orm in list(Plugin.select()):
-            plugin = self._runners.get(plugin_orm.name)
-            if plugin:
-                plugins.append(plugin)
-            else:
-                logger.warning('missing runner for plugin {}'.format(plugin_orm.name))
+        with Database.get_session() as db:
+            for plugin_orm in db.query(Plugin).all():
+                plugin = self._runners.get(plugin_orm.name)
+                if plugin:
+                    plugins.append(plugin)
+                else:
+                    logger.warning('missing runner for plugin {}'.format(plugin_orm.name))
         return plugins
 
     def _get_plugin(self, name):

@@ -35,7 +35,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from gateway.dto import ModuleDTO
 from gateway.daemon_thread import DaemonThread
-from gateway.models import Config, EnergyModule, Module
+from gateway.models import Config, EnergyModule, Module, Database, Session
 from platform_utils import Platform, System
 from gateway.enums import EnergyEnums, ModuleType, UpdateEnums
 from enums import HardwareType
@@ -186,44 +186,45 @@ class UpdateController(object):
                             2: UpdateEnums.States.OK,
                             3: UpdateEnums.States.OK}
         modules = {}  # type: Dict[str, List[Module]]
-        for module in Module.select().where(Module.hardware_type == HardwareType.PHYSICAL):
-            modules.setdefault(module.module_type, []).append(module)
-        firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
-        for firmware_type in firmware_types:
-            success, target_version, _ = UpdateController._get_target_version_info(firmware_type)
-            if target_version is None:
-                continue
-            if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
-                current_version = self._fetch_version(firmware_type=firmware_type, logger=global_logger)
-                if current_version == target_version:
-                    state_number = 3
+        with Database.get_session() as db:
+            for module in db.query(Module).where(Module.hardware_type == HardwareType.PHYSICAL).all():
+                modules.setdefault(module.module_type, []).append(module)
+            firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
+            for firmware_type in firmware_types:
+                success, target_version, _ = UpdateController._get_target_version_info(firmware_type)
+                if target_version is None:
+                    continue
+                if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
+                    current_version = self._fetch_version(firmware_type=firmware_type, logger=global_logger)
+                    if current_version == target_version:
+                        state_number = 3
+                    else:
+                        state_number = 1
+                        if success is not None:
+                            state_number = 2 if success else 0
+                    state = min(state, state_number)
+                    states.append({'firmware_type': firmware_type,
+                                   'state': state_map[state_number],
+                                   'current_version': current_version,
+                                   'target_version': target_version})
                 else:
-                    state_number = 1
-                    if success is not None:
-                        state_number = 2 if success else 0
-                state = min(state, state_number)
-                states.append({'firmware_type': firmware_type,
-                               'state': state_map[state_number],
-                               'current_version': current_version,
-                               'target_version': target_version})
-            else:
-                for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
-                    for module in modules.get(module_type, []):
-                        if module.firmware_version == target_version:
-                            state_number = 3
-                        else:
-                            state_number = 1
-                            update_success = module.update_success
-                            if update_success is not None:
-                                state_number = 2 if update_success else 0
-                        state = min(state, state_number)
-                        states.append({'firmware_type': firmware_type,
-                                       'state': state_map[state_number],
-                                       'current_version': module.firmware_version,
-                                       'target_version': target_version,
-                                       'module_address': module.address})
-        return {'status': global_state_map[state],
-                'status_detail': states}
+                    for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
+                        for module in modules.get(module_type, []):
+                            if module.firmware_version == target_version:
+                                state_number = 3
+                            else:
+                                state_number = 1
+                                update_success = module.update_success
+                                if update_success is not None:
+                                    state_number = 2 if update_success else 0
+                            state = min(state, state_number)
+                            states.append({'firmware_type': firmware_type,
+                                           'state': state_map[state_number],
+                                           'current_version': module.firmware_version,
+                                           'target_version': target_version,
+                                           'module_address': module.address})
+            return {'status': global_state_map[state],
+                    'status_detail': states}
 
     def request_update(self, new_version, metadata=None):
         """
@@ -239,38 +240,39 @@ class UpdateController(object):
         Where the order of download is based on `firmware.get('urls', [firmware['url']])`
         """
         modules = {}  # type: Dict[str, List[Module]]
-        for module in Module.select().where(Module.hardware_type == HardwareType.PHYSICAL):
-            modules.setdefault(module.module_type, []).append(module)
-        global_logger.info('Request for update to {0}'.format(new_version))
-        platform = Platform.get_platform()
-        if metadata is None:
-            global_logger.info('Downloading metadata for {0}'.format(new_version))
-            response = requests.get(url=self._get_update_metadata_url(version=new_version),
-                                    timeout=2,
-                                    verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
-            if response.status_code != 200:
-                raise ValueError('Failed to get update metadata for {0}'.format(new_version))
-            metadata = response.json()
-        target_versions = {}
-        for firmware in metadata.get('firmwares', []):
-            version = firmware['version']
-            firmware_type = firmware['type']
-            if firmware_type not in UpdateController.SUPPORTED_FIRMWARES.get(platform, []):
-                global_logger.info('Skip firmware {0} as it is unsupported on platform {1}'.format(firmware_type, platform))
-                continue
-            target_versions[firmware_type] = {'target_version': version,
-                                              'urls': firmware.get('urls', []) + ([firmware['url']] if 'url' in firmware else []),
-                                              'sha256': firmware['sha256']}
-            if firmware_type in UpdateController.FIRMWARE_INFO_MAP:
-                module_types = UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types
-                for module_type in module_types:
-                    for module in modules.get(module_type, []):
-                        if module.firmware_version != version:
-                            module.update_success = None  # Allow the update to be re-tried
-                            module.save()
-            global_logger.info('Request for update firmware {0} to {1}'.format(firmware_type, version))
-        Config.set_entry('firmware_target_versions', target_versions)
-        self._pending_updates = True
+        with Database.get_session() as db:
+            for module in db.query(Module).where(Module.hardware_type == HardwareType.PHYSICAL).all():
+                modules.setdefault(module.module_type, []).append(module)
+            global_logger.info('Request for update to {0}'.format(new_version))
+            platform = Platform.get_platform()
+            if metadata is None:
+                global_logger.info('Downloading metadata for {0}'.format(new_version))
+                response = requests.get(url=self._get_update_metadata_url(version=new_version),
+                                        timeout=2,
+                                        verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
+                if response.status_code != 200:
+                    raise ValueError('Failed to get update metadata for {0}'.format(new_version))
+                metadata = response.json()
+            target_versions = {}
+            for firmware in metadata.get('firmwares', []):
+                version = firmware['version']
+                firmware_type = firmware['type']
+                if firmware_type not in UpdateController.SUPPORTED_FIRMWARES.get(platform, []):
+                    global_logger.info('Skip firmware {0} as it is unsupported on platform {1}'.format(firmware_type, platform))
+                    continue
+                target_versions[firmware_type] = {'target_version': version,
+                                                  'urls': firmware.get('urls', []) + ([firmware['url']] if 'url' in firmware else []),
+                                                  'sha256': firmware['sha256']}
+                if firmware_type in UpdateController.FIRMWARE_INFO_MAP:
+                    module_types = UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types
+                    for module_type in module_types:
+                        for module in modules.get(module_type, []):
+                            if module.firmware_version != version:
+                                module.update_success = None  # Allow the update to be re-tried
+                                module.save()
+                global_logger.info('Request for update firmware {0} to {1}'.format(firmware_type, version))
+            Config.set_entry('firmware_target_versions', target_versions)
+            self._pending_updates = True
 
     def update_module_firmware(self, module_type, target_version, mode, module_address, firmware_filename=None):
         # type: (str, str, str, Optional[str], Optional[str]) -> Tuple[int, int]
@@ -619,55 +621,56 @@ class UpdateController(object):
             if '@' in module_address:
                 single_address, address_suffix = module_address.split('@')
             where_expression &= (Module.address == single_address)
-        modules = Module.select().where(where_expression)  # type: List[Module]
 
-        modules_to_update = UpdateController._filter_modules_to_update(all_modules=modules,
-                                                                       target_version=target_version,
-                                                                       mode=mode)
-        if not modules_to_update:
-            if module_address is None or mode != UpdateEnums.Modes.FORCED:
-                return 0, 0
-            modules_to_update = [Module(address=single_address)]
+        with Database.get_session() as db:
+            modules = list(db.query(Module).where(where_expression).all())
+            modules_to_update = UpdateController._filter_modules_to_update(db,
+                                                                           all_modules=modules,
+                                                                           target_version=target_version,
+                                                                           mode=mode)
+            if not modules_to_update:
+                if module_address is None or mode != UpdateEnums.Modes.FORCED:
+                    return 0, 0
+                modules_to_update = [Module(address=single_address)]
 
-        # Fetch the firmware
-        filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
-        filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
-        target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
-        self._load_firmware(firmware_type=firmware_type,
-                            version=target_version,
-                            logger=logger,
-                            target_filename=target_filename,
-                            source_filename=firmware_filename,
-                            metadata=metadata)
+            # Fetch the firmware
+            filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
+            filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
+            target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
+            self._load_firmware(firmware_type=firmware_type,
+                                version=target_version,
+                                logger=logger,
+                                target_filename=target_filename,
+                                source_filename=firmware_filename,
+                                metadata=metadata)
 
-        # Update
-        successes, failures = 0, 0
-        hold_versions = {target_version}
-        for module in modules_to_update:
-            address = module.address
-            if address_suffix is not None:
-                address = '{0}@{1}'.format(address, address_suffix)
-            if module.firmware_version is not None:
-                hold_versions.add(module.firmware_version)
-            individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module.address))
-            try:
-                new_version = self._master_controller.update_slave_module(firmware_type=firmware_type,
-                                                                          address=address,
-                                                                          hex_filename=target_filename,
-                                                                          version=target_version)
-                if module.id is not None:
-                    if new_version is not None:
-                        module.firmware_version = new_version
-                    module.last_online_update = int(time.time())
-                    module.update_success = True
-                successes += 1
-            except Exception as ex:
-                individual_logger.exception('Error when updating {0}: {1}'.format(firmware_type, ex))
-                if module.id is not None:
-                    module.update_success = False
-                failures += 1
-            if module.id is not None:
-                module.save()
+            # Update
+            successes, failures = 0, 0
+            hold_versions = {target_version}
+            for module in modules_to_update:
+                address = module.address
+                if address_suffix is not None:
+                    address = '{0}@{1}'.format(address, address_suffix)
+                if module.firmware_version is not None:
+                    hold_versions.add(module.firmware_version)
+                individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module.address))
+                try:
+                    new_version = self._master_controller.update_slave_module(firmware_type=firmware_type,
+                                                                              address=address,
+                                                                              hex_filename=target_filename,
+                                                                              version=target_version)
+                    if module.id is not None:
+                        if new_version is not None:
+                            module.firmware_version = new_version
+                        module.last_online_update = int(time.time())
+                        module.update_success = True
+                    successes += 1
+                except Exception as ex:
+                    individual_logger.exception('Error when updating {0}: {1}'.format(firmware_type, ex))
+                    if module.id is not None:
+                        module.update_success = False
+                    failures += 1
+                db.commit()
 
         # Cleanup
         base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
@@ -681,59 +684,59 @@ class UpdateController(object):
         # type: (str, str, Optional[str], Optional[str], Logger, str, Optional[Dict[str, Any]]) -> Tuple[int, int]
         module_version = {'energy': EnergyEnums.Version.ENERGY_MODULE,
                           'p1_concentrator': EnergyEnums.Version.P1_CONCENTRATOR}[firmware_type]
+
         where_expression = ((EnergyModule.version == module_version) &
                             (Module.hardware_type == HardwareType.PHYSICAL))
         if module_address is not None:
             where_expression &= (Module.address == module_address)
-        modules = [em.module for em in EnergyModule.select(EnergyModule, Module)
-                                                   .join_from(EnergyModule, Module)
-                                                   .where(where_expression)]  # type: List[Module]
 
-        modules_to_update = UpdateController._filter_modules_to_update(all_modules=modules,
-                                                                       target_version=target_version,
-                                                                       mode=mode)
-        if not modules_to_update:
-            if module_address is None or mode != UpdateEnums.Modes.FORCED:
-                return 0, 0
-            modules_to_update = [Module(address=module_address)]
+        with Database.get_session() as db:
+            modules = [em.module for em in db.query(EnergyModule).where(where_expression).all()]
+            modules_to_update = UpdateController._filter_modules_to_update(db,
+                                                                           all_modules=modules,
+                                                                           target_version=target_version,
+                                                                           mode=mode)
+            if not modules_to_update:
+                if module_address is None or mode != UpdateEnums.Modes.FORCED:
+                    return 0, 0
+                modules_to_update = [Module(address=module_address)]
 
-        # Fetch the firmware
-        filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
-        filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
-        target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
-        self._load_firmware(firmware_type=firmware_type,
-                            version=target_version,
-                            logger=logger,
-                            target_filename=target_filename,
-                            source_filename=firmware_filename,
-                            metadata=metadata)
+            # Fetch the firmware
+            filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code
+            filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
+            target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
+            self._load_firmware(firmware_type=firmware_type,
+                                version=target_version,
+                                logger=logger,
+                                target_filename=target_filename,
+                                source_filename=firmware_filename,
+                                metadata=metadata)
 
-        # Update
-        successes, failures = 0, 0
-        hold_versions = {target_version}
-        for module in modules_to_update:
-            module_address = module.address
-            if module.firmware_version is not None:
-                hold_versions.add(module.firmware_version)
-            individual_logger = Logs.get_update_logger('{0}_{1}'.format(EnergyEnums.VERSION_TO_STRING[module_version], module_address))
-            try:
-                new_version = self._energy_module_controller.update_module(module_version=module_version,
-                                                                           module_address=module_address,
-                                                                           firmware_filename=target_filename,
-                                                                           firmware_version=target_version)
-                if module.id is not None:
-                    if new_version is not None:
-                        module.firmware_version = new_version
-                    module.last_online_update = int(time.time())
-                    module.update_success = True
-                successes += 1
-            except Exception as ex:
-                individual_logger.exception('Error when updating {0}: {1}'.format(firmware_type, ex))
-                if module.id is not None:
-                    module.update_success = False
-                failures += 1
-            if module.id is not None:
-                module.save()
+            # Update
+            successes, failures = 0, 0
+            hold_versions = {target_version}
+            for module in modules_to_update:
+                module_address = module.address
+                if module.firmware_version is not None:
+                    hold_versions.add(module.firmware_version)
+                individual_logger = Logs.get_update_logger('{0}_{1}'.format(EnergyEnums.VERSION_TO_STRING[module_version], module_address))
+                try:
+                    new_version = self._energy_module_controller.update_module(module_version=module_version,
+                                                                               module_address=module_address,
+                                                                               firmware_filename=target_filename,
+                                                                               firmware_version=target_version)
+                    if module.id is not None:
+                        if new_version is not None:
+                            module.firmware_version = new_version
+                        module.last_online_update = int(time.time())
+                        module.update_success = True
+                    successes += 1
+                except Exception as ex:
+                    individual_logger.exception('Error when updating {0}: {1}'.format(firmware_type, ex))
+                    if module.id is not None:
+                        module.update_success = False
+                    failures += 1
+                db.commit()
 
         # Cleanup
         base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
@@ -744,8 +747,8 @@ class UpdateController(object):
         return successes, failures
 
     @staticmethod
-    def _filter_modules_to_update(all_modules, target_version, mode):
-        # type: (List[Module], str, str) -> List[Module]
+    def _filter_modules_to_update(db, all_modules, target_version, mode):
+        # type: (Session, List[Module], str, str) -> List[Module]
         modules_to_update = []
         for module in all_modules:
             if module.firmware_version == target_version:
@@ -754,7 +757,8 @@ class UpdateController(object):
                     modules_to_update.append(module)
                 else:
                     module.update_success = True
-                    module.save()
+                    db.add(module)
+                    db.save()
             else:
                 # When an outdated module is automatically updated, it should
                 # take the update_success into account (no retries yet), but
