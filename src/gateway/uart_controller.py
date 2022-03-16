@@ -209,10 +209,28 @@ class UARTController(object):
                 client = self._get_modbus_client(arg.get('slaveaddress'))
                 reg_output = {}
                 for config in arg.get('read_configs'):
-                    data = self._execute_modbus(action=client.read_registers,
-                                                registeraddress=config.get('registeraddress'),
-                                                number_of_registers=config.get('number_of_registers', 1),
-                                                functioncode=config.get('functioncode', 3))
+                    if isinstance(config.get('registeraddress'), basestring):
+                        registeraddresses = []
+                        if ',' in config.get('registeraddress'):
+                            commasplitted = config.get('registeraddress').split(',')
+                        elif ';' in config.get('registeraddress'):
+                            commasplitted = config.get('registeraddress').split(';')
+                        else:
+                            commasplitted = [config.get('registeraddress')]
+                        for value in commasplitted:
+                            if '-' in value:
+                                registeraddresses.append(range(value.split('-')[0], value.split('-')[1]))
+                            else:
+                                registeraddresses.append(value)
+                    else:
+                        registeraddresses = [config.get('registeraddress')]
+                    data = []
+                    for registeraddress in registeraddresses:
+                        data.append(self._execute_modbus(action=client.read_registers,
+                                                    registeraddress=config.get('registeraddress'),
+                                                    number_of_registers=config.get('number_of_registers', 1),
+                                                    functioncode=config.get('functioncode', 3)))
+
                     reg_output[config.get('registeraddress')] = data
             output[arg.get('slaveaddress')] = reg_output
         return output
