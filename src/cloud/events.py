@@ -22,7 +22,7 @@ from collections import deque
 
 from cloud.cloud_api_client import APIException, CloudAPIClient
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.events import GatewayEvent, EsafeEvent, BaseEvent
+from gateway.events import GatewayEvent, BaseEvent
 from gateway.input_controller import InputController
 from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton

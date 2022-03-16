@@ -157,35 +157,3 @@ class GatewayEvent(BaseEvent):
         PING = 'PING'
         PONG = 'PONG'
 
-
-class EsafeEvent(BaseEvent):
-    """
-    eSafeEvent object
-
-    Data formats:
-
-    * CONFIG_CHANGE
-      {'type': str,   # config type: Global, Doorbell, RFID, User, Apartment
-       'value': dict} # OPTIONAL: The new value of the config change: For example: when a user is updated, the new user value is populated in this field
-
-    * DELIVERY_CHANGE
-      {'id': int,                # The id of the delivery
-       'action': str,            # action type: DELIVERY or PICKUP
-       'delivery': dict }        # The delivery information
-
-    * LOCK_CHANGE
-      {'id': int,      # Rebus lock id
-       'status': str}  # action type: 'open' or 'close'
-
-    * RFID_CHANGE
-      {'uuid': str,      # RFID uuid
-       'action': str}    # action of the rfid change: "SCAN" or "REGISTER"
-    """
-    VERSION = 2
-    NAMESPACE = 'ESAFE'
-
-    class Types(BaseEnum):
-        CONFIG_CHANGE = 'CONFIG_CHANGE'
-        DELIVERY_CHANGE = 'DELIVERY_CHANGE'
-        LOCK_CHANGE = 'LOCK_CHANGE'
-        RFID_CHANGE = 'RFID_CHANGE'
