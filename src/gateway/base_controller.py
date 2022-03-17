@@ -107,10 +107,17 @@ class BaseController(object):
         self._sync_running = True
 
         try:
+            sync_structures = self._sync_structures
+            if sync_structures:
+                self._sync_structures = False
+            send_config_event = self._send_config_event
+            if send_config_event:
+                self._send_config_event = False
+
             for structure in self.SYNC_STRUCTURES:
                 orm_model = structure.orm_model
 
-                if self._sync_structures:
+                if sync_structures:
                     try:
                         start = time.time()
                         logger.info('ORM sync ({0})'.format(orm_model.__name__))
@@ -122,15 +129,12 @@ class BaseController(object):
                     except Exception:
                         logger.exception('ORM sync ({0}): Failed'.format(orm_model.__name__))
 
-                if self._send_config_event:
+                if send_config_event:
                     logger.info('ORM sync ({0}): Send CONFIG_CHANGE event'.format(orm_model.__name__))
                     type_name = orm_model.__name__.lower()
                     gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': type_name})
                     self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
                     self.request_sync_state()
-
-            self._sync_structures = False
-            self._send_config_event = False
         finally:
             self._sync_running = False
         return True

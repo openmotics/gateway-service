@@ -48,6 +48,8 @@ class PulseCounterController(BaseController):
         self._sync_running = True
 
         if self._sync_structures:
+            self._sync_structures = False
+
             start = time.time()
             logger.info('ORM sync (PulseCounter)')
             try:
@@ -71,7 +73,6 @@ class PulseCounterController(BaseController):
             except Exception:
                 logger.exception('ORM sync (PulseCounter): Failed')
 
-        self._sync_structures = False
         self._sync_running = False
         return True
 
