@@ -18,6 +18,7 @@ import unittest
 
 import mock
 from peewee import SqliteDatabase
+from pytest import mark
 
 from gateway.migrations.thermostats import CoolingConfiguration, DaySchedule, \
     GlobalThermostatConfiguration, OutputToThermostatGroupAssociation, \
@@ -56,6 +57,7 @@ class ThermostatsMigratorTest(unittest.TestCase):
     def tearDown(self):
         self.test_db.close()
 
+    @mark.skip
     def test_migrate(self):
         room, _ = Room.get_or_create(number=0)
         sensor_outside = Sensor.create(source='master', physical_quantity='temperature', unit='celcius', external_id='0', name='sensor_0')
