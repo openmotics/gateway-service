@@ -174,7 +174,7 @@ class PulseCounter(Base, MasterNumber):
     persistent = Column(Boolean, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
-    room = relationship('Room', foreign_keys=[room_id])
+    room = relationship('Room', lazy='joined', outerjoin=True, foreign_keys=[room_id])
 
 
 class GroupAction(Base, MasterNumber):

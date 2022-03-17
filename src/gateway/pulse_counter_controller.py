@@ -23,7 +23,7 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from serial_utils import CommunicationFailure
 from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
-from gateway.models import Database, PulseCounter, Room, and_, NoResultFound
+from gateway.models import Database, PulseCounter, Room, NoResultFound
 from gateway.mappers import PulseCounterMapper
 
 if False:  # MYPY
@@ -64,8 +64,8 @@ class PulseCounterController(BaseController):
                                                                source='master',
                                                                persistent=pulse_counter_dto.persistent))
                 db.add_all(new_pulse_counters)
-                db.query(PulseCounter).where(and_(PulseCounter.source == 'master'),
-                                                 (PulseCounter.number.notin_(ids))).delete()
+                db.query(PulseCounter).where((PulseCounter.source == 'master') &
+                                             (PulseCounter.number.notin_(ids))).delete()
                 db.commit()
             duration = time.time() - start
             logger.info('ORM sync (PulseCounter): completed after {0:.1f}s'.format(duration))
@@ -82,7 +82,6 @@ class PulseCounterController(BaseController):
         with Database.get_session() as db:
             mapper = PulseCounterMapper(db)
             pulse_counter = db.query(PulseCounter) \
-                              .join(Room, isouter=True) \
                               .where(PulseCounter.number == pulse_counter_id) \
                               .one()
             if pulse_counter.source == 'master':
@@ -97,9 +96,7 @@ class PulseCounterController(BaseController):
         master_pulse_counters = {pc.id: pc for pc in self._master_controller.load_pulse_counters()}
         with Database.get_session() as db:
             mapper = PulseCounterMapper(db)
-            pulse_counters = list(db.query(PulseCounter)
-                                    .join(Room, isouter=True)
-                                    .all())
+            pulse_counters = list(db.query(PulseCounter).all())
             for pulse_counter in pulse_counters:
                 if pulse_counter.source == 'master':
                     pulse_counter_dto = master_pulse_counters.get(pulse_counter.number)
