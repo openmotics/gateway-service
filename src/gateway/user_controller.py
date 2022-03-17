@@ -22,13 +22,14 @@ from __future__ import absolute_import
 import logging
 import random
 import six
+from sqlalchemy import select
 
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums, Languages
 from gateway.exceptions import GatewayException
 from gateway.mappers.user import UserMapper
-from gateway.models import User
+from gateway.models import Database, User
 
 from ioc import Injectable, Inject, Singleton, INJECTED
 
@@ -81,7 +82,8 @@ class UserController(object):
 
     def user_id_exists(self, user_id):
         # type: (int) -> bool
-        user_orm = User.get_by_id(user_id)
+        with Database.get_session() as db:
+            user_orm = db.query(User).where(User.id == user_id).one_or_none()
         return user_orm is not None
 
     def save_user(self, user_dto):
@@ -92,10 +94,12 @@ class UserController(object):
             if not Languages.contains(user_dto.language):
                 raise RuntimeError('Could not save the user with an unknown language: {}'.format(user_dto.language))
 
-        user_orm = UserMapper.dto_to_orm(user_dto)
-        UserController._validate(user_orm)
-        user_orm.save()
-        user_dto_saved = UserMapper.orm_to_dto(user_orm)
+        with Database.get_session() as db:
+            mapper = UserMapper(db)
+            user_orm = mapper.dto_to_orm(user_dto)
+            UserController._validate(user_orm)
+            db.commit()
+            user_dto_saved = mapper.orm_to_dto(user_orm)
         return user_dto_saved
 
     def save_users(self, users):
@@ -108,20 +112,24 @@ class UserController(object):
         # type: (int, bool) -> Optional[UserDTO]
         """  Returns a UserDTO of the requested user """
         _ = self
-        user_orm = User.select().where(User.id == user_id).first()
-        if user_orm is None:
-            return None
-        user_dto = UserMapper.orm_to_dto(user_orm)
+        with Database.get_session() as db:
+            user_orm = db.query(User).where(User.id == user_id).one_or_none()
+            if user_orm is None:
+                return None
+            mapper = UserMapper(db)
+            user_dto = mapper.orm_to_dto(user_orm)
         if clear_password:
             user_dto.clear_password()
         return user_dto
 
     def load_user_by_username(self, username, clear_password=True):
         _ = self
-        user_orm = User.select().where(User.username == username).first()
-        if user_orm is None:
-            return None
-        user_dto = UserMapper.orm_to_dto(user_orm)
+        with Database.get_session() as db:
+            user_orm = db.query(User).where(User.username == username).one_or_none()
+            if user_orm is None:
+                return None
+            mapper = UserMapper(db)
+            user_dto = mapper.orm_to_dto(user_orm)
         if clear_password:
             user_dto.clear_password()
         return user_dto
@@ -131,24 +139,28 @@ class UserController(object):
         """  Returns a list of UserDTOs with all the usernames """
         _ = self
         users = []
-        query = User.select()
-        if roles is not None:
-            query = query.where(User.role.in_(roles))
-        if not include_inactive:
-            query = query.where(User.is_active == 1)
-        for user_orm in query:
-            user_dto = UserMapper.orm_to_dto(user_orm)
-            user_dto.clear_password()
-            users.append(user_dto)
+        with Database.get_session() as db:
+            query = db.query(User)
+            if roles is not None:
+                query = query.where(User.role.in_(roles))
+            if not include_inactive:
+                query = query.where(User.is_active == 1)
+            mapper = UserMapper(db)
+            for user_orm in query:
+                user_dto = mapper.orm_to_dto(user_orm)
+                user_dto.clear_password()
+                users.append(user_dto)
         return users
 
     def activate_user(self, user_id):
         try:
-            user_orm = User.select().where(User.id == user_id).first()
-            user_dto = UserMapper.orm_to_dto(user_orm)
-            self.authentication_controller.remove_tokens_for_user(user_dto)
-            user_orm.is_active = True
-            user_orm.save()
+            with Database.get_session() as db:
+                user_orm = db.query(User).where(User.id == user_id).one()
+                mapper = UserMapper(db)
+                user_dto = mapper.orm_to_dto(user_orm)
+                self.authentication_controller.remove_tokens_for_user(user_dto)
+                user_orm.is_active = True
+                db.commit()
         except Exception as e:
             raise RuntimeError('Could not save the is_active flag to the database: {}'.format(e))
 
@@ -156,7 +168,8 @@ class UserController(object):
     def get_number_of_users():
         # type: () -> int
         """ Return the number of registered users """
-        return User.select().count()
+        with Database.get_session() as db:
+            return db.query(User).count()
 
     @Inject
     def remove_user(self, user_dto):
@@ -172,7 +185,9 @@ class UserController(object):
         if UserController.get_number_of_users() <= 1:
             raise GatewayException(UserEnums.DeleteErrors.LAST_ACCOUNT)
 
-        User.delete().where(User.username == username).execute()
+        with Database.get_session() as db:
+            db.query(User).where(User.username == username).delete()
+            db.commit()
 
     def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None):
         # type: (UserDTO, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
@@ -193,7 +208,8 @@ class UserController(object):
     def generate_new_pin_code(self, length=4):
         # type: (int) -> str
         _ = self
-        current_pin_codes = User.select(User.pin_code).execute()
+        with Database.get_session() as db:
+            current_pin_codes = list(db.execute(select(User.pin_code)).scalars())
         # Split this up for testing reasons
         return UserController._generate_new_pin_code(length, current_pin_codes)
 
@@ -208,7 +224,8 @@ class UserController(object):
 
     def check_if_pin_exists(self, pin):
         _ = self
-        current_pin_codes = User.select(User.pin_code).execute()
+        with Database.get_session() as db:
+            current_pin_codes = list(db.execute(select(User.pin_code)).scalars())
         return pin in current_pin_codes
 
     @staticmethod
