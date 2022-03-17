@@ -20,7 +20,7 @@ import logging
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import GroupActionDTO
-from gateway.models import GroupAction
+from gateway.models import GroupAction, Database
 
 if False:  # MYPY
     from typing import List, Tuple
@@ -45,23 +45,26 @@ class GroupActionController(BaseController):
         self._master_controller.do_group_action(group_action_id)
 
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
-        group_action = GroupAction.get(number=group_action_id)  # type: GroupAction  # TODO: Use exists
-        group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)
-        return group_action_dto
+        with Database.get_session() as db:
+            group_action = db.query(GroupAction).where(GroupAction.number == group_action_id).one()
+            group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)
+            return group_action_dto
 
     def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         group_action_dtos = []
-        for group_action in list(GroupAction.select()):  # TODO: Only fetch the numbers
-            group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)
-            group_action_dtos.append(group_action_dto)
+        with Database.get_session() as db:
+            for group_action in db.query(GroupAction).all():
+                group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)
+                group_action_dtos.append(group_action_dto)
         return group_action_dtos
 
     def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
         group_actions_to_save = []
-        for group_action_dto in group_actions:
-            group_action = GroupAction.get_or_none(number=group_action_dto.id)  # type: GroupAction
-            if group_action is None:
-                logger.info('Ignored saving non-existing GroupAction {0}'.format(group_action_dto.id))
-                continue
+        with Database.get_session() as db:
+            for group_action_dto in group_actions:
+                group_action = db.query(GroupAction).where(GroupAction.number == group_action_dto.id).one_or_none()
+                if group_action is None:
+                    logger.info('Ignored saving non-existing GroupAction {0}'.format(group_action_dto.id))
+                    continue
             group_actions_to_save.append(group_action_dto)
         self._master_controller.save_group_actions(group_actions_to_save)

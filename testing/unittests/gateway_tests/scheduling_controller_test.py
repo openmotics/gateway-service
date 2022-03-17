@@ -23,16 +23,19 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta
+from unittest import mock
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from mock import Mock
 from peewee import SqliteDatabase
-
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.master_controller import MasterController
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import DaySchedule, Schedule
+from gateway.models import DaySchedule, Schedule, Base, Database
 from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
@@ -47,23 +50,27 @@ MODELS = [DaySchedule, Schedule]
 class SchedulingControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        super(SchedulingControllerTest, cls).setUpClass()
         SetTestMode()
-        Logs.setup_logger(log_level_override=logging.DEBUG)
-        cls._db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls._db_filename)
-
-    @classmethod
-    def tearDownClass(cls):
-        if os.path.exists(cls._db_filename):
-            os.remove(cls._db_filename)
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.scheduling_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     def setUp(self):
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.db = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.db)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
         self.group_action_controller = Mock(GroupActionController)
-        SetUpTestInjections(message_client=None,
+        self.master_controller = Mock(MasterController)
+        SetUpTestInjections(master_controller=self.master_controller,
+                            message_client=None,
                             module_controller=None,
                             pubsub=Mock(PubSub))
         SetUpTestInjections(system_controller=SystemController())
@@ -92,11 +99,8 @@ class SchedulingControllerTest(unittest.TestCase):
         self.controller._scheduler = self.scheduler
         self.controller.start()
 
-
     def tearDown(self):
         self.controller.stop()
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def test_save_load(self):
         dto = ScheduleDTO(id=None, source='gateway', name='schedule', start=0, action='GROUP_ACTION', arguments=0)
@@ -178,7 +182,6 @@ class SchedulingControllerTest(unittest.TestCase):
     def test_group_action(self):
         self.group_action_controller.do_group_action.return_value = {}
         self.group_action_controller.do_basic_action.return_value = {}
-
 
         schedule_dto = ScheduleDTO(id=None,
                                    source='gateway',

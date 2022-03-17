@@ -2018,11 +2018,9 @@ class WebInterface(object):
         """
         energy_dirty = self._energy_dirty
         self._energy_dirty = False
-        orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
         return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
-                'power': energy_dirty,
-                'orm': orm_dirty}
+                'power': energy_dirty}
 
     @openmotics_api(auth=True, check=types(level=str, logger_name=str))
     def set_loglevel(self, level='INFO', logger_name=None):  # type: (str, Optional[str]) -> Dict

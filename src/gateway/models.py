@@ -252,52 +252,54 @@ class Config(Base):
     setting = Column(String(255), unique=True, nullable=False)
     data = Column(String(255), nullable=False)
 
-    # CACHE_EXPIRY_DURATION = 60
-    # CACHE = {}
+    CACHE_EXPIRY_DURATION = 60
+    CACHE = {}
 
-    # @staticmethod
-    # def get_entry(key, fallback):
-    #     # type: (str, T) -> T
-    #     """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
-    #     key = key.lower()
-    #     if key in Config.CACHE:
-    #         data, expire_at = Config.CACHE[key]
-    #         if expire_at > time.time():
-    #             return data
-    #     raw_data = Config.select(Config.data).where(Config.setting == key).dicts().first()
-    #     if raw_data is not None:
-    #         data = json.loads(raw_data['data'])
-    #     else:
-    #         data = fallback
-    #     Config.CACHE[key] = (data, time.time() + Config.CACHE_EXPIRY_DURATION)
-    #     return data
+    @staticmethod
+    def get_entry(key, fallback):
+        # type: (str, T) -> T
+        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
+        key = key.lower()
+        if key in Config.CACHE:
+            data, expire_at = Config.CACHE[key]
+            if expire_at > time.time():
+                return data
+        with Database.get_session() as db:
+            raw_data = db.query(Config.data).where(Config.setting == key).one_or_none()
+        if raw_data is not None:
+            data = json.loads(raw_data[0])
+        else:
+            data = fallback
+        Config.CACHE[key] = (data, time.time() + Config.CACHE_EXPIRY_DURATION)
+        return data
 
-    # @staticmethod
-    # def set_entry(key, value):
-    #     # type: (str, Any) -> None
-    #     """ Sets a setting in the DB, does overwrite if already existing """
-    #     key = key.lower()
-    #     data = json.dumps(value)
-    #     config_orm = Config.get_or_none(Config.setting == key)
-    #     if config_orm is not None:
-    #         # if the key already exists, update the value
-    #         config_orm.data = data
-    #         config_orm.save()
-    #     else:
-    #         # create a new setting if it was non existing
-    #         config_orm = Config(setting=key, data=data)
-    #         config_orm.save()
-    #     Config.CACHE[key] = (value, time.time() + Config.CACHE_EXPIRY_DURATION)
+    @staticmethod
+    def set_entry(key, value):
+        # type: (str, Any) -> None
+        """ Sets a setting in the DB, does overwrite if already existing """
+        key = key.lower()
+        data = json.dumps(value)
+        with Database.get_session() as db:
+            config_orm = db.query(Config).where(Config.setting == key).one_or_none()
+            if config_orm is not None:
+                # if the key already exists, update the value
+                config_orm.data = data
+            else:
+                # create a new setting if it was non existing
+                config_orm = Config(setting=key, data=data)
+            db.add(config_orm)
+            db.commit()
+        Config.CACHE[key] = (value, time.time() + Config.CACHE_EXPIRY_DURATION)
 
-    # @staticmethod
-    # def remove_entry(key):
-    #     # type: (str) -> int
-    #     """ Removes a setting from the DB """
-    #     amount = Config.delete().where(
-    #         Config.setting == key.lower()
-    #     ).execute()
-    #     Config.CACHE.pop(key, None)
-    #     return amount
+    @staticmethod
+    def remove_entry(key):
+        # type: (str) -> int
+        """ Removes a setting from the DB """
+        with Database.get_session() as db:
+            rows_deleted = db.query(Config).where(Config.setting == key.lower()).delete()
+            db.commit()
+        Config.CACHE.pop(key, None)
+        return rows_deleted
 
 
 class Plugin(Base):

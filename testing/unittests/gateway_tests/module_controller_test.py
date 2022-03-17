@@ -17,19 +17,20 @@ from __future__ import absolute_import
 import unittest
 import time
 import mock
-from peewee import SqliteDatabase
-
+import fakesleep
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from gateway.enums import ModuleType
 from gateway.api.serializers import ModuleSerializer
 from gateway.dto import ModuleDTO
 from gateway.hal.master_controller import MasterController
-from gateway.models import Module
+from gateway.models import Module, Database, Base
 from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
 from gateway.energy_module_controller import EnergyModuleController
 from ioc import SetTestMode, SetUpTestInjections
 from enums import HardwareType
-import fakesleep
 
 MODELS = [Module]
 
@@ -38,13 +39,26 @@ class ModuleControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
+        fakesleep.monkey_patch()
+
+    @classmethod
+    def tearDownClass(cls):
+        super(ModuleControllerTest, cls).tearDownClass()
+        fakesleep.monkey_restore()
+
 
     def setUp(self):
-        fakesleep.monkey_patch()
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         self.master_controller = mock.Mock(MasterController)
@@ -53,16 +67,12 @@ class ModuleControllerTest(unittest.TestCase):
                             maintenance_controller=mock.Mock(),
                             energy_module_controller=self.energy_module_controller)
         self.controller = ModuleController()
-        module = Module.create(address=2,
-                               source=ModuleDTO.Source.GATEWAY,
-                               hardware_type=HardwareType.PHYSICAL,
-                               module_type=ModuleType.ENERGY)
-        module.save()
-
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
-        fakesleep.monkey_restore()
+        with Database.get_session() as db:
+            db.add(Module(address=2,
+                          source=ModuleDTO.Source.GATEWAY,
+                          hardware_type=HardwareType.PHYSICAL,
+                          module_type=ModuleType.ENERGY))
+            db.commit()
 
     def test_module_sync(self):
         master_modules = [ModuleDTO(id=0,
