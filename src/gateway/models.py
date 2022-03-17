@@ -214,12 +214,13 @@ class EnergyModule(Base, MasterNumber):
     cts = relationship("EnergyCT",  lazy='joined', innerjoin=False, back_populates="energy_module")  # type: RelationshipProperty[List[EnergyCT]]
 
 
-class EnergyCT(Base, MasterNumber):
+class EnergyCT(Base):
     __tablename__ = 'energyct'
     __table_args__ = (UniqueConstraint('number', 'energy_module_id'), {'sqlite_autoincrement': True})
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), default='', nullable=False)
+    number = Column(Integer, unique=False, nullable=False)
     sensor_type = Column(Integer, nullable=False)
     times = Column(String(255), nullable=False)
     inverted = Column(Boolean, default=False, nullable=False)
