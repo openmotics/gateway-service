@@ -14,16 +14,21 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
-import unittest
-import fakesleep
-import mock
-import time
 import logging
-from peewee import SqliteDatabase
+import time
+import unittest
 
-from gateway.models import Pump, Output, Valve, PumpToValveAssociation
-from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
+import mock
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import fakesleep
+from gateway.models import Base, Database, Output, Pump, \
+    PumpToValveAssociation, Valve
 from gateway.output_controller import OutputController
+from gateway.thermostat.gateway.pump_valve_controller import \
+    PumpValveController
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
@@ -42,19 +47,25 @@ class PumpValveControllerTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.test_db = SqliteDatabase(':memory:')
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
     def test_open_valves(self):
-        Valve.create(number=1, name='valve 1', delay=30, output=Output.create(number=1))
-        Valve.create(number=2, name='valve 2', delay=30, output=Output.create(number=2))
-        Valve.create(number=3, name='valve 3', delay=30, output=Output.create(number=3))
+        with self.session as db:
+            db.add_all([
+                Valve(name='valve 1', delay=30, output=Output(number=1)),
+                Valve(name='valve 2', delay=30, output=Output(number=2)),
+                Valve(name='valve 3', delay=30, output=Output(number=3)),
+            ])
+            db.commit()
 
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
         controller = PumpValveController()
@@ -80,14 +91,21 @@ class PumpValveControllerTest(unittest.TestCase):
             self.assertEqual(0, valve_driver_3._desired_percentage)
 
     def test_transitions(self):
-        pump_1 = Pump.create(number=1, name='pump 1', output=Output.create(number=1))
-        pump_2 = Pump.create(number=2, name='pump 2', output=Output.create(number=2))
-        valve_1 = Valve.create(number=1, name='valve 1', delay=30, output=Output.create(number=11))
-        valve_2 = Valve.create(number=2, name='valve 2', delay=15, output=Output.create(number=12))
-        valve_3 = Valve.create(number=3, name='valve 3', delay=15, output=Output.create(number=13))
-        PumpToValve.create(pump=pump_1, valve=valve_1)
-        PumpToValve.create(pump=pump_1, valve=valve_2)
-        PumpToValve.create(pump=pump_2, valve=valve_3)
+        with self.session as db:
+            db.add_all([
+                Pump(name='pump 1',
+                     output=Output(number=1),
+                     valves=[
+                         Valve(name='valve 1', delay=30, output=Output(number=11)),
+                         Valve(name='valve 2', delay=15, output=Output(number=12)),
+                     ]),
+                Pump(name='pump 2',
+                     output=Output(number=2),
+                     valves=[
+                         Valve(name='valve 3', delay=15, output=Output(number=13)),
+                     ])
+            ])
+            db.commit()
 
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
         controller = PumpValveController()
