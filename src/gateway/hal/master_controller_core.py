@@ -160,7 +160,8 @@ class MasterCoreController(MasterController):
     def _process_event(self, core_event):
         log_event = True
         try:
-            if core_event.type in [MasterCoreEvent.Types.BUTTON_PRESS]:
+            if core_event.type in [MasterCoreEvent.Types.BUTTON_PRESS,
+                                   MasterCoreEvent.Types.SENSOR]:
                 log_event = False
             if core_event.type == MasterCoreEvent.Types.OUTPUT:
                 output_id = core_event.data['output']
