@@ -205,7 +205,6 @@ class MasterCoreController(MasterController):
                 search_type = core_event.data.get('type')
                 if search_type == MasterCoreEvent.SearchType.ACTIVE:
                     guard_timeout = CoreCommunicator.BLOCKER_TIMEOUTS[CommunicationBlocker.AUTO_DISCOVER] * 0.9
-                    self._new_modules_found = False
                     self._guard_module_discovery(activate=True, timeout=guard_timeout)
                     self._master_communicator.report_blockage(blocker=CommunicationBlocker.AUTO_DISCOVER,
                                                               active=True)
@@ -407,9 +406,11 @@ class MasterCoreController(MasterController):
 
         max_specs = self._master_communicator.do_command(command=CoreAPI.general_configuration_max_specs(),
                                                          fields={})
+        version = self.get_firmware_version()
         global_configuration = GlobalConfiguration()
         amd = global_configuration.automatic_module_discovery
         logger.info('General core information:')
+        logger.info('* Version: {0}'.format('.'.join(str(x) for x in version)))
         logger.info('* Modules:')
         logger.info('  * Auto discovery:')
         logger.info('    * Enabled: {0}'.format('Yes' if amd.automatic_discovery_enabled else 'No'))
@@ -438,7 +439,7 @@ class MasterCoreController(MasterController):
         logger.info('    * FRAM BA logging: {0}abled'.format('Dis' if global_configuration.debug.disable_fram_ba_logging else 'En'))
         logger.info('    * Health check: {0}abled'.format('En' if global_configuration.debug.enable_health_check else 'Dis'))
         logger.info('    * FRAM error logging: {0}abled'.format('En' if global_configuration.debug.enable_fram_error_logging else 'Dis'))
-        logger.info('  * Uptime: {0}d {1}h'.format(global_configuration.uptime_hours / 24,
+        logger.info('  * Uptime: {0}d {1}h'.format(global_configuration.uptime_hours // 24,
                                                    global_configuration.uptime_hours % 24))
         # noinspection PyStringFormat
         logger.info('  * Started at 20{0}/{1}/{2} {3}:{4}:{5}'.format(*(list(reversed(global_configuration.startup_date)) +
@@ -1063,7 +1064,6 @@ class MasterCoreController(MasterController):
     def module_discover_start(self, timeout):  # type: (int) -> None
         with self._discovery_log_lock:
             self._discovery_log = []
-        self._new_modules_found = False
         self._guard_module_discovery(activate=True, timeout=timeout)
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
