@@ -102,6 +102,7 @@ class MasterCoreController(MasterController):
         self._last_health_warning_timestamp = 0.0
         self._pulse_counter_values = {}  # type: Dict[int, Optional[int]]
         self._new_modules_found = False
+        self._rogue_module_timer = None  # type: Optional[Timer]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
@@ -152,6 +153,15 @@ class MasterCoreController(MasterController):
                                                        'address': data['address'],
                                                        'module_number': data['line_number']})
         self._process_event(core_event)
+        if self._discover_mode_timer is None:
+            logger.info('A new module is found, but no discovery is active')
+            if self._rogue_module_timer is not None:
+                self._rogue_module_timer.cancel()
+                self._rogue_module_timer = None
+            self._rogue_module_timer = Timer(interval=60,
+                                             function=self._finish_module_discovery,
+                                             kwargs={'reason': 'rogue module discovered'})
+            self._rogue_module_timer.start()
 
     def _handle_event(self, data):
         # type: (Dict[str, Any]) -> None
@@ -1100,7 +1110,8 @@ class MasterCoreController(MasterController):
         if activate:
             if self._discover_mode_timer is not None:
                 self._discover_mode_timer.cancel()
-            self._discover_mode_timer = Timer(timeout, self.module_discover_stop)
+            self._discover_mode_timer = Timer(interval=timeout,
+                                              function=self.module_discover_stop)
             self._discover_mode_timer.start()
         elif self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
