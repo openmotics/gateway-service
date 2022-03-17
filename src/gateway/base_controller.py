@@ -108,11 +108,9 @@ class BaseController(object):
 
         try:
             sync_structures = self._sync_structures
-            if sync_structures:
-                self._sync_structures = False
+            self._sync_structures = False
             send_config_event = self._send_config_event
-            if send_config_event:
-                self._send_config_event = False
+            self._send_config_event = False
 
             for structure in self.SYNC_STRUCTURES:
                 orm_model = structure.orm_model
