@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 @Injectable.named('room_controller')
 @Singleton
 class RoomController(object):
+    def __init__(self):
+        pass
+
     def load_room(self, room_id):  # type: (int) -> RoomDTO
         with Database.get_session() as db:
             room = db.query(Room).where(Room.number == room_id).one()

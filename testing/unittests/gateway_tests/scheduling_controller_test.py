@@ -23,19 +23,19 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta
-from unittest import mock
 
+import mock
 from apscheduler.schedulers.background import BackgroundScheduler
-from mock import Mock
 from peewee import SqliteDatabase
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.master_controller import MasterController
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import DaySchedule, Schedule, Base, Database
+from gateway.models import Base, Database, DaySchedule, Schedule
 from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
@@ -67,12 +67,12 @@ class SchedulingControllerTest(unittest.TestCase):
         session_mock.start()
         self.addCleanup(session_mock.stop)
 
-        self.group_action_controller = Mock(GroupActionController)
-        self.master_controller = Mock(MasterController)
+        self.group_action_controller = mock.Mock(GroupActionController)
+        self.master_controller = mock.Mock(MasterController)
         SetUpTestInjections(master_controller=self.master_controller,
                             message_client=None,
                             module_controller=None,
-                            pubsub=Mock(PubSub))
+                            pubsub=mock.Mock(PubSub))
         SetUpTestInjections(system_controller=SystemController())
         SetUpTestInjections(configuration_controller=None,
                             energy_module_controller=None,
@@ -94,7 +94,7 @@ class SchedulingControllerTest(unittest.TestCase):
         SetUpTestInjections(scheduling_controller=self.controller)
         self.web_interface = WebInterface()
         self.controller.set_webinterface(self.web_interface)
-        self.scheduler = Mock(BackgroundScheduler)
+        self.scheduler = mock.Mock(BackgroundScheduler)
         self.scheduler.get_job.return_value = None
         self.controller._scheduler = self.scheduler
         self.controller.start()

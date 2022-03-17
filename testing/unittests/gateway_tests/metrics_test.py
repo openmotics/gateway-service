@@ -30,7 +30,6 @@ from peewee import SqliteDatabase
 from threading import Lock
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
-from gateway.migrations.config import ConfigMigrator
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
 from gateway.models import Config
@@ -47,7 +46,6 @@ class MetricsTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        ConfigMigrator._insert_defaults()
 
     def tearDown(self):
         self.test_db.drop_tables(MODELS)

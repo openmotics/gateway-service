@@ -20,7 +20,6 @@ import datetime
 import logging
 import time
 
-from peewee import DoesNotExist
 from sqlalchemy import func, select
 
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO

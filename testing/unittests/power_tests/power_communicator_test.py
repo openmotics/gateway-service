@@ -18,26 +18,30 @@ Tests for EnergyCommunicator module.
 
 from __future__ import absolute_import
 
+import logging
 import time
 import unittest
-from unittest import mock
+import mock
+
 import xmlrunner
 from pytest import mark
-import logging
-from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, ADDRESS_MODE, NORMAL_MODE
-from gateway.enums import EnergyEnums
-from gateway.pubsub import PubSub
-from gateway.models import Module, EnergyModule, EnergyCT, Base, Database
-from gateway.dto import ModuleDTO
-from ioc import SetTestMode, SetUpTestInjections
-from gateway.energy.energy_communicator import InAddressModeException, EnergyCommunicator
-from serial_test import SerialMock, sin, sout
-from serial_utils import RS485, CommunicationTimedOutException
-from enums import HardwareType
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+from enums import HardwareType
+from gateway.dto import ModuleDTO
+from gateway.energy.energy_api import ADDRESS_MODE, BROADCAST_ADDRESS, \
+    NORMAL_MODE, EnergyAPI
+from gateway.energy.energy_communicator import EnergyCommunicator, \
+    InAddressModeException
+from gateway.enums import EnergyEnums
+from gateway.models import Base, Database, EnergyCT, EnergyModule, Module
+from gateway.pubsub import PubSub
+from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
+from serial_test import SerialMock, sin, sout
+from serial_utils import RS485, CommunicationTimedOutException
 
 MODELS = [Module, EnergyModule, EnergyCT]
 
