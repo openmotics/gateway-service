@@ -22,6 +22,7 @@ from __future__ import absolute_import
 import logging
 import random
 import six
+from sqlalchemy import select
 
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.dto.user import UserDTO
@@ -208,7 +209,7 @@ class UserController(object):
         # type: (int) -> str
         _ = self
         with Database.get_session() as db:
-            current_pin_codes = list(db.query(User.pin_code).all())
+            current_pin_codes = list(db.execute(select(User.pin_code)).scalars())
         # Split this up for testing reasons
         return UserController._generate_new_pin_code(length, current_pin_codes)
 
@@ -224,7 +225,7 @@ class UserController(object):
     def check_if_pin_exists(self, pin):
         _ = self
         with Database.get_session() as db:
-            current_pin_codes = list(db.query(User.pin_code).all())
+            current_pin_codes = list(db.execute(select(User.pin_code)).scalars())
         return pin in current_pin_codes
 
     @staticmethod
