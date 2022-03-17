@@ -209,21 +209,7 @@ class UARTController(object):
                 client = self._get_modbus_client(arg.get('slaveaddress'))
                 reg_output = {}
                 for config in arg.get('read_configs'):
-                    if isinstance(config.get('registeraddress'), basestring):
-                        registeraddresses = []
-                        if ',' in config.get('registeraddress'):
-                            commasplitted = config.get('registeraddress').split(',')
-                        elif ';' in config.get('registeraddress'):
-                            commasplitted = config.get('registeraddress').split(';')
-                        else:
-                            commasplitted = [config.get('registeraddress')]
-                        for value in commasplitted:
-                            if '-' in value:
-                                registeraddresses.append(range(value.split('-')[0], value.split('-')[1]))
-                            else:
-                                registeraddresses.append(value)
-                    else:
-                        registeraddresses = [config.get('registeraddress')]
+                    registeraddresses = self._unparse_range_string(possible_string=config.get('registeraddress'))
                     data = []
                     for registeraddress in registeraddresses:
                         data.append(self._execute_modbus(action=client.read_registers,
@@ -244,3 +230,25 @@ class UARTController(object):
             return action(**kwargs)
         finally:
             self._last_activity = time.time()
+
+    def _unparse_range_string(self, possible_string):
+        strings = []
+        try:
+            if isinstance(possible_string, basestring):
+                strings = []
+                if ',' in possible_string:
+                    commasplitted = possible_string.split(',')
+                elif ';' in possible_string:
+                    commasplitted = possible_string.split(';')
+                else:
+                    commasplitted = [possible_string]
+                for value in commasplitted:
+                    if '-' in value:
+                        strings.append(_ for _ in range(int(value.split('-')[0]), int(value.split('-')[1]) + 1))
+                    else:
+                        strings.append(int(value))
+            else:
+                strings = [possible_string]
+        except Exception as ex:
+            logger.warning('Unable to unparse the string {0}: {1}'.format(possible_string, ex))
+        return strings
