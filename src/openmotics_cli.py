@@ -31,28 +31,29 @@ def cmd_feature_thermostats(args):
     from platform_utils import System
     System.import_libs()
 
-    from gateway.models import DataMigration, Feature
+    from gateway.models import Database, DataMigration, Feature
     if args.enable and args.disable:
-      logger.error('--enable and --disable are mutually exclusive')
-    if args.enable or args.disable:
-        logger.info('Updating feature thermostats_gateway')
-        enabled = args.enable and not args.disable
-        feature, _ = Feature.get_or_create(name='thermostats_gateway')
-        feature.enabled = enabled
-        feature.save()
-    if args.migrate:
-        logger.info('Updating data migration for thermostats')
-        migration = DataMigration.get_or_none(name='thermostats')
-        if migration:
-            migration.migrated = False
-            migration.save()
+        logger.error('--enable and --disable are mutually exclusive')
 
-    logger.info('')
-    feature = Feature.get_or_none(name='thermostats_gateway')
-    logger.info('    feature:   thermostats_gateway enabled=%s', feature and feature.enabled)
-    migration = DataMigration.get_or_none(name='thermostats')
-    logger.info('    migration: thermostats migrated=%s', migration and migration.migrated)
-    logger.info('')
+    with Database.get_session() as db:
+        if args.enable or args.disable:
+            logger.info('Updating feature thermostats_gateway')
+            enabled = args.enable and not args.disable
+            feature = db.query(Feature).filter_by(name='thermostats_gateway').one_or_none()
+            if feature is None:
+                feature = Feature(name='thermostats_gateway')
+            feature.enabled = enabled
+        if args.migrate:
+            logger.info('Updating data migration for thermostats')
+            migration = db.query(DataMigration).filter_by(name='thermostats').one_or_none()
+            if migration:
+                migration.migrated = False
+        db.commit()
+
+        logger.info('')
+        logger.info('    feature:   thermostats_gateway enabled=%s', feature.enabled)
+        logger.info('    migration: thermostats migrated=%s', migration and migration.migrated)
+        logger.info('')
 
 
 def cmd_factory_reset(args):
