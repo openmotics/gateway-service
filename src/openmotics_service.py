@@ -28,9 +28,7 @@ from signal import SIGTERM, signal
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
-from gateway.migrations import ConfigMigrator, EnergyModulesMigrator, \
-    FeatureMigrator, InputMigrator, RoomsMigrator, \
-    ScheduleMigrator, ThermostatsMigrator, UserMigrator
+from gateway.migrations.thermostats import ThermostatsMigrator
 from gateway.models import Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
@@ -165,15 +163,6 @@ class OpenmoticsService(object):
         pulse_counter_controller.run_sync_orm()
         sensor_controller.run_sync_orm()
         shutter_controller.run_sync_orm()
-
-        # Execute data migration(s)
-        FeatureMigrator.migrate()
-        RoomsMigrator.migrate()
-        InputMigrator.migrate()
-        ScheduleMigrator.migrate()
-        UserMigrator.migrate()
-        ConfigMigrator.migrate()
-        EnergyModulesMigrator.migrate()
 
         thermostats_gateway_enabled = Feature.select(Feature.enabled) \
             .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
