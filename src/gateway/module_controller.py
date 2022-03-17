@@ -54,6 +54,8 @@ class ModuleController(BaseController):
         self._sync_running = True
 
         if self._sync_structures:
+            self._sync_structures = False
+
             logger.info('ORM sync (Modules)')
             amounts = {None: 0, True: 0, False: 0}
             try:
@@ -108,7 +110,6 @@ class ModuleController(BaseController):
             except Exception as ex:
                 logger.exception('ORM sync (Modules): Failed')
 
-        self._sync_structures = False
         self._sync_running = False
         return True
 
