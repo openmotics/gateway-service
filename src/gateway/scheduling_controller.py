@@ -35,7 +35,7 @@ from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
 from gateway.dto.schedule import BaseScheduleDTO
 from gateway.events import GatewayEvent
 from gateway.mappers import ScheduleMapper
-from gateway.models import DaySchedule, Schedule, Database
+from gateway.models import Database, DaySchedule, NoResultFound, Schedule
 from gateway.pubsub import PubSub
 from gateway.webservice import params_parser
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -163,7 +163,7 @@ class SchedulingController(object):
         # type: (int) -> ScheduleDTO
         schedule_dto = self._schedules.get(schedule_id)
         if schedule_dto is None:
-            raise Schedule.DoesNotExist('Schedule {0} does not exist'.format(schedule_id))
+            raise NoResultFound('Schedule {0} does not exist'.format(schedule_id))
         return schedule_dto
 
     def load_schedules(self):

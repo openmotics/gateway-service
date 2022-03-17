@@ -27,7 +27,7 @@ import six
 
 import constants
 from gateway.events import GatewayEvent
-from gateway.models import Config, Plugin, Database
+from gateway.models import Config, Database, Plugin
 from ioc import INJECTED, Inject, Injectable, Singleton
 from plugins.runner import PluginRunner, RunnerWatchdog
 
@@ -220,11 +220,11 @@ class PluginController(object):
         # type: (str, str) -> None
         try:
             with Database.get_session() as db:
-                plugin = db.query(Plugin).where(Plugin.name == name).one_or_none()
+                plugin = db.query(Plugin).filter_by(name=name).one_or_none()  # type: Optional[Plugin]
                 if plugin is None:
-                    p = Plugin(name=name, version=version)
-                    db.add(p)
-                elif plugin.version != version:
+                    plugin = Plugin(name=name, version=version)
+                    db.add(plugin)
+                if plugin.version != version:
                     plugin.version = version
                 db.commit()
         except Exception as ex:
