@@ -90,7 +90,7 @@ class OutputModuleConfiguration(MemoryModelDefinition):
     @property
     def hardware_type(self):
         # Source: Inside the `Eeprom.c` file in the master fimrware code
-        if self.device_type in ['o', 'l', 'd'] and '.000.000.' in self.address:
+        if self.device_type in ['o', 'l', 'd'] and '.000.000.' in self.address and int(self.address.split('.')[-1]) < 4:
             return HardwareType.INTERNAL
         if self.device_type in ['O', 'R', 'D', 'L']:
             return HardwareType.PHYSICAL
@@ -142,7 +142,7 @@ class InputModuleConfiguration(MemoryModelDefinition):
     @property
     def hardware_type(self):
         # Source: Inside the `Eeprom.c` file in the master fimrware code
-        if self.device_type in ['i'] and '.000.000.' in self.address:
+        if self.device_type in ['i'] and '.000.000.000' in self.address:
             return HardwareType.INTERNAL
         if self.device_type in ['b']:
             return HardwareType.EMULATED
