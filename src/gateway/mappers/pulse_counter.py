@@ -25,22 +25,24 @@ if False:  # MYPY
 
 
 class PulseCounterMapper(object):
+    def __init__(self, db):
+        self._db = db
 
-    @staticmethod
-    def orm_to_dto(orm_object):  # type: (PulseCounter) -> PulseCounterDTO
+    def orm_to_dto(self, orm_object):  # type: (PulseCounter) -> PulseCounterDTO
+        _ = self
         return PulseCounterDTO(id=orm_object.number,
                                name=orm_object.name,
                                persistent=orm_object.persistent,
                                room=None if orm_object.room is None else orm_object.room.number)
 
-    @staticmethod
-    def dto_to_orm(pulse_counter_dto):  # type: (PulseCounterDTO) -> PulseCounter
-        pulse_counter = PulseCounter.get_or_none(number=pulse_counter_dto.id)
+    def dto_to_orm(self, pulse_counter_dto):  # type: (PulseCounterDTO) -> PulseCounter
+        pulse_counter = self._db.query(PulseCounter).where(PulseCounter.number == pulse_counter_dto.id).one_or_none()
         if pulse_counter is None:
             pulse_counter = PulseCounter(number=pulse_counter_dto.id,
                                          name='',
                                          source='gateway',
                                          persistent=False)
+            self._db.add(pulse_counter)
         if 'name' in pulse_counter_dto.loaded_fields:
             pulse_counter.name = pulse_counter_dto.name
         if 'persistent' in pulse_counter_dto.loaded_fields:
