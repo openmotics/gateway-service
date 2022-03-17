@@ -23,7 +23,10 @@ from peewee import SqliteDatabase
 import fakesleep
 from gateway.dto import SensorStatusDTO
 from gateway.enums import ThermostatState
-from gateway.models import DaySchedule, Output, Preset, Sensor, Thermostat, \
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+from gateway.models import Base, Database, DaySchedule, Output, Preset, Sensor, Thermostat, \
     ThermostatGroup, Valve, ValveToThermostatAssociation
 from gateway.sensor_controller import SensorController
 from gateway.thermostat.gateway.pump_valve_controller import \
@@ -31,8 +34,6 @@ from gateway.thermostat.gateway.pump_valve_controller import \
 from gateway.thermostat.gateway.thermostat_pid import PID, ThermostatPid
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
-
-MODELS = [Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostatAssociation, Valve, Output, DaySchedule]
 
 
 class PumpValveControllerTest(unittest.TestCase):
@@ -47,61 +48,60 @@ class PumpValveControllerTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.test_db = SqliteDatabase(':memory:')
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
         sensor_controller = mock.Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self._pump_valve_controller = mock.Mock(PumpValveController)
         SetUpTestInjections(sensor_controller=sensor_controller)
-        sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')
-        self._thermostat_group = ThermostatGroup.create(number=0,
-                                                        name='thermostat group',
-                                                        on=True,
-                                                        threshold_temperature=10.0,
-                                                        sensor=sensor,
-                                                        mode='heating')
-
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def _get_thermostat_pid(self):
-        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
-        thermostat = Thermostat.create(number=1,
-                                       name='thermostat 1',
-                                       sensor=sensor,
-                                       pid_heating_p=200,
-                                       pid_heating_i=100,
-                                       pid_heating_d=50,
-                                       pid_cooling_p=200,
-                                       pid_cooling_i=100,
-                                       pid_cooling_d=50,
-                                       automatic=True,
-                                       room=None,
-                                       start=0,
-                                       valve_config='equal',
-                                       thermostat_group=self._thermostat_group)
-        ValveToThermostat.create(thermostat=thermostat,
-                                 valve=Valve.create(number=1,
-                                                    name='valve 1',
-                                                    output=Output.create(number=1)),
-                                 mode=ThermostatGroup.Modes.HEATING,
-                                 priority=0)
-        ValveToThermostat.create(thermostat=thermostat,
-                                 valve=Valve.create(number=2,
-                                                    name='valve 2',
-                                                    output=Output.create(number=2)),
-                                 mode=ThermostatGroup.Modes.COOLING,
-                                 priority=0)
-        Preset.create(type=Preset.Types.AUTO,
-                      heating_setpoint=20.0,
-                      cooling_setpoint=25.0,
-                      active=True,
-                      thermostat=thermostat)
-        return ThermostatPid(thermostat=thermostat,
-                             pump_valve_controller=self._pump_valve_controller)
+        with self.session as db:
+            db.add_all([
+                Thermostat(
+                    number=0,
+                    name='thermostat 0',
+                    pid_heating_p=200,
+                    pid_heating_i=100,
+                    pid_heating_d=50,
+                    pid_cooling_p=200,
+                    pid_cooling_i=100,
+                    pid_cooling_d=50,
+                    automatic=True,
+                    start=0,
+                    valve_config='equal',
+                    sensor=Sensor(source='master', external_id='10', physical_quantity='temperature', name=''),
+                    group=ThermostatGroup(number=0, name='thermostat group', mode='heating'),
+                    presets=[
+                        Preset(type=Preset.Types.AUTO,
+                               active=True,
+                               heating_setpoint=20.0,
+                               cooling_setpoint=25.0)
+                    ]
+                ),
+                ValveToThermostatAssociation(thermostat_id=1,
+                                             priority=0,
+                                             mode=ThermostatGroup.Modes.HEATING,
+                                             valve=Valve(name='valve 1',
+                                                         output=Output(number=1))),
+                ValveToThermostatAssociation(thermostat_id=1,
+                                             priority=0,
+                                             mode=ThermostatGroup.Modes.COOLING,
+                                             valve=Valve(name='valve 2',
+                                                         output=Output(number=2)))
+            ])
+            db.commit()
+            thermostat = db.query(Thermostat).filter_by(number=0).one()
+            return ThermostatPid(thermostat, pump_valve_controller=self._pump_valve_controller)
 
     def test_basic(self):
         thermostat_pid = self._get_thermostat_pid()
@@ -114,14 +114,22 @@ class PumpValveControllerTest(unittest.TestCase):
 
     def test_enabled(self):
         thermostat_pid = self._get_thermostat_pid()
-        thermostat = thermostat_pid._thermostat
         self.assertTrue(thermostat_pid.enabled)
-        # No sensor configured
-        sensor = thermostat.sensor
-        thermostat.sensor = None
+
+        with self.session as db:
+            thermostat = db.query(Thermostat).filter_by(number=0).one()
+            thermostat.sensor = None
+            db.commit()
+        thermostat_pid.update_thermostat()
         self.assertFalse(thermostat_pid.enabled)
-        thermostat.sensor = sensor
+
+        with self.session as db:
+            thermostat = db.query(Thermostat).filter_by(number=0).one()
+            thermostat.sensor = db.query(Sensor).filter_by(external_id='10').one()
+            db.commit()
+        thermostat_pid.update_thermostat()
         self.assertTrue(thermostat_pid.enabled)
+
         # No valves
         heating_valve_ids = thermostat_pid._heating_valve_ids
         thermostat_pid._heating_valve_ids = []
@@ -129,13 +137,22 @@ class PumpValveControllerTest(unittest.TestCase):
         self.assertFalse(thermostat_pid.enabled)
         thermostat_pid._heating_valve_ids = heating_valve_ids
         self.assertTrue(thermostat_pid.enabled)
-        # The group is turned off
-        thermostat.state = ThermostatState.OFF
-        thermostat_pid.update_thermostat(thermostat)
+
+        # The unit is turned off
+        with self.session as db:
+            thermostat = db.query(Thermostat).filter_by(number=0).one()
+            thermostat.state = ThermostatState.OFF
+            db.commit()
+        thermostat_pid.update_thermostat()
         self.assertFalse(thermostat_pid.enabled)
-        thermostat.state = ThermostatState.ON
-        thermostat_pid.update_thermostat(thermostat)
+
+        with self.session as db:
+            thermostat = db.query(Thermostat).filter_by(number=0).one()
+            thermostat.state = ThermostatState.ON
+            db.commit()
+        thermostat_pid.update_thermostat()
         self.assertTrue(thermostat_pid.enabled)
+
         # A high amount of errors
         thermostat_pid._errors = 10
         self.assertFalse(thermostat_pid.enabled)
@@ -146,11 +163,13 @@ class PumpValveControllerTest(unittest.TestCase):
         thermostat_pid = self._get_thermostat_pid()
         thermostat_pid._pid = mock.Mock(PID)
         thermostat_pid._pid.setpoint = 0.0
-        thermostat = thermostat_pid._thermostat
         self.assertTrue(thermostat_pid.enabled)
 
-        thermostat.state = ThermostatState.OFF
-        thermostat_pid.update_thermostat(thermostat)
+        with self.session as db:
+            thermostat = db.query(Thermostat).filter_by(number=0).one()
+            thermostat.state = ThermostatState.OFF
+            db.commit()
+        thermostat_pid.update_thermostat()
         self._pump_valve_controller.set_valves.call_count = 0
         self._pump_valve_controller.set_valves.mock_calls = []
         self.assertFalse(thermostat_pid.tick())
@@ -159,9 +178,12 @@ class PumpValveControllerTest(unittest.TestCase):
                                  mock.call(0, [2], mode='equal')]),
                          sorted(self._pump_valve_controller.set_valves.mock_calls))
         self.assertEqual(2, self._pump_valve_controller.set_valves.call_count)
-        thermostat.state = ThermostatState.ON
-        thermostat_pid.update_thermostat(thermostat)
 
+        with self.session as db:
+            thermostat = db.query(Thermostat).filter_by(number=0).one()
+            thermostat.state = ThermostatState.ON
+            db.commit()
+        thermostat_pid.update_thermostat()
         for mode, output_power, heating_power, cooling_power in [(ThermostatGroup.Modes.HEATING, 100, 100, 0),
                                                                  (ThermostatGroup.Modes.HEATING, 50, 50, 0),
                                                                  (ThermostatGroup.Modes.HEATING, 0, 0, 0),
