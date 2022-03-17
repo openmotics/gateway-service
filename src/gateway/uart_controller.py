@@ -209,15 +209,12 @@ class UARTController(object):
                 client = self._get_modbus_client(arg.get('slaveaddress'))
                 reg_output = {}
                 for config in arg.get('read_configs'):
-                    registeraddresses = self._unparse_range_string(possible_string=config.get('registeraddress'))
-                    data = []
+                    registeraddresses = self._unparse_range_string(possible_string=config.get('registeraddress'), step=config.get('number_of_registers', 1))
                     for registeraddress in registeraddresses:
-                        data.append(self._execute_modbus(action=client.read_registers,
-                                                    registeraddress=config.get('registeraddress'),
-                                                    number_of_registers=config.get('number_of_registers', 1),
-                                                    functioncode=config.get('functioncode', 3)))
-
-                    reg_output[config.get('registeraddress')] = data
+                        reg_output[registeraddress] = self._execute_modbus(action=client.read_registers,
+                                                                           registeraddress=registeraddress,
+                                                                           number_of_registers=config.get('number_of_registers', 1),
+                                                                           functioncode=config.get('functioncode', 3))
             output[arg.get('slaveaddress')] = reg_output
         return output
 
@@ -231,7 +228,12 @@ class UARTController(object):
         finally:
             self._last_activity = time.time()
 
-    def _unparse_range_string(self, possible_string):
+    def _unparse_range_string(self, possible_string, step=1):
+        """
+        :param possible_string: string corresponding to a certain interval of numbers
+        :param step: step that will be used in a range of numbers
+        :return: a list of all numbers the string corresponds to
+        """
         strings = []
         try:
             if isinstance(possible_string, basestring):
@@ -244,7 +246,7 @@ class UARTController(object):
                     commasplitted = [possible_string]
                 for value in commasplitted:
                     if '-' in value:
-                        strings.append(_ for _ in range(int(value.split('-')[0]), int(value.split('-')[1]) + 1))
+                        strings.append(_ for _ in range(int(value.split('-')[0]), int(value.split('-')[1]) + 1, step))
                     else:
                         strings.append(int(value))
             else:
