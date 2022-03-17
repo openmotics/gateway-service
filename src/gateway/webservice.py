@@ -2065,7 +2065,8 @@ class WebInterface(object):
                      different registers of the modbus device and additional parameters a read will be executed on.
                      Additional parameters within this list, are number_of_registers (default 1) and functioncode
                      (default 3).
-        :return: A dict with as keys the different slaveaddresses will be returned. The value of these keys will be a
+        :return: A dict with as keys succes and data. The value of the key succes is a bool. The value of the key data
+                 is a dict with as keys the different slaveaddresses will be returned. The value of these keys will be a
                  dict with as keys the different registeraddresses. The value of these keys contains the data of these
                  specific registers. If number_of_registers > 1, the value will be a list containing all the values.
 
@@ -2092,6 +2093,22 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(args='json'))
     def write_modbus_registers(self, args):
+        """
+        :param args: this should be a list of one or multiple dictionaries with the keys slaveaddress and write_configs,
+                     this list contains all different modbus devices a write will be executed on. The value of the
+                     slaveaddress key has to be the address of the modbus device. The value of the write_configs key is
+                     a list of one or multiple dictionaries with the keys registeraddress and values, this list contains
+                     all different registers of the modbus device a write will be executed on together with the values
+                     that will be written. The value of the values parameter should always be a list.
+        :return: A dict wit key succes, value is a bool
+
+        Caution when using this function, the parameter number_of_registers used in the method read_modbus_registers is
+        implicitly used in this function within the length of the values parameter. As in the
+        read_modbus_registers method, this functionality should only be used if the modbus device explicitly says a
+        value can be written spanning multiple registers. If a lot of registers will be written with the same values,
+        the value of registeraddress can be a string existing of '-' or ','/';' to define a range of
+        registers.
+        """
         if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
             raise FeatureUnavailableException()
         self._uart_controller.write_registers(args)
