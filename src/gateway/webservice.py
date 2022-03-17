@@ -2090,13 +2090,11 @@ class WebInterface(object):
                                              signed=signed)
         return {}
 
-    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, values=list))
-    def write_modbus_registers(self, slaveaddress, registeraddress, values):
+    @openmotics_api(auth=True, check=types(args='json'))
+    def write_modbus_registers(self, args):
         if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
             raise FeatureUnavailableException()
-        self._uart_controller.write_registers(slaveaddress=slaveaddress,
-                                              registeraddress=registeraddress,
-                                              values=values)
+        self._uart_controller.write_registers(args)
         return {}
 
     # Energy modules

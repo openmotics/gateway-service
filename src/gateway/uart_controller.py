@@ -180,14 +180,17 @@ class UARTController(object):
                                  signed=signed)
 
     @require_mode(Mode.MODBUS)
-    def write_registers(self, slaveaddress, registeraddress, values):
-        # type: (int, int, list) -> None
-        logger.info(values)
+    def write_registers(self, args):
+        # type: (list) -> None
         with self._modbus_lock:
-            client = self._get_modbus_client(slaveaddress)
-            self._execute_modbus(client.write_registers,
-                                 registeraddress=registeraddress,
-                                 values=values)
+            for arg in args:
+                client = self._get_modbus_client(arg.get('slaveaddress'))
+                for config in arg.get('write_configs'):
+                    registeraddresses = self._unparse_range_string(possible_string=config.get('registeraddress'))
+                    for registeraddress in registeraddresses:
+                        self._execute_modbus(client.write_registers,
+                                             registeraddress=registeraddress,
+                                             values=config.get('values'))
 
     @require_mode(Mode.MODBUS)
     def read_register(self, slaveaddress, registeraddress, number_of_decimals=0, functioncode=3, signed=False):
