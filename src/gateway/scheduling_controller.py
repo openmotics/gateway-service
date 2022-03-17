@@ -121,7 +121,7 @@ class SchedulingController(object):
         stale_schedules = {k: v for k, v in self._schedules.items()}
         with Database.get_session() as db:
             for schedule in db.query(Schedule).all():
-                schedule_dto = ScheduleMapper.orm_to_dto(schedule)
+                schedule_dto = ScheduleMapper(db).orm_to_dto(schedule)
                 if self._schedules.get(schedule.id) != schedule_dto:
                     self._submit_schedule(schedule_dto)
                 stale_schedules.pop(schedule.id, None)
@@ -174,7 +174,7 @@ class SchedulingController(object):
         # type: (List[ScheduleDTO]) -> None
         with Database.get_session() as db:
             for schedule_dto in schedules:
-                schedule = ScheduleMapper.dto_to_orm(db, schedule_dto)
+                schedule = ScheduleMapper(db).dto_to_orm(schedule_dto)
                 self._validate(schedule)
                 db.add(schedule)
             db.commit()
@@ -270,7 +270,7 @@ class SchedulingController(object):
             schedule_dto.next_execution = None
             schedule_dto.status = 'COMPLETED'
             with Database.get_session() as db:
-                schedule = ScheduleMapper.dto_to_orm(db, schedule_dto)
+                schedule = ScheduleMapper(db).dto_to_orm(schedule_dto)
                 db.add(schedule)
                 db.commit()
         else:

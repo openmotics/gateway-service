@@ -26,6 +26,8 @@ if False:  # MYPY
 
 
 class ScheduleMapper(object):
+    def __init__(self, db):
+        self._db = db
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (Schedule) -> ScheduleDTO
@@ -44,9 +46,8 @@ class ScheduleMapper(object):
                            end=orm_object.end,
                            arguments=arguments)
 
-    @staticmethod
-    def dto_to_orm(db, schedule_dto):  # type: (Session, ScheduleDTO) -> Schedule
-        schedule = db.query(Schedule).where(Schedule.id == schedule_dto.id).one_or_none()
+    def dto_to_orm(self, schedule_dto):  # type: (ScheduleDTO) -> Schedule
+        schedule = self._db.query(Schedule).where(Schedule.id == schedule_dto.id).one_or_none()
         if schedule is None:
             mandatory_fields = {'name', 'start', 'action'}
             if not mandatory_fields.issubset(set(schedule_dto.loaded_fields)):

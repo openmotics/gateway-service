@@ -294,6 +294,7 @@ class Config(Base):
         """ Removes a setting from the DB """
         with Database.get_session() as db:
             rows_deleted = db.query(Config).where(Config.setting == key.lower()).delete()
+            db.commit()
         Config.CACHE.pop(key, None)
         return rows_deleted
 

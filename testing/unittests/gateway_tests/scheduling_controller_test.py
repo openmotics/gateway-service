@@ -318,7 +318,7 @@ class SchedulingControllerTest(unittest.TestCase):
         schedules = self.controller.load_schedules()
         dto = ScheduleDTO(id=None, source='gateway', **kwargs)
         self.controller.save_schedules([dto])
-        for _ in range(100):
+        for _ in range(60):
             if len(self.controller.load_schedules()) > len(schedules):
                 break
             time.sleep(0.1)

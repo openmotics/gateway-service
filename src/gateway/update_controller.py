@@ -670,7 +670,7 @@ class UpdateController(object):
                     if module.id is not None:
                         module.update_success = False
                     failures += 1
-                db.commit()
+            db.commit()
 
         # Cleanup
         base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
@@ -736,7 +736,7 @@ class UpdateController(object):
                     if module.id is not None:
                         module.update_success = False
                     failures += 1
-                db.commit()
+            db.commit()
 
         # Cleanup
         base_template = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base)
@@ -748,7 +748,7 @@ class UpdateController(object):
 
     @staticmethod
     def _filter_modules_to_update(db, all_modules, target_version, mode):
-        # type: (Session, List[Module], str, str) -> List[Module]
+        # type: (Any, List[Module], str, str) -> List[Module]
         modules_to_update = []
         for module in all_modules:
             if module.firmware_version == target_version:
@@ -758,7 +758,7 @@ class UpdateController(object):
                 else:
                     module.update_success = True
                     db.add(module)
-                    db.save()
+                    db.commit()
             else:
                 # When an outdated module is automatically updated, it should
                 # take the update_success into account (no retries yet), but
