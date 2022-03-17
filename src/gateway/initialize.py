@@ -105,11 +105,10 @@ def apply_migrations():
     # type: () -> None
     logger.info('Applying migrations')
     # Run all unapplied migrations
-    from alembic.config import Config
-    from alembic import command
-    gateway_src = os.path.abspath(os.path.join(__file__, '..'))
-    alembic_cfg = Config("{}/alembic.ini".format(gateway_src))
-    command.upgrade(alembic_cfg, "head")
+    from alembic import command, config
+    cfg = config.Config(os.path.abspath(os.path.join(__file__, '../../alembic.ini')))
+    cfg.set_main_option('sqlalchemy.url', 'sqlite:///{0}'.format(constants.get_gateway_database_file()))
+    command.upgrade(cfg, 'head')
 
 
 @Inject
