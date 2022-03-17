@@ -176,8 +176,8 @@ class PulseCounterController(BaseController):
     def set_value(self, pulse_counter_id, value):  # type: (int, int) -> int
         with Database.get_session() as db:
             pulse_counter = db.query(PulseCounter).where(PulseCounter.number == pulse_counter_id).one()
-        if pulse_counter.source == 'master':
-            raise ValueError('Cannot set pulse counter value for a Master controlled PulseCounter')
+            if pulse_counter.source == 'master':
+                raise ValueError('Cannot set pulse counter value for a Master controlled PulseCounter')
         self._counts[pulse_counter_id] = value
         return value
 
