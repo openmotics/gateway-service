@@ -8,10 +8,6 @@ from gateway import models
 # access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-fileConfig(config.config_file_name)
-
 # add your model's MetaData object here
 # for 'autogenerate' support
 target_metadata = models.Base.metadata
@@ -73,6 +69,10 @@ def run_migrations_online():
 
 
 if context.is_offline_mode():
+    # Interpret the config file for Python logging.
+    # This line sets up loggers basically.
+    fileConfig(config.config_file_name)  # type: ignore
+
     run_migrations_offline()
 else:
     run_migrations_online()

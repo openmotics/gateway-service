@@ -24,7 +24,6 @@ import ujson as json
 import fakesleep
 import xmlrunner
 import time
-from peewee import SqliteDatabase
 from threading import Lock
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
@@ -36,7 +35,6 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from gateway.models import Database, Base, Input, Room
 import mock
-from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
 logger = logging.getLogger('test')

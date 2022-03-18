@@ -17,14 +17,17 @@ Tests for the types module
 """
 
 from __future__ import absolute_import
+
 import unittest
-import xmlrunner
+
 from mock import Mock
+
+from gateway.models import NoResultFound
 from ioc import SetTestMode
-from master.core.basic_action import BasicAction  # Must be imported
-from master.core.memory_types import *
-from master.core.memory_file import MemoryTypes, MemoryFile
 from logs import Logs
+from master.core.basic_action import BasicAction  # Must be imported
+from master.core.memory_file import MemoryFile, MemoryTypes
+from master.core.memory_types import *
 from mocked_core_helper import MockedCore
 
 logger = logging.getLogger(__name__)
@@ -385,13 +388,13 @@ class MemoryTypesTest(unittest.TestCase):
             id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0)))
 
         for invalid_id in [None, -1, 3]:
-            with self.assertRaises(RuntimeError if invalid_id is None else DoesNotExist):
+            with self.assertRaises(RuntimeError if invalid_id is None else NoResultFound):
                 _ = FixedLimitObject(invalid_id)
         for valid_id in [0, 1, 2]:
             self.assertEqual(valid_id, FixedLimitObject(valid_id).id)
 
         for invalid_id in [None, -1, 2]:
-            with self.assertRaises(RuntimeError if invalid_id is None else DoesNotExist):
+            with self.assertRaises(RuntimeError if invalid_id is None else NoResultFound):
                 _ = FieldLimitObject(invalid_id)
         for valid_id in [0, 1]:
             self.assertEqual(valid_id, FieldLimitObject(valid_id).id)
@@ -433,7 +436,3 @@ class MemoryTypesTest(unittest.TestCase):
         instance.checked_enum_field = 'FOO'
         instance.save()
         self.assertEqual(bytearray([20, 235, 255, 0, 255]), self.memory[0])
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

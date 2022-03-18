@@ -77,6 +77,7 @@ class InputControllerTest(unittest.TestCase):
 
         input_dto = InputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
+            self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
 

@@ -47,35 +47,37 @@ class PulseCounterController(BaseController):
             return False
         self._sync_running = True
 
-        start = time.time()
-        logger.info('ORM sync (PulseCounter)')
+        if self._sync_structures:
+            self._sync_structures = False
 
-        try:
-            ids = []
-            with Database.get_session() as db:
-                new_pulse_counters = []
-                for pulse_counter_dto in self._master_controller.load_pulse_counters():
-                    pulse_counter_id = pulse_counter_dto.id
-                    ids.append(pulse_counter_id)
-                    pulse_counter = db.query(PulseCounter).where(number=pulse_counter_id).one_or_none()
-                    if pulse_counter is None:
-                        new_pulse_counters.append(PulseCounter(number=pulse_counter_id,
-                                                               name='PulseCounter {0}'.format(pulse_counter_id),
-                                                               source='master',
-                                                               persistent=pulse_counter_dto.persistent))
-                db.add_all(new_pulse_counters)
-                db.query(PulseCounter).where((PulseCounter.source == 'master') &
-                                             (PulseCounter.number.notin_(ids))).delete()
-                db.commit()
-            duration = time.time() - start
-            logger.info('ORM sync (PulseCounter): completed after {0:.1f}s'.format(duration))
-        except CommunicationFailure as ex:
-            logger.error('ORM sync (PulseCounter): Failed: {0}'.format(ex))
-        except Exception:
-            logger.exception('ORM sync (PulseCounter): Failed')
-        finally:
-            self._sync_running = False
+            start = time.time()
+            logger.info('ORM sync (PulseCounter)')
 
+            try:
+                ids = []
+                with Database.get_session() as db:
+                    new_pulse_counters = []
+                    for pulse_counter_dto in self._master_controller.load_pulse_counters():
+                        pulse_counter_id = pulse_counter_dto.id
+                        ids.append(pulse_counter_id)
+                        pulse_counter = db.query(PulseCounter).where(number=pulse_counter_id).one_or_none()
+                        if pulse_counter is None:
+                            new_pulse_counters.append(PulseCounter(number=pulse_counter_id,
+                                                                   name='PulseCounter {0}'.format(pulse_counter_id),
+                                                                   source='master',
+                                                                   persistent=pulse_counter_dto.persistent))
+                    db.add_all(new_pulse_counters)
+                    db.query(PulseCounter).where((PulseCounter.source == 'master') &
+                                                 (PulseCounter.number.notin_(ids))).delete()
+                    db.commit()
+                duration = time.time() - start
+                logger.info('ORM sync (PulseCounter): completed after {0:.1f}s'.format(duration))
+            except CommunicationFailure as ex:
+                logger.error('ORM sync (PulseCounter): Failed: {0}'.format(ex))
+            except Exception:
+                logger.exception('ORM sync (PulseCounter): Failed')
+
+        self._sync_running = False
         return True
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO

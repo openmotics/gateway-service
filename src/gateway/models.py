@@ -21,11 +21,11 @@ import time
 
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, \
     Text, UniqueConstraint, and_, create_engine
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import RelationshipProperty, relationship, \
     scoped_session, sessionmaker
+from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import MetaData
 
 import constants
@@ -102,7 +102,7 @@ class Output(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
-    room = relationship('Room')
+    room = relationship('Room', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
     pump = relationship('Pump', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Pump]]
     valve = relationship('Valve', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Valve]]
 
@@ -258,7 +258,7 @@ class Config(Base):
     data = Column(String(255), nullable=False)
 
     CACHE_EXPIRY_DURATION = 60
-    CACHE = {}
+    CACHE = {}  # type: Dict[str,Any]
 
     @staticmethod
     def get_entry(key, fallback):

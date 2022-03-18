@@ -631,7 +631,7 @@ class UpdateController(object):
             if not modules_to_update:
                 if module_address is None or mode != UpdateEnums.Modes.FORCED:
                     return 0, 0
-                modules_to_update = [Module(address=single_address)]
+                modules_to_update = [Module(address=module_address)]
 
             # Fetch the firmware
             filename_code = UpdateController.FIRMWARE_INFO_MAP[firmware_type].code

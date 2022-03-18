@@ -57,6 +57,17 @@ class UCANCommunicator(object):
         self._background_consumer = BackgroundConsumer(CoreAPI.ucan_rx_transport_message(), 1, self._process_transport_message)
         self._communicator.register_consumer(self._background_consumer)
 
+    def ping(self, cc_address, ucan_address, bootloader=False, ping_data=1, tries=3, warn=True):
+        """
+        Pings an uCAN in a certain mode
+        """
+        self.do_command(cc_address=cc_address,
+                        command=UCANAPI.ping(SID.BOOTLOADER_COMMAND if bootloader else SID.NORMAL_COMMAND),
+                        identity=ucan_address,
+                        fields={'data': ping_data},
+                        tries=tries,
+                        warn=warn)
+
     def is_ucan_in_bootloader(self, cc_address, ucan_address, tries=2):  # type: (str, str, int) -> bool
         """
         Figures out whether a uCAN is in bootloader or application mode. This can be a rather slow call since it might rely on a communication timeout
@@ -66,20 +77,18 @@ class UCANCommunicator(object):
         :return: Boolean, indicating whether the uCAN is in bootloader or not
         """
         try:
-            self.do_command(cc_address=cc_address,
-                            command=UCANAPI.ping(SID.NORMAL_COMMAND),
-                            identity=ucan_address,
-                            fields={'data': 1},
-                            tries=tries,
-                            warn=False)
+            self.ping(cc_address=cc_address,
+                      ucan_address=ucan_address,
+                      bootloader=False,
+                      tries=tries,
+                      warn=False)
             return False
         except CommunicationTimedOutException:
-            self.do_command(cc_address=cc_address,
-                            command=UCANAPI.ping(SID.BOOTLOADER_COMMAND),
-                            identity=ucan_address,
-                            fields={'data': 1},
-                            tries=tries,
-                            warn=False)
+            self.ping(cc_address=cc_address,
+                      ucan_address=ucan_address,
+                      bootloader=True,
+                      tries=tries,
+                      warn=False)
             return True
 
     def register_consumer(self, consumer):  # type: (Union[Consumer, PalletConsumer]) -> None

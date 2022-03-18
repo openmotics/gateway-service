@@ -94,6 +94,7 @@ class ModuleControllerTest(unittest.TestCase):
                                     hardware_version=None)]
         self.master_controller.get_modules_information.return_value = master_modules
         self.energy_module_controller.get_modules_information.return_value = []  # Empty, should not remove EM
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         self.assertEqual(energy_modules + master_modules, self.controller.load_modules())
         self.assertEqual([], self.controller.load_modules(address='000.000.000.000'))
@@ -109,16 +110,19 @@ class ModuleControllerTest(unittest.TestCase):
                         order=0)
         self.master_controller.get_modules_information.return_value = [dto]
         self.energy_module_controller.get_modules_information.return_value = []
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertIsNone(received_dto.firmware_version)
         self.assertIsNone(received_dto.hardware_version)
         dto.online = True
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertEqual('3.1.0', received_dto.firmware_version)
         self.assertEqual('4', received_dto.hardware_version)
         dto.online = False
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertEqual('3.1.0', received_dto.firmware_version)

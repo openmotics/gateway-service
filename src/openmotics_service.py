@@ -25,11 +25,12 @@ import sys
 import time
 from signal import SIGTERM, signal
 
+from sqlalchemy import select
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
 from gateway.migrations.thermostats import ThermostatsMigrator
-from gateway.models import Feature
+from gateway.models import Database, Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
@@ -164,9 +165,9 @@ class OpenmoticsService(object):
         sensor_controller.run_sync_orm()
         shutter_controller.run_sync_orm()
 
-        thermostats_gateway_enabled = Feature.select(Feature.enabled) \
-            .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
-            .scalar()
+        with Database.get_session() as db:
+            stmt = select(Feature.enabled).filter_by(name=Feature.THERMOSTATS_GATEWAY)  # type: ignore
+            thermostats_gateway_enabled = db.execute(stmt).scalar()
         if thermostats_gateway_enabled:
             ThermostatsMigrator.migrate()
 

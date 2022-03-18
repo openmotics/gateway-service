@@ -454,13 +454,13 @@ class EepromControllerTest(unittest.TestCase):
         controller.invalidate_cache()
         get_pubsub()._publish_all_events(blocking=False)
         self.assertEqual([
-            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {'activation': False})
         ], events)
         controller.activate()
         get_pubsub()._publish_all_events(blocking=False)
         self.assertEqual([
-            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {}),
-            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {'activation': False}),
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {'activation': True})
         ], events)
 
 

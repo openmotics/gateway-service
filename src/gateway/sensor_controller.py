@@ -241,6 +241,7 @@ class SensorController(BaseController):
             raise ValueError('Plugin sensor id {} is invalid'.format(sensor.id))
         if sensor in db.dirty:
             changed = True
+        db.commit()  # explicit commit here because of id allocation
         return sensor, changed
 
     def get_sensors_status(self):  # type: () -> List[SensorStatusDTO]
