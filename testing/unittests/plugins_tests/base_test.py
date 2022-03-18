@@ -20,33 +20,33 @@ from __future__ import absolute_import
 
 import hashlib
 import inspect
+import logging
 import os
 import shutil
 import tempfile
 import time
-from unittest import mock
-
-import ujson as json
 import unittest
-import logging
 from subprocess import call
 
-from mock import Mock
+import mock
+import ujson as json
 from peewee import SqliteDatabase
 from pytest import mark
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 import plugin_runtime
 from gateway.dto import OutputStatusDTO
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
-from gateway.models import Plugin, Base, Database
+from gateway.models import Base, Database, Plugin
 from gateway.output_controller import OutputController
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
-from plugin_runtime.base import PluginConfigChecker, PluginException, PluginWebResponse, PluginWebRequest
 from logs import Logs
+from plugin_runtime.base import PluginConfigChecker, PluginException, \
+    PluginWebRequest, PluginWebResponse
 
 MODELS = [Plugin]
 
@@ -308,7 +308,7 @@ class P1(OMPluginBase):
             time.sleep(1)
 """)
 
-            output_controller = Mock(OutputController)
+            output_controller = mock.Mock(OutputController)
             output_controller.get_output_statuses = lambda: [OutputStatusDTO(id=1, status=True, dimmer=5)]
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
             controller.start()
@@ -388,7 +388,7 @@ class UnsupportedPlugin(OMPluginBase):
     def output_with_unsupported_decorator(self, test_data):
         pass
 """)
-            output_controller = Mock(OutputController)
+            output_controller = mock.Mock(OutputController)
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
             # the plugin will fail to load, but only log this
             controller.start()
@@ -448,7 +448,7 @@ class ShutterPlugin(OMPluginBase):
     def shutter_v3(self, shutter_event):
         self._shutter_data_v3 = shutter_event
 """)
-            shutter_controller = Mock(ShutterController)
+            shutter_controller = mock.Mock(ShutterController)
             shutter_status = [ShutterEnums.State.STOPPED]
             detail_for_shutter = {'1': {'state': ShutterEnums.State.STOPPED,
                                       'actual_position': None,

@@ -30,8 +30,8 @@ class GlobalRTD10DTO(BaseDTO):
 
     def __init__(self, heating_values=None, cooling_values=None):
         # type: (Optional[Dict[float, int]], Optional[Dict[float, int]]) -> None
-        self.heating_values = defaultdict(default_factory=lambda: 0)  # type: DefaultDict[float, int]
-        self.cooling_values = defaultdict(default_factory=lambda: 0)  # type: DefaultDict[float, int]
+        self.heating_values = defaultdict(default=0)  # type: DefaultDict[float, int]
+        self.cooling_values = defaultdict(default=0)  # type: DefaultDict[float, int]
         if heating_values is not None:
             self.heating_values.update({i: heating_values[i]
                                         for i in GlobalRTD10DTO.TEMPERATURES

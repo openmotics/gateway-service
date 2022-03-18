@@ -209,7 +209,8 @@ class UserController(object):
         # type: (int) -> str
         _ = self
         with Database.get_session() as db:
-            current_pin_codes = list(db.execute(select(User.pin_code)).scalars())
+            stmt = select(User.pin_code)  # type: ignore
+            current_pin_codes = db.execute(stmt).scalars()
         # Split this up for testing reasons
         return UserController._generate_new_pin_code(length, current_pin_codes)
 
@@ -225,7 +226,8 @@ class UserController(object):
     def check_if_pin_exists(self, pin):
         _ = self
         with Database.get_session() as db:
-            current_pin_codes = list(db.execute(select(User.pin_code)).scalars())
+            stmt = select(User.pin_code)  # type: ignore
+            current_pin_codes = list(db.execute(stmt).scalars())
         return pin in current_pin_codes
 
     @staticmethod
