@@ -133,8 +133,7 @@ class OutputController(BaseController):
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         with Database.get_session() as db:
             output = db.query(Output) \
-                       .join(Room, isouter=True) \
-                       .where(Output.number == output_id) \
+                       .filter_by(number=output_id) \
                        .one()  # type: Output
             output_dto = self._master_controller.load_output(output_id=output_id)
             output_dto.room = output.room.number if output.room is not None else None
@@ -143,9 +142,7 @@ class OutputController(BaseController):
     def load_outputs(self):  # type: () -> List[OutputDTO]
         output_dtos = []
         with Database.get_session() as db:
-            for output in list(db.query(Output)
-                                 .join(Room, isouter=True)
-                                 .all()):
+            for output in db.query(Output):  # type: Output
                 output_dto = self._master_controller.load_output(output_id=output.number)
                 output_dto.room = output.room.number if output.room is not None else None
                 output_dtos.append(output_dto)
@@ -156,14 +153,16 @@ class OutputController(BaseController):
         outputs_to_save = []
         with Database.get_session() as db:
             for output_dto in outputs:
-                output = db.query(Output).where(number=output_dto.id).one_or_none()  # type: Output
+                output = db.query(Output) \
+                    .filter_by(number=output_dto.id) \
+                    .one_or_none()  # type: Optional[Output]
                 if output is None:
-                    logger.info('Ignored saving non-existing Output {0}'.format(output_dto.id))
+                    raise ValueError('Output {0} does not exist'.format(output_dto.id))
                 if 'room' in output_dto.loaded_fields:
-                    if output_dto.room is None:
+                    if output_dto.room in (None, 255):
                         output.room = None
-                    elif 0 <= output_dto.room <= 100:
-                        output.room = db.query(Room).where(Room.number == output_dto.room).one()
+                    else:
+                        output.room = db.query(Room).filter_by(number=output_dto.room).one()
                 outputs_to_save.append(output_dto)
             db.commit()
         self._master_controller.save_outputs(outputs_to_save)
