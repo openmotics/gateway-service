@@ -31,6 +31,13 @@ from ioc import SetTestMode, SetUpTestInjections
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
 from gateway.models import Config
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+from gateway.models import Database, Base, Input, Room
+import mock
+from ioc import SetTestMode, SetUpTestInjections
+from logs import Logs
 
 logger = logging.getLogger('test')
 
@@ -40,26 +47,31 @@ MODELS = [Config]
 class MetricsTest(unittest.TestCase):
     intervals = {}
 
-    def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
-        ConfigMigrator._insert_defaults()
-
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
-
     @classmethod
     def setUpClass(cls):
+        super(MetricsTest, cls).setUpClass()
         SetTestMode()
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.input_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
         fakesleep.monkey_patch()
         fakesleep.reset(seconds=0)
-        cls.test_db = SqliteDatabase(':memory:')
 
     @classmethod
     def tearDownClass(cls):
+        super(MetricsTest, cls).tearDownClass()
         fakesleep.monkey_restore()
+
+    def setUp(self):
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
     @staticmethod
     def _set_cloud_interval(self, metric_type, interval):
