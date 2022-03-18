@@ -255,8 +255,8 @@ class OutputControllerTest(unittest.TestCase):
                 OutputDTO(id=42, name='foo', room=3),
             ])
             save.assert_called()
-            assert save.call_args_list[0].args[0][0].id == 42
-            assert save.call_args_list[0].args[0][0].name == 'foo'
+            assert save.call_args_list[0][0][0][0].id == 42
+            assert save.call_args_list[0][0][0][0].name == 'foo'
             outputs = self.controller.load_outputs()
             assert OutputDTO(id=42, room=3) in outputs
 
