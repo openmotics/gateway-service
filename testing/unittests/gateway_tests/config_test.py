@@ -18,15 +18,16 @@ Tests for the config module.
 
 from __future__ import absolute_import
 
-import os
-import tempfile
+import mock
 import unittest
 import xmlrunner
-from peewee import SqliteDatabase
-
+import logging
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+from logs import Logs
 from ioc import SetTestMode
-
-from gateway.models import Config
+from gateway.models import Config, Database, Base
 
 MODELS = [Config]
 
@@ -34,27 +35,23 @@ MODELS = [Config]
 class ConfigControllerTest(unittest.TestCase):
     """ Tests for ConfigurationController. """
 
-    _db_filename = None
-
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls._db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls._db_filename)
-
-    @classmethod
-    def tearDownClass(cls):
-        if os.path.exists(cls._db_filename):
-            os.remove(cls._db_filename)
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.config_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
     def test_empty(self):
         """ Test an empty database. """
