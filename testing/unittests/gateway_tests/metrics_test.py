@@ -49,7 +49,6 @@ class MetricsTest(unittest.TestCase):
     def setUpClass(cls):
         super(MetricsTest, cls).setUpClass()
         SetTestMode()
-        Logs.set_loglevel(logging.DEBUG, namespace='gateway.input_controller')
         # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
         fakesleep.monkey_patch()
         fakesleep.reset(seconds=0)
