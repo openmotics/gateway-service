@@ -313,7 +313,7 @@ def upgrade_initial():
     sa.Column('value', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['output_id'], ['output.id'], name=op.f('fk_outputtothermostatgroup_output_id_output'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['thermostat_group_id'], ['thermostatgroup.id'], name=op.f('fk_outputtothermostatgroup_thermostat_group_id_thermostatgroup'), ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('output_id', 'thermostat_group_id', name=op.f('pk_outputtothermostatgroup')),
+    sa.PrimaryKeyConstraint('output_id', 'thermostat_group_id', 'mode', name=op.f('pk_outputtothermostatgroup')),
     sqlite_autoincrement=True
     )
     op.create_table('pumptovalve',
