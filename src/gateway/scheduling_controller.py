@@ -120,15 +120,15 @@ class SchedulingController(object):
         # type: () -> None
         stale_schedules = {k: v for k, v in self._schedules.items()}
         with Database.get_session() as db:
-            for schedule in db.query(Schedule).all():
-                schedule_dto = ScheduleMapper(db).orm_to_dto(schedule)
-                if self._schedules.get(schedule.id) != schedule_dto:
-                    self._submit_schedule(schedule_dto)
-                stale_schedules.pop(schedule.id, None)
-                self._update_status(schedule_dto)
-            for schedule_dto in stale_schedules.values():
-                self._abort(schedule_dto)
-                self._schedules.pop(schedule_dto.id, None)
+            schedule_dtos = [ScheduleMapper(db).orm_to_dto(schedule) for schedule in db.query(Schedule)]
+        for schedule_dto in schedule_dtos:
+            if self._schedules.get(schedule_dto.id) != schedule_dto:
+                self._submit_schedule(schedule_dto)
+            stale_schedules.pop(schedule_dto.id, None)
+            self._update_status(schedule_dto)
+        for schedule_dto in stale_schedules.values():
+            self._abort(schedule_dto)
+            self._schedules.pop(schedule_dto.id, None)
 
     def _submit_schedule(self, schedule_dto):
         # type: (ScheduleDTO) -> None
