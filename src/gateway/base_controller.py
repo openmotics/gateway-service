@@ -20,6 +20,7 @@ from __future__ import absolute_import
 import logging
 import time
 
+from threading import Lock
 from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
@@ -46,6 +47,7 @@ class SyncStructure(object):
 
 class BaseController(object):
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
+    SYNC_LOCK = Lock()
 
     @Inject
     def __init__(self, master_controller, maintenance_controller=INJECTED, pubsub=INJECTED, sync_interval=900):
@@ -55,20 +57,23 @@ class BaseController(object):
         self._pubsub = pubsub
         self._sync_orm_thread = None  # type: Optional[DaemonThread]
         self._sync_orm_interval = sync_interval
-        self._sync_dirty = True  # Always sync after restart.
         self._sync_running = False
+
+        self._sync_structures = True
+        self._send_config_event = True
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type in [MasterEvent.Types.EEPROM_CHANGE]:
-            self._sync_dirty = True
+            self._send_config_event = True
+            self._sync_structures = not master_event.data.get('activation', False)
             self.request_sync_orm()
 
     def start(self):
         self._sync_orm_thread = DaemonThread(name='{0}sync'.format(self.__class__.__name__.lower()[:10]),
-                                             target=self._sync_orm,
+                                             target=self.run_sync_orm,
                                              interval=self._sync_orm_interval,
                                              delay=300)
         self._sync_orm_thread.start()
@@ -86,7 +91,8 @@ class BaseController(object):
             self._sync_orm_thread.request_single_run()
 
     def run_sync_orm(self):
-        self._sync_orm()
+        with BaseController.SYNC_LOCK:
+            self._sync_orm()
 
     def _sync_orm(self):
         # type: () -> bool
@@ -101,25 +107,32 @@ class BaseController(object):
         self._sync_running = True
 
         try:
+            sync_structures = self._sync_structures
+            self._sync_structures = False
+            send_config_event = self._send_config_event
+            self._send_config_event = False
+
             for structure in self.SYNC_STRUCTURES:
                 orm_model = structure.orm_model
-                try:
-                    start = time.time()
-                    logger.info('ORM sync ({0})'.format(orm_model.__name__))
-                    self._sync_orm_structure(structure)
-                    duration = time.time() - start
-                    logger.info('ORM sync ({0}): completed after {1:.1f}s'.format(orm_model.__name__, duration))
-                except CommunicationFailure as ex:
-                    logger.error('ORM sync ({0}): Failed: {1}'.format(orm_model.__name__, ex))
-                except Exception:
-                    logger.exception('ORM sync ({0}): Failed'.format(orm_model.__name__))
 
-                if self._sync_dirty:
+                if sync_structures:
+                    try:
+                        start = time.time()
+                        logger.info('ORM sync ({0})'.format(orm_model.__name__))
+                        self._sync_orm_structure(structure)
+                        duration = time.time() - start
+                        logger.info('ORM sync ({0}): completed after {1:.1f}s'.format(orm_model.__name__, duration))
+                    except CommunicationFailure as ex:
+                        logger.error('ORM sync ({0}): Failed: {1}'.format(orm_model.__name__, ex))
+                    except Exception:
+                        logger.exception('ORM sync ({0}): Failed'.format(orm_model.__name__))
+
+                if send_config_event:
+                    logger.info('ORM sync ({0}): Send CONFIG_CHANGE event'.format(orm_model.__name__))
                     type_name = orm_model.__name__.lower()
                     gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': type_name})
                     self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
                     self.request_sync_state()
-            self._sync_dirty = False
         finally:
             self._sync_running = False
         return True
