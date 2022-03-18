@@ -150,8 +150,10 @@ class OutputControllerTest(unittest.TestCase):
         master_dtos = {1: OutputDTO(id=1, name='one'),
                        2: OutputDTO(id=2, name='two')}
         with Database.get_session() as db:
-            db.add_all([Output(number=1),
-                        Output(number=2)])
+            db.add_all([
+                Output(number=1),
+                Output(number=2)
+            ])
             db.commit()
         with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: master_dtos.get(output_id)):
@@ -187,10 +189,10 @@ class OutputControllerTest(unittest.TestCase):
 
     def test_get_output_status(self):
         with Database.get_session() as db:
-            room = Room(number=3)
-            db.add_all([room,
-                        Output(number=2),
-                        Output(number=40, room=room)])
+            db.add_all([
+                Output(number=2),
+                Output(number=40, room=Room(number=3))
+            ])
             db.commit()
         with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: OutputDTO(id=output_id)), \
@@ -203,10 +205,10 @@ class OutputControllerTest(unittest.TestCase):
 
     def test_get_output_statuses(self):
         with Database.get_session() as db:
-            room = Room(number=3)
-            db.add_all([room,
-                        Output(number=2),
-                        Output(number=40, room=room)])
+            db.add_all([
+                Output(number=2),
+                Output(number=40, room=Room(number=3))
+            ])
             db.commit()
         with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: OutputDTO(id=output_id)), \
@@ -221,9 +223,7 @@ class OutputControllerTest(unittest.TestCase):
 
     def test_load_output(self):
         with Database.get_session() as db:
-            room = Room(number=3)
-            db.add_all([room,
-                        Output(number=42, room=room)])
+            db.add(Output(number=42, room=Room(number=3)))
             db.commit()
         with mock.patch.object(self.master_controller, 'load_output',
                                return_value=OutputDTO(id=42)) as load:
@@ -233,15 +233,32 @@ class OutputControllerTest(unittest.TestCase):
 
     def test_load_outputs(self):
         with Database.get_session() as db:
-            room = Room(number=3)
-            db.add_all([room,
-                        Output(number=42, room=room)])
+            db.add(Output(number=42, room=Room(number=3)))
             db.commit()
         with mock.patch.object(self.master_controller, 'load_output',
                                return_value=OutputDTO(id=42)) as load:
             outputs = self.controller.load_outputs()
             assert OutputDTO(id=42, room=3) in outputs
             load.assert_called_with(output_id=42)
+
+    def test_save_outputs(self):
+        with Database.get_session() as db:
+            db.add_all([
+                Room(number=3),
+                Output(number=42)
+            ])
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
+                               side_effect=lambda output_id: OutputDTO(id=output_id)) as load, \
+             mock.patch.object(self.master_controller, 'save_outputs') as save:
+            self.controller.save_outputs([
+                OutputDTO(id=42, name='foo', room=3),
+            ])
+            save.assert_called()
+            assert save.call_args_list[0].args[0][0].id == 42
+            assert save.call_args_list[0].args[0][0].name == 'foo'
+            outputs = self.controller.load_outputs()
+            assert OutputDTO(id=42, room=3) in outputs
 
     def test_output_actions(self):
         with self.session as db:

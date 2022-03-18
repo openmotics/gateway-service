@@ -102,7 +102,7 @@ class Output(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
 
-    room = relationship('Room', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
     pump = relationship('Pump', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Pump]]
     valve = relationship('Valve', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Valve]]
 
