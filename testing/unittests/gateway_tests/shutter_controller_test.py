@@ -26,9 +26,6 @@ import fakesleep
 import logging
 from gateway.events import GatewayEvent
 from mock import Mock
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.pool import StaticPool
 from gateway.dto import ShutterDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.master_controller_classic import MasterClassicController
@@ -36,6 +33,9 @@ from gateway.models import Room, Shutter, Base, Database
 from gateway.pubsub import PubSub
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from logs import Logs
 
 MODELS = [Shutter, Room]

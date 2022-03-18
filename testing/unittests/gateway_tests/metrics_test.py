@@ -17,7 +17,6 @@ Tests for metrics.
 """
 from __future__ import absolute_import
 import logging
-import os
 import unittest
 import requests
 import copy
@@ -25,12 +24,10 @@ import ujson as json
 import fakesleep
 import xmlrunner
 import time
-import tempfile
 from peewee import SqliteDatabase
 from threading import Lock
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
-from gateway.migrations.config import ConfigMigrator
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
 from gateway.models import Config
