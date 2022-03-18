@@ -530,32 +530,32 @@ class ShutterControllerTest(unittest.TestCase):
                             maintenance_controller=Mock())
         controller = ShutterController()
 
+        # do not try to sync inside the shutter controller, we will update config manually for the tests
+        orm_mock = mock.patch.object(controller, '_sync_orm', return_value=True)
+        orm_mock.start()
+
         # Basic configuration
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
         self.assertEqual(len(controller._shutters), 4)
 
         events = []
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, lambda event: events.append(event))
+        try:
+            controller.start()
+            self.pubsub._publish_all_events()
+            self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                              GatewayEvent('SHUTTER_CHANGE', {'id': 1, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                              GatewayEvent('SHUTTER_CHANGE', {'id': 2, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                              GatewayEvent('SHUTTER_CHANGE', {'id': 3, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}})], events)
 
-        def on_change(gateway_event):
-            events.append(gateway_event)
-
-        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
-        controller.start()
-        self.pubsub._publish_all_events()
-        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 1, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 2, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 3, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}})], events)
-        controller.stop()
-
-        events = []
-        fakesleep.reset(100)
-        controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
-        controller.start()
-        controller.report_shutter_position(0, 89, 'UP')
-        self.pubsub._publish_all_events()
-        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP', 'position': 89, 'last_change': 100.0}, 'location': {'room_id': None}})], events)
-        controller.stop()
+            events = []
+            fakesleep.reset(100)
+            controller.report_shutter_position(0, 89, 'UP')
+            self.pubsub._publish_all_events()
+            self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP', 'position': 89, 'last_change': 100.0}, 'location': {'room_id': None}})], events)
+        finally:
+            controller.stop()
+        orm_mock.stop()
 
     def test_exception_during_sync(self):
         _ = self
