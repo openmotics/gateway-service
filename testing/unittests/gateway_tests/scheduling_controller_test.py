@@ -96,7 +96,7 @@ class SchedulingControllerTest(unittest.TestCase):
         mock_refresh.start()
         self.controller._scheduler.start()
 
-    def tearDown(self) -> None:
+    def tearDown(self):
         self.controller.stop()
 
     def test_save_load(self):
