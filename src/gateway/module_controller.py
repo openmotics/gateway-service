@@ -53,61 +53,63 @@ class ModuleController(BaseController):
             return False
         self._sync_running = True
 
-        logger.info('ORM sync (Modules)')
+        if self._sync_structures:
+            self._sync_structures = False
 
-        amounts = {None: 0, True: 0, False: 0}
-        try:
-            # Master slave modules (update/insert/delete)
-            ids = []
-            with Database.get_session() as db:
-                for dto in self._master_controller.get_modules_information():
-                    module = db.query(Module)\
-                        .where(Module.source == dto.source, Module.address == dto.address)\
-                        .one_or_none()
-                    if module is None:
-                        module = Module(source=dto.source,
-                                        address=dto.address,
-                                        module_type=dto.module_type,
-                                        hardware_type=dto.hardware_type)
-                        db.add(module)
-                    else:
-                        module.module_type = dto.module_type
-                        module.hardware_type = dto.hardware_type
-                    if dto.online:
-                        module.firmware_version = dto.firmware_version
-                        module.hardware_version = dto.hardware_version
-                        module.last_online_update = int(time.time())
-                    module.order = dto.order
-                    amounts[dto.online] += 1
-                    ids.append(module.id)
-                db.query(Module).where(Module.id.notin_(ids), Module.source == ModuleDTO.Source.MASTER).delete()
-                db.commit()
+            logger.info('ORM sync (Modules)')
 
-                # Energy modules (online update live metadata)
-                for dto in self._energy_module_controller.get_modules_information():
-                    module = db.query(Module)\
-                        .where(Module.source == dto.source, Module.address == dto.address)\
-                        .one_or_none()
-                    if module is None:
-                        logger.warning('ORM sync (Modules): Could not find EnergyModule {0}'.format(dto.address))
-                        continue
-                    if dto.online:
-                        module.firmware_version = dto.firmware_version
-                        module.hardware_version = dto.hardware_version
-                        module.last_online_update = int(time.time())
-                        db.add(module)
-                    amounts[dto.online] += 1
-                logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
-                    amounts[True], amounts[False], amounts[None]
-                ))
-                db.commit()
-        except CommunicationFailure as ex:
-            logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
-        except Exception as ex:
-            logger.exception('ORM sync (Modules): Failed')
-        finally:
-            self._sync_running = False
+            amounts = {None: 0, True: 0, False: 0}
+            try:
+                # Master slave modules (update/insert/delete)
+                ids = []
+                with Database.get_session() as db:
+                    for dto in self._master_controller.get_modules_information():
+                        module = db.query(Module)\
+                            .where(Module.source == dto.source, Module.address == dto.address)\
+                            .one_or_none()
+                        if module is None:
+                            module = Module(source=dto.source,
+                                            address=dto.address,
+                                            module_type=dto.module_type,
+                                            hardware_type=dto.hardware_type)
+                            db.add(module)
+                        else:
+                            module.module_type = dto.module_type
+                            module.hardware_type = dto.hardware_type
+                        if dto.online:
+                            module.firmware_version = dto.firmware_version
+                            module.hardware_version = dto.hardware_version
+                            module.last_online_update = int(time.time())
+                        module.order = dto.order
+                        amounts[dto.online] += 1
+                        ids.append(module.id)
+                    db.query(Module).where(Module.id.notin_(ids), Module.source == ModuleDTO.Source.MASTER).delete()
+                    db.commit()
 
+                    # Energy modules (online update live metadata)
+                    for dto in self._energy_module_controller.get_modules_information():
+                        module = db.query(Module)\
+                            .where(Module.source == dto.source, Module.address == dto.address)\
+                            .one_or_none()
+                        if module is None:
+                            logger.warning('ORM sync (Modules): Could not find EnergyModule {0}'.format(dto.address))
+                            continue
+                        if dto.online:
+                            module.firmware_version = dto.firmware_version
+                            module.hardware_version = dto.hardware_version
+                            module.last_online_update = int(time.time())
+                            db.add(module)
+                        amounts[dto.online] += 1
+                    logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
+                        amounts[True], amounts[False], amounts[None]
+                    ))
+                    db.commit()
+            except CommunicationFailure as ex:
+                logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
+            except Exception as ex:
+                logger.exception('ORM sync (Modules): Failed')
+
+        self._sync_running = False
         return True
 
     def get_modules(self):
@@ -174,6 +176,9 @@ class ModuleController(BaseController):
 
     def module_discover_stop(self):  # type: () -> None
         self._master_controller.module_discover_stop()
+
+    def module_discover_auto(self, wait=True):  # type: (bool) -> bool
+        return self._master_controller.module_discover_auto(wait=wait)
 
     def module_discover_status(self):  # type: () -> bool
         return self._master_controller.module_discover_status()

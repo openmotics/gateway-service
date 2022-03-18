@@ -60,7 +60,7 @@ class EepromController(object):
         """ Invalidate the cache, this should happen when maintenance mode was used. """
         self._eeprom_file.invalidate_cache()
         self.dirty = True
-        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {'activation': False})
         self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, eeprom_model, id=None, fields=None):
@@ -158,7 +158,7 @@ class EepromFile(object):
         """
         logger.info('EEPROM - Activate')
         self._master_communicator.do_command(activate_eeprom(), {'eep': 0}, timeout=5)
-        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {'activation': True})
         self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, addresses):
