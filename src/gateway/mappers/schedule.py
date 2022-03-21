@@ -47,7 +47,7 @@ class ScheduleMapper(object):
                            arguments=arguments)
 
     def dto_to_orm(self, schedule_dto):  # type: (ScheduleDTO) -> Schedule
-        schedule = self._db.query(Schedule).where(Schedule.id == schedule_dto.id).one_or_none()
+        schedule = self._db.query(Schedule).filter_by(id=schedule_dto.id).one_or_none()
         if schedule is None:
             mandatory_fields = {'name', 'start', 'action'}
             if not mandatory_fields.issubset(set(schedule_dto.loaded_fields)):
