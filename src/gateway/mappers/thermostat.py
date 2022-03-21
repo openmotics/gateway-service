@@ -154,7 +154,7 @@ class ThermostatMapper(object):
             .join(DaySchedule, isouter=True) \
             .where(Thermostat.number == thermostat_dto.id) \
             .one()  # type: Thermostat
-        day_schedules = {x.index: x for x in thermostat.schedules}
+        day_schedules = {x.index: x for x in thermostat.schedules if x.mode == mode}
 
         links = []
         for field, day_index in [('auto_mon', 0),
