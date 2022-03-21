@@ -66,8 +66,7 @@ class MetricsCollectorTest(unittest.TestCase):
         self.shutter_controller.get_shutters_status.return_value = [ShutterStatusDTO(id=42,
                                                                                      state='GOING_UP',
                                                                                      actual_position=21,
-                                                                                     desired_position=99,
-                                                                                     last_change=1647881197.0)]
+                                                                                     desired_position=99)]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
             self.controller._process_shutters('shutter')
             expected_call = mock.call(timestamp=mock.ANY,
@@ -75,8 +74,7 @@ class MetricsCollectorTest(unittest.TestCase):
                                       tags={'id': 42, 'name': 'Shutter 42'},
                                       values={'state': 'GOING_UP',
                                               'actual_position': 21,
-                                              'desired_position': 99,
-                                              'last_change': 1647881197.0})
+                                              'desired_position': 99})
             assert enqueue.call_args_list == [expected_call]
 
     def test_sensor_metrics(self):

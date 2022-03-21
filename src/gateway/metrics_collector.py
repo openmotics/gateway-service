@@ -551,7 +551,6 @@ class MetricsCollector(object):
             values['state'] = shutter_status_dto.state
             values['actual_position'] = shutter_status_dto.actual_position
             values['desired_position'] = shutter_status_dto.desired_position
-            values['last_change'] = shutter_status_dto.last_change
             self._enqueue_metrics(metric_type=metric_type,
                                   values=values,
                                   tags=tags,
@@ -913,7 +912,7 @@ class MetricsCollector(object):
                 for shutter_dto in shutters:
                     shutter_id = shutter_dto.id
                     ids.append(shutter_id)
-                    self._environment_shutters[shutter_id] = (shutter_dto, {})
+                    self._environment_shutters[shutter_id] = shutter_dto
                 for shutter_id in self._environment_shutters.keys():
                     if shutter_id not in ids:
                         del self._environment_shutters[shutter_id]
