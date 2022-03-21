@@ -17,8 +17,10 @@ from __future__ import absolute_import
 import unittest
 import mock
 from gateway.dto import SensorDTO, SensorStatusDTO, RealtimeEnergyDTO, EnergyModuleDTO, TotalEnergyDTO
+from gateway.dto.shutter import ShutterStatusDTO, ShutterDTO
 from gateway.metrics_collector import MetricsCollector
 from gateway.sensor_controller import SensorController
+from gateway.shutter_controller import ShutterController
 from ioc import Scope, SetTestMode, SetUpTestInjections
 
 
@@ -46,15 +48,36 @@ class MetricsCollectorTest(unittest.TestCase):
         self.em_controller.get_realtime_energy.return_value = {}
         self.em_controller.get_realtime_p1.return_value = {}
         self.em_controller.get_total_energy.return_value = {}
+        self.shutter_controller = mock.Mock(ShutterController)
         self.sensor_controller = mock.Mock(SensorController)
         SetUpTestInjections(energy_module_controller=self.em_controller,
                             pulse_counter_controller=mock.Mock(),
                             thermostat_controller=mock.Mock(),
                             output_controller=mock.Mock(),
+                            shutter_controller=self.shutter_controller,
                             input_controller=mock.Mock(),
                             sensor_controller=self.sensor_controller,
                             module_controller=mock.Mock())
         self.controller = MetricsCollector()
+
+    def test_shutter_metrics(self):
+        shutter_dto = ShutterDTO(id=42, name='Shutter 42')
+        self.controller._environment_shutters = {42: shutter_dto}
+        self.shutter_controller.get_shutters_status.return_value = [ShutterStatusDTO(id=42,
+                                                                                     state='GOING_UP',
+                                                                                     actual_position=21,
+                                                                                     desired_position=99,
+                                                                                     last_change=1647881197.0)]
+        with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
+            self.controller._process_shutters('shutter')
+            expected_call = mock.call(timestamp=mock.ANY,
+                                      metric_type='shutter',
+                                      tags={'id': 42, 'name': 'Shutter 42'},
+                                      values={'state': 'GOING_UP',
+                                              'actual_position': 21,
+                                              'desired_position': 99,
+                                              'last_change': 1647881197.0})
+            assert enqueue.call_args_list == [expected_call]
 
     def test_sensor_metrics(self):
         sensor_dto = SensorDTO(id=42, source='master', external_id='0', physical_quantity='temperature', unit='celcius', name='foo')
