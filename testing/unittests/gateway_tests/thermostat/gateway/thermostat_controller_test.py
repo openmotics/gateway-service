@@ -535,10 +535,10 @@ class ThermostatControllerTest(unittest.TestCase):
 
         with self.session as db:
             thermostat = db.query(Thermostat).filter_by(number=0).one()
-            # self.assertEqual(0, len(thermostat.heating_schedules))  # defaults
             default_schedule = DaySchedule.DEFAULT_SCHEDULE['heating']
             self.assertEqual(default_schedule, thermostat.heating_schedules[0].schedule_data)
-            expected = {Preset.Types.AWAY: 16.0,
+            expected = {Preset.Types.AUTO: 14.0,
+                        Preset.Types.AWAY: 16.0,
                         Preset.Types.VACATION: 15.0,
                         Preset.Types.PARTY: 22.0}
             self.assertEqual(expected, {x.type: x.heating_setpoint for x in thermostat.presets})
@@ -556,7 +556,8 @@ class ThermostatControllerTest(unittest.TestCase):
             thermostat = db.get(Thermostat, 1)
             self.assertEqual({0: 1.0, 4*60*60: 2.0, 5*60*60: 1.0, 6*60*60: 3.0, 7*60*60: 1.0},
                              thermostat.heating_schedules[0].schedule_data)
-            expected = {Preset.Types.AWAY: 8.0,
+            expected = {Preset.Types.AUTO: 14.0,
+                        Preset.Types.AWAY: 8.0,
                         Preset.Types.VACATION: 9.0,
                         Preset.Types.PARTY: 10.0}
             self.assertEqual(expected, {x.type: x.heating_setpoint for x in thermostat.presets})

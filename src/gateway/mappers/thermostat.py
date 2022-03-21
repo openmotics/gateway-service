@@ -154,7 +154,7 @@ class ThermostatMapper(object):
             .join(DaySchedule, isouter=True) \
             .where(Thermostat.number == thermostat_dto.id) \
             .one()  # type: Thermostat
-        day_schedules = {x.index: x for x in thermostat.schedules}
+        day_schedules = {x.index: x for x in thermostat.schedules if x.mode == mode}
 
         links = []
         for field, day_index in [('auto_mon', 0),
@@ -184,6 +184,12 @@ class ThermostatMapper(object):
             .join(Preset, isouter=True) \
             .where(Thermostat.number == thermostat_dto.id) \
             .one()  # type: Thermostat
+        if not thermostat.presets:
+            thermostat.presets = [
+                Preset(type=Preset.Types.AUTO, heating_setpoint=14.0, cooling_setpoint=30.0)  # type: ignore
+            ]
+        if thermostat.active_preset is None:
+            thermostat.presets[0].active = True
         presets = {preset.type: preset for preset in thermostat.presets}
 
         links = []

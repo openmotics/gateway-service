@@ -296,18 +296,20 @@ class ThermostatControllerGateway(ThermostatController):
     def set_current_preset(self, thermostat_id, preset_type):  # type: (int, str) -> None
         with Database.get_session() as db:
             thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()  # type: Thermostat
-            change = self._set_current_preset(thermostat, preset_type=preset_type)
+            self._set_current_preset(thermostat, preset_type=preset_type)
+            change = bool(db.dirty)
             db.commit()
         if change:
             self.tick_thermostat(thermostat_id)
 
     def _set_current_preset(self, thermostat, preset_type):
-        # type: (Thermostat, str) -> bool
+        # type: (Thermostat, str) -> None
         preset = next((x for x in thermostat.presets if x.type == preset_type), None)  # type: Optional[Preset]
         if preset is None:
             preset = Preset(thermostat=thermostat, type=preset_type,
                             heating_setpoint=Preset.DEFAULT_PRESETS['heating'].get(preset_type, 14.0),
                             cooling_setpoint=Preset.DEFAULT_PRESETS['cooling'].get(preset_type, 30.0))  # type: ignore
+
         if preset.type == Preset.Types.AUTO:
             # Restore setpoint from auto schedule.
             now = datetime.now()
@@ -325,22 +327,14 @@ class ThermostatControllerGateway(ThermostatController):
                 except StopIteration:
                     logger.warning('could not determine %s setpoint from schedule', mode)
 
-        if thermostat.active_preset == preset:
-            return False
-
-        for p in thermostat.presets:
-            p.active = False
-        preset.active = True
-
-        return True
+        if thermostat.active_preset != preset:
+            for p in thermostat.presets:
+                p.active = False
+            preset.active = True
 
     def _set_current_state(self, thermostat, state):
-        # type: (Thermostat, str) -> bool
-        if thermostat.state == state:
-            return False
+        # type: (Thermostat, str) -> None
         thermostat.state = state
-
-        return True
 
     def tick_thermostat(self, thermostat_id):  # type: (int) -> None
         pid = self.thermostat_pids.get(thermostat_id)
@@ -453,10 +447,11 @@ class ThermostatControllerGateway(ThermostatController):
             if changed or state is not None:
                 for thermostat in thermostat_group.thermostats:
                     if state is not None:
-                        changed |= self._set_current_state(thermostat,
-                                                           state=state)
-                    changed |= self._set_current_preset(thermostat=thermostat,
-                                                        preset_type=Preset.Types.AUTO)
+                        self._set_current_state(thermostat,
+                                                state=state)
+                    self._set_current_preset(thermostat=thermostat,
+                                             preset_type=Preset.Types.AUTO)
+            change = bool(db.dirty)
             db.commit()
             if changed:
                 for thermostat in thermostat_group.thermostats:
@@ -506,6 +501,7 @@ class ThermostatControllerGateway(ThermostatController):
                 mapper = ThermostatMapper(db)
                 logger.debug('Updating thermostat %s', thermostat_dto)
                 thermostat = mapper.dto_to_orm(thermostat_dto)
+                db.add(thermostat)
                 update_valves, remove_valves = mapper.get_valve_links(thermostat_dto, mode)
                 for valve_to_thermostat in remove_valves:
                     logger.debug('Removing %s of thermostat %s', valve_to_thermostat.valve.name, thermostat.number)
@@ -548,7 +544,8 @@ class ThermostatControllerGateway(ThermostatController):
                 preset_type = Preset.Types.AUTO  # type: str
             else:
                 preset_type = Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.AUTO)
-            change = self._set_current_preset(thermostat, preset_type=preset_type)
+            self._set_current_preset(thermostat, preset_type=preset_type)
+            change = bool(db.dirty)
             db.commit()
         if change:
             self.tick_thermostat(thermostat_id)
@@ -559,14 +556,15 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()
             change = False
             if preset is not None:
-                change |= self._set_current_preset(thermostat,
-                                                   preset_type=preset)
+                self._set_current_preset(thermostat,
+                                         preset_type=preset)
             if state is not None:
-                change |= self._set_current_state(thermostat=thermostat,
-                                                  state=state)
+                self._set_current_state(thermostat=thermostat,
+                                        state=state)
             if temperature is not None:
-                change |= self._set_current_setpoint(thermostat=thermostat,
-                                                     temperature=temperature)
+                self._set_current_setpoint(thermostat=thermostat,
+                                           temperature=temperature)
+            change = bool(db.dirty)
             db.commit()
         if change:
             self.tick_thermostat(thermostat_id)
