@@ -1181,13 +1181,13 @@ class MasterCoreController(MasterController):
         # C/E = Physical/internal CAN Control
         return {'outputs': outputs, 'inputs': inputs, 'shutters': [], 'can_inputs': can_inputs}
 
-    def _request_firmware_versions(self, bus, timeout=4.0):
+    def _request_firmware_versions(self, bus):
         try:
             self._master_communicator.report_blockage(blocker=CommunicationBlocker.VERSION_SCAN,
                                                       active=True)
             self._firmware_versions = {}
             amount = 0
-            threshold = time.time() + timeout
+            threshold = time.time() + CoreCommunicator.BLOCKER_TIMEOUTS[CommunicationBlocker.VERSION_SCAN] * 0.9
             if bus == MasterCoreEvent.Bus.CAN:
                 logger.info('Requesting firmware version for uCANs')
                 amount += self._master_communicator.do_command(command=CoreAPI.request_ucan_module_information(),
