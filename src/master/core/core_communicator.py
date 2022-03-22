@@ -65,7 +65,7 @@ class CoreCommunicator(object):
     BLOCKER_TIMEOUTS = {CommunicationBlocker.RESTART: 15.0,
                         CommunicationBlocker.AUTO_DISCOVER: 360.0,
                         CommunicationBlocker.UPDATE: 900.0,
-                        CommunicationBlocker.VERSION_SCAN: 5.0,
+                        CommunicationBlocker.VERSION_SCAN: 15.0,
                         CommunicationBlocker.FACTORY_RESET: 600.0}
     BLOCKER_ABORT = [CommunicationBlocker.UPDATE,
                      CommunicationBlocker.FACTORY_RESET]
