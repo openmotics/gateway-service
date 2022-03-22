@@ -370,9 +370,9 @@ class OutputToThermostatGroupAssociation(Base):
 
     output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), primary_key=True)
     thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), primary_key=True)
+    mode = Column(String(255), nullable=False, primary_key=True)  # The mode this config is used for. Options: 'heating' or 'cooling'
 
     index = Column(Integer, nullable=False)  # The index of this output in the config 0-3
-    mode = Column(String(255), nullable=False)  # The mode this config is used for. Options: 'heating' or 'cooling'
     value = Column(Integer, nullable=False)  # The value that needs to be set on the output when in this mode (0-100)
 
     output = relationship('Output')
