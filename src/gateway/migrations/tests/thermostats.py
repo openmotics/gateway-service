@@ -194,7 +194,7 @@ class ThermostatMigratorTest(unittest.TestCase):
                              [ThermostatMigratorTest._extract_dict(x) for x in thermostat_1.heating_valve_associations])
             self.assertEqual(sorted([output_6.id, output_7.id]), sorted(v.output_id for v in heating_valves))
             cooling_valve = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_1) &
-                                                                                     (ValveToThermostatAssociation.mode == 'cooling')).first()  # type: Valve
+                                                                                     (ValveToThermostatAssociation.mode == 'cooling')).first()
             self.assertIsNone(cooling_valve)
             self.assertEqual(sensor_3.id, thermostat_1.sensor.id)
 
