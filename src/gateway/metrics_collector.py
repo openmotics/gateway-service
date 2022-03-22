@@ -549,7 +549,7 @@ class MetricsCollector(object):
             if shutter_status_dto is None:
                 continue
             values['state'] = shutter_status_dto.state
-            values['actual_position'] = shutter_status_dto.actual_position
+            values['position'] = shutter_status_dto.position
             values['desired_position'] = shutter_status_dto.desired_position
             self._enqueue_metrics(metric_type=metric_type,
                                   values=values,

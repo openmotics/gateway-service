@@ -39,11 +39,11 @@ class ShutterDTO(BaseDTO):
 
 
 class ShutterStatusDTO(BaseDTO):
-    def __init__(self, id, state=None, actual_position=None, desired_position=None, last_change=None):
+    def __init__(self, id, state=None, position=None, desired_position=None, last_change=None):
         # type: (int, Optional[str], Optional[int], Optional[int], Optional[float]) -> None
         self.id = id
         self.state = str(state) if state is not None else None
-        self.actual_position = int(actual_position) if actual_position is not None else None
+        self.position = int(position) if position is not None else None
         self.desired_position = int(desired_position) if desired_position is not None else None
         self.last_change = float(last_change) if last_change is not None else None
 
@@ -53,6 +53,6 @@ class ShutterStatusDTO(BaseDTO):
             return False
         return (self.id == other.id and
                 self.state == other.state and
-                self.actual_position == other.actual_position and
+                self.position == other.position and
                 self.desired_position == other.desired_position and
                 self.last_change == other.last_change)

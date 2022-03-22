@@ -553,7 +553,7 @@ class ShutterController(BaseController):
             return None
         return ShutterStatusDTO(id=shutter_id,
                                 state=self._states[shutter_id][1].upper(),
-                                actual_position=self._actual_positions[shutter_id],
+                                position=self._actual_positions[shutter_id],
                                 desired_position=self._desired_positions[shutter_id],
                                 last_change=self._states[shutter_id][0])
 
@@ -562,7 +562,7 @@ class ShutterController(BaseController):
         """
         return [ShutterStatusDTO(id=shutter_id,
                                  state=self._states[shutter_id][1].upper(),
-                                 actual_position=self._actual_positions[shutter_id],
+                                 position=self._actual_positions[shutter_id],
                                  desired_position=self._desired_positions[shutter_id],
                                  last_change=self._states[shutter_id][0]) for shutter_id in self._shutters]
 
@@ -571,6 +571,7 @@ class ShutterController(BaseController):
                                      data={'id': shutter_id,
                                            'status': {'state': shutter_state[1].upper(),
                                                       'position': self._actual_positions.get(shutter_id),
+                                                      'desired_position': self._desired_positions.get(shutter_id),
                                                       'last_change': shutter_state[0]},
                                            'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}})
         logger.debug('_publish_shutter_change: {}'.format(gateway_event))
