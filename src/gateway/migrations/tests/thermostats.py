@@ -14,16 +14,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
-import logging
 import unittest
 
 import mock
 from sqlalchemy import create_engine
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from gateway.models import Base, Database, ThermostatGroup, Sensor, Output, \
-    Thermostat, Valve, ValveToThermostatAssociation
+    Thermostat, Valve, ValveToThermostatAssociation, NoResultFound
 from gateway.migrations.thermostats import ThermostatsMigrator, \
     GlobalThermostatConfiguration, ThermostatConfiguration, CoolingConfiguration, PumpGroupConfiguration
 from ioc import SetTestMode
@@ -86,13 +84,13 @@ class ThermostatMigratorTest(unittest.TestCase):
                                                'permanent_manual': 255})
         ]
         rcc.return_value = [
-            ThermostatConfiguration.from_dict({'id': 0,
-                                               'name': 'Cooling 0',
-                                               'setp0': 14.0, 'setp1': 15.0, 'setp2': 16.0, 'setp3': 17.0, 'setp4': 18.0, 'setp5': 19.0,
-                                               'sensor': 4,  # This sensor will be ignored due to architecture
-                                               'output0': 6, 'output1': 255,
-                                               'pid_p': 10, 'pid_i': 20, 'pid_d': 30, 'pid_int': 40,
-                                               'permanent_manual': 255})
+            CoolingConfiguration.from_dict({'id': 0,
+                                            'name': 'Cooling 0',
+                                            'setp0': 14.0, 'setp1': 15.0, 'setp2': 16.0, 'setp3': 17.0, 'setp4': 18.0, 'setp5': 19.0,
+                                            'sensor': 4,  # This sensor will be ignored due to architecture
+                                            'output0': 6, 'output1': 255,
+                                            'pid_p': 10, 'pid_i': 20, 'pid_d': 30, 'pid_int': 40,
+                                            'permanent_manual': 255})
         ]
         rpgc.return_value = [
             PumpGroupConfiguration.from_dict({'id': 0,
