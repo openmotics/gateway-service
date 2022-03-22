@@ -270,7 +270,7 @@ class ThermostatsMigrator(BaseMigrator):
             db.query(Pump).delete()
             db.query(Valve).delete()
 
-            thermostat_group = db.query(ThermostatGroup).limit(1).one()  # TODO: Does this one exists?
+            thermostat_group = db.query(ThermostatGroup).limit(1).one()
 
             for eeprom_object in cls._read_heating_configuration():
                 cls._migrate_thermostat(db, thermostat_group, ThermostatGroup.Modes.HEATING, eeprom_object)
@@ -327,12 +327,12 @@ class ThermostatsMigrator(BaseMigrator):
         if thermostat is None:
             kwargs = {'number': eeprom_object.id,
                       'name': eeprom_object.name,
-                      'thermostat_group': thermostat_group,
+                      'group': thermostat_group,
                       'sensor': sensor,
                       'room': room,
                       'start': last_monday_night,
                       'valve_config': Thermostat.ValveConfigs.CASCADE}
-            thermostat = Thermostat.create(**kwargs)
+            thermostat = Thermostat(**kwargs)
             db.add(thermostat)
 
         cls._migrate_pid_parameters(thermostat, mode, eeprom_object)
@@ -458,9 +458,9 @@ class ThermostatsMigrator(BaseMigrator):
             for output_nr in (int(x) for x in eeprom_object.outputs.split(',')):
                 linked_output = db.query(Output).where(Output.number == output_nr).one()
                 name = 'Valve (output {0})'.format(linked_output.number)
-                valve = db.query(Valve).where(output=output).one_or_none()
+                valve = db.query(Valve).where(Valve.output == linked_output).one_or_none()
                 if valve is None:
-                    valve = Valve(output=output,
+                    valve = Valve(output=linked_output,
                                   name=name)
                     db.add(valve)
                 pump_to_valve = PumpToValveAssociation(pump=pump, valve=valve)
@@ -477,15 +477,12 @@ class ThermostatsMigrator(BaseMigrator):
             ).one_or_none()
             if sensor is None:
                 sensor = db.query(Sensor).where(
-                    (Sensor.physical_quantity is None) &
+                    (Sensor.physical_quantity == None) &  # Must be `==` for SQLAlchemy
                     (Sensor.external_id == str(eeprom_object.outside_sensor))
                 ).one_or_none()
-                if sensor is None:
-                    sensor = Sensor(pysical_quantity=None,
-                                    external_id=str(eeprom_object.outside_sensor))
-                    db.add(sensor)
-                sensor.physical_quantity = temperature
-                sensor.unit = Sensor.Units.CELCIUS
+                if sensor is not None:
+                    sensor.physical_quantity = temperature
+                    sensor.unit = Sensor.Units.CELCIUS
             if sensor is None:
                 raise ValueError('Thermostat <Sensor external_id={}> does not exist'.format(eeprom_object.outside_sensor))
             thermostat_group.sensor = sensor
