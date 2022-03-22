@@ -1,7 +1,9 @@
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+
 from alembic import context
+from alembic.operations import ops
+from sqlalchemy import engine_from_config, pool
+
 from gateway import models
 
 # this is the Alembic Config object, which provides
@@ -50,6 +52,18 @@ def run_migrations_online():
     and associate a connection with the context.
 
     """
+    def _no_sqlite_sequence(op):
+        return not ((isinstance(op, ops.DropTableOp) or isinstance(op, ops.CreateTableOp)) and op.table_name == 'sqlite_sequence')
+
+    def process_revision_directives(context, revision, directives):
+        script = directives[0]
+        if config.cmd_opts.autogenerate:  # type: ignore
+            for directive in (script.upgrade_ops, script.downgrade_ops):
+                directive.ops = [x for x in directive.ops if _no_sqlite_sequence(x)]
+
+            if script.upgrade_ops.is_empty():
+                directives[:] = []
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
@@ -60,6 +74,7 @@ def run_migrations_online():
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            process_revision_directives=process_revision_directives,
             render_as_batch=True,
             dialect_opts={"paramstyle": "named"}
         )
