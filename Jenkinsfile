@@ -39,6 +39,31 @@ pipeline {
             }
         }
 
+        stage('Checking migrations') {
+            agent {
+                dockerfile {
+                    filename 'docker/test/Dockerfile'
+                    additionalBuildArgs "--build-arg TAG=3.8-buster --build-arg OM_PYPI_INDEX_URL=${env.OM_PYPI_INDEX_URL}"
+                }
+            }
+            steps {
+                sh '''
+                rm -f etc/gateway.db
+                mkdir -p etc
+                cd src
+                alembic upgrade head
+                alembic revision -m jenkins --autogenerate
+                # Second autogenerate fails with "Target database is not up to date" if there where unexpected changes.
+                if ! alembic revision -m jenkins --autogenerate; then
+                    echo
+                    file=$(git status -z gateway/alembic/versions | sed 's,?? src/,,')
+                    cat "$file"
+                    echo
+                fi
+                '''
+            }
+        }
+
         stage('Run python2 unittests') {
             agent {
                 dockerfile {
