@@ -382,7 +382,7 @@ class MetricsController(object):
             try:
                 # Try to send the metrics
                 amount_metrics = len(self._cloud_buffer) + len(self._cloud_queue)
-                logger.info('Uploading %d metrics to cloud...', amount_metrics)
+                logger.debug('Uploading %d metrics to cloud...', amount_metrics)
                 request = requests.post(metrics_endpoint,
                                         data={'metrics': json.dumps(self._cloud_buffer + self._cloud_queue)},
                                         timeout=30.0,
@@ -390,7 +390,7 @@ class MetricsController(object):
                 return_data = json.loads(request.text)
                 if return_data.get('success', False) is False:
                     raise RuntimeError('{0}'.format(return_data.get('error')))
-                logger.info('Uploaded metrics successfully')
+                logger.debug('Uploaded metrics successfully')
                 # If successful; clear buffers
                 if self._metrics_cache_controller.clear_buffer(metric['timestamp']) > 0:
                     self._load_cloud_buffer()
