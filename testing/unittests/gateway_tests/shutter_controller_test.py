@@ -535,16 +535,16 @@ class ShutterControllerTest(unittest.TestCase):
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
         controller.start()
         self.pubsub._publish_all_events()
-        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 1, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 2, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 3, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}})], events)
+        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                          GatewayEvent('SHUTTER_CHANGE', {'id': 1, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                          GatewayEvent('SHUTTER_CHANGE', {'id': 2, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                          GatewayEvent('SHUTTER_CHANGE', {'id': 3, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}})], events)
 
         events = []
         fakesleep.reset(100)
         controller.report_shutter_position(0, 89, 'UP')
         self.pubsub._publish_all_events()
-        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP', 'position': 89, 'last_change': 100.0}, 'location': {'room_id': None}})], events)
+        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP', 'position': 89, 'desired_position': None, 'last_change': 100.0}, 'location': {'room_id': None}})], events)
         controller.stop()
 
     def test_exception_during_sync(self):
