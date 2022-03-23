@@ -313,7 +313,6 @@ class ThermostatsMigrator(BaseMigrator):
                                 external_id=str(eeprom_object.sensor))
                 db.add(sensor)
                 db.commit()
-                db.refresh(sensor)
         if sensor is None:
             raise ValueError('Thermostat <Sensor external_id={}> does not exist'.format(eeprom_object.sensor))
         if sensor.source != Sensor.Sources.MASTER:
@@ -337,7 +336,6 @@ class ThermostatsMigrator(BaseMigrator):
             thermostat = Thermostat(**kwargs)
             db.add(thermostat)
             db.commit()
-            db.refresh(thermostat)
 
         cls._migrate_pid_parameters(thermostat, mode, eeprom_object)
         cls._migrate_output(db, thermostat, mode, eeprom_object.output0, 0)
@@ -367,7 +365,6 @@ class ThermostatsMigrator(BaseMigrator):
                 valve = Valve(output=output, name=name)
                 db.add(valve)
                 db.commit()
-                db.refresh(valve)
             else:
                 valve.name = name
                 valve_to_thermostat = db.query(ValveToThermostatAssociation).where(
@@ -382,7 +379,6 @@ class ThermostatsMigrator(BaseMigrator):
                                                                    priority=valve_priority)
                 db.add(valve_to_thermostat)
                 db.commit()
-                db.refresh(valve_to_thermostat)
             else:
                 valve_to_thermostat.priority = valve_priority
 
@@ -401,7 +397,6 @@ class ThermostatsMigrator(BaseMigrator):
                                     type=preset_type)
                     db.add(preset)
                     db.commit()
-                    db.refresh(preset)
                 if mode == ThermostatGroup.Modes.HEATING:
                     preset.heating_setpoint = value
                 else:
@@ -458,7 +453,6 @@ class ThermostatsMigrator(BaseMigrator):
             schedule = DaySchedule(thermostat=thermostat, mode=mode, index=i, schedule_data=schedule_data)
             db.add(schedule)
             db.commit()
-            db.refresh(schedule)
 
     @classmethod
     def _migrate_pump_group(cls, db, eeprom_object):
@@ -469,7 +463,6 @@ class ThermostatsMigrator(BaseMigrator):
             pump = Pump(name=name, output=output)
             db.add(pump)
             db.commit()
-            db.refresh(pump)
             for output_nr in (int(x) for x in eeprom_object.outputs.split(',')):
                 linked_output = db.query(Output).where(Output.number == output_nr).one()
                 name = 'Valve (output {0})'.format(linked_output.number)
@@ -479,11 +472,9 @@ class ThermostatsMigrator(BaseMigrator):
                                   name=name)
                     db.add(valve)
                     db.commit()
-                    db.refresh(valve)
                 pump_to_valve = PumpToValveAssociation(pump=pump, valve=valve)
                 db.add(pump_to_valve)
                 db.commit()
-                db.refresh(pump_to_valve)
 
     @classmethod
     def _migrate_thermostat_group(cls, db, thermostat_group, eeprom_object):
@@ -518,7 +509,6 @@ class ThermostatsMigrator(BaseMigrator):
                     o2tg = OutputToThermostatGroupAssociation(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=0)
                     db.add(o2tg)
                     db.commit()
-                    db.refresh(o2tg)
 
         for valve in db.query(Valve).all():
             valve.delay = eeprom_object.pump_delay
