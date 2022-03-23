@@ -18,9 +18,9 @@ import time
 from datetime import timedelta
 
 from gateway.migrations.base_migrator import BaseMigrator
-from gateway.models import DaySchedule, Feature, Output, \
+from gateway.models import Database, DaySchedule, Feature, Output, \
     OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
+    Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation, Session
 from ioc import INJECTED, Inject
 from master.classic import master_api
 from master.classic.eeprom_controller import CompositeDataType, EepromByte, \
@@ -29,7 +29,7 @@ from master.classic.eeprom_controller import CompositeDataType, EepromByte, \
 from platform_utils import Platform
 
 if False:  # MYPY
-    from typing import Any, List, Iterable, Optional, Tuple
+    from typing import Any, List, Iterable, Tuple
     from master.classic.eeprom_controller import EepromController
     from master.classic.master_communicator import MasterCommunicator
 
@@ -264,75 +264,82 @@ class ThermostatsMigrator(BaseMigrator):
             return
 
         # Remove all existing gateway configuration
-        Thermostat.delete().execute()
-        OutputToThermostatGroup.delete().execute()
-        Pump.delete().execute()
-        Valve.delete().execute()
+        with Database.get_session() as db:
+            db.query(Thermostat).delete()
+            db.query(OutputToThermostatGroupAssociation).delete()
+            db.query(Pump).delete()
+            db.query(Valve).delete()
 
-        thermostat_group = ThermostatGroup.get(number=0)
+            thermostat_group = db.query(ThermostatGroup).limit(1).one()
 
-        for eeprom_object in cls._read_heating_configuration():
-            cls._migrate_thermostat(thermostat_group, ThermostatGroup.Modes.HEATING, eeprom_object)
-        for eeprom_object in cls._read_cooling_configuration():
-            cls._migrate_thermostat(thermostat_group, ThermostatGroup.Modes.COOLING, eeprom_object)
+            for eeprom_object in cls._read_heating_configuration():
+                cls._migrate_thermostat(db, thermostat_group, ThermostatGroup.Modes.HEATING, eeprom_object)
+            for eeprom_object in cls._read_cooling_configuration():
+                cls._migrate_thermostat(db, thermostat_group, ThermostatGroup.Modes.COOLING, eeprom_object)
 
-        for eeprom_object in cls._read_pump_group_configuration():
-            cls._migrate_pump_group(eeprom_object)
+            for eeprom_object in cls._read_pump_group_configuration():
+                cls._migrate_pump_group(db, eeprom_object)
 
-        eeprom_object = cls._read_global_configuration()
-        cls._migrate_thermostat_group(thermostat_group, eeprom_object)
+            eeprom_object = cls._read_global_configuration()
+            cls._migrate_thermostat_group(db, thermostat_group, eeprom_object)
 
-        try:
-            logger.info('Disabling master Thermostats.')
-            cls._disable_master_thermostats()
-        except Exception:
-            logger.exception('Could not migrate master Thermostats')
-            feature = Feature.get(name=Feature.THERMOSTATS_GATEWAY)
-            feature.enabled = False
-            feature.save()
+            try:
+                logger.info('Disabling master Thermostats.')
+                cls._disable_master_thermostats()
+            except Exception:
+                logger.exception('Could not migrate master Thermostats')
+                feature = db.query(Feature).get(name=Feature.THERMOSTATS_GATEWAY)
+                feature.enabled = False
+
+            db.commit()
 
     @classmethod
-    def _migrate_thermostat(cls, thermostat_group, mode, eeprom_object):
-        # type: (ThermostatGroup, str, Any) -> None
+    def _migrate_thermostat(cls, db, thermostat_group, mode, eeprom_object):
+        # type: (Session, ThermostatGroup, str, Any) -> None
         if eeprom_object.sensor == 240:
             raise RuntimeError('Thermostat {} with timer only configuration, this can\'t be migrated'.format(eeprom_object.id))
         if eeprom_object.sensor in (None, 255):
             return
 
         temperature = Sensor.PhysicalQuantities.TEMPERATURE
-        sensor = Sensor.get_or_none(physical_quantity=temperature, external_id=str(eeprom_object.sensor))
+        sensor = db.query(Sensor).where((Sensor.physical_quantity == temperature) &
+                                        (Sensor.external_id == str(eeprom_object.sensor))).one_or_none()
         if sensor is None:
-            sensor = Sensor.get_or_none(physical_quantity=None, external_id=str(eeprom_object.sensor))
-            sensor.physical_quantity = temperature
-            sensor.unit = Sensor.Units.CELCIUS
-            sensor.save()
+            sensor = db.query(Sensor).where((Sensor.physical_quantity is None) &
+                                            (Sensor.external_id == str(eeprom_object.sensor))).one_or_none()
+            if sensor is None:
+                sensor = Sensor(physical_quantity=temperature,
+                                unit=Sensor.Units.CELCIUS,
+                                external_id=str(eeprom_object.sensor))
+                db.add(sensor)
         if sensor is None:
             raise ValueError('Thermostat <Sensor external_id={}> does not exist'.format(eeprom_object.sensor))
         if sensor.source != Sensor.Sources.MASTER:
             raise ValueError('Unexpected <Sensor {}> {} for thermostats'.format(sensor.id, sensor.source))
-        room, _ = Room.get_or_create(number=eeprom_object.room) if eeprom_object.room not in (None, 255) else (None, False)
+        room = db.query(Room).where(Room.number == eeprom_object.room).one_or_none()
 
         # We don't get a start date, calculate last monday night to map the schedules
         now = int(time.time())
         day_of_week = (now / 86400 - 4) % 7  # 0: Monday, 1: Tuesday, ...
         last_monday_night = now - now % 86400 - day_of_week * 86400
 
-        thermostat = Thermostat.get_or_none(number=eeprom_object.id)
+        thermostat = db.query(Thermostat).where(Thermostat.number == eeprom_object.id).one_or_none()
         if thermostat is None:
             kwargs = {'number': eeprom_object.id,
                       'name': eeprom_object.name,
-                      'thermostat_group': thermostat_group,
+                      'group': thermostat_group,
                       'sensor': sensor,
                       'room': room,
                       'start': last_monday_night,
                       'valve_config': Thermostat.ValveConfigs.CASCADE}
-            thermostat = Thermostat.create(**kwargs)
+            thermostat = Thermostat(**kwargs)
+            db.add(thermostat)
 
         cls._migrate_pid_parameters(thermostat, mode, eeprom_object)
-        cls._migrate_output(thermostat, mode, eeprom_object.output0, 0)
-        cls._migrate_output(thermostat, mode, eeprom_object.output1, 1)
-        cls._migrate_presets(thermostat, mode, eeprom_object)
-        cls._migrate_schedules(thermostat, mode, eeprom_object)
+        cls._migrate_output(db, thermostat, mode, eeprom_object.output0, 0)
+        cls._migrate_output(db, thermostat, mode, eeprom_object.output1, 1)
+        cls._migrate_presets(db, thermostat, mode, eeprom_object)
+        cls._migrate_schedules(db, thermostat, mode, eeprom_object)
 
     @classmethod
     def _migrate_pid_parameters(cls, thermostat, mode, eeprom_object):
@@ -343,36 +350,54 @@ class ThermostatsMigrator(BaseMigrator):
             if value in (None, 255):
                 value = default_value
             setattr(thermostat, dst_field, value)
-        thermostat.save()
 
     @classmethod
-    def _migrate_output(cls, thermostat, mode, output_nr, valve_priority):
-        # type: (Thermostat, str, int, int) -> None
+    def _migrate_output(cls, db, thermostat, mode, output_nr, valve_priority):
+        # type: (Session, Thermostat, str, int, int) -> None
         if output_nr not in (None, 255):
-            output = Output.get(number=output_nr)
+            output = db.query(Output).where(Output.number == output_nr).one()
             name = 'Valve (output {0})'.format(output.number)
-            valve, _ = Valve.get_or_create(output=output, defaults={'name': name})
-            valve.name = name
-            valve.save()
-            valve_to_thermostat, _ = ValveToThermostat.get_or_create(mode=mode, valve=valve, thermostat=thermostat)
-            valve_to_thermostat.priority = valve_priority
-            valve_to_thermostat.save()
+            valve = db.query(Valve).where(Valve.output == output).one_or_none()
+            if valve is None:
+                valve = Valve(output=output, name=name)
+                db.add(valve)
+            else:
+                valve.name = name
+            valve_to_thermostat = db.query(ValveToThermostatAssociation).where(
+                (ValveToThermostatAssociation.mode == mode) &
+                (ValveToThermostatAssociation.valve == valve) &
+                (ValveToThermostatAssociation.thermostat == thermostat)
+            ).one_or_none()
+            if valve_to_thermostat is None:
+                valve_to_thermostat = ValveToThermostatAssociation(mode=mode,
+                                                                   valve=valve,
+                                                                   thermostat=thermostat,
+                                                                   priority=valve_priority)
+                db.add(valve_to_thermostat)
+            else:
+                valve_to_thermostat.priority = valve_priority
 
     @classmethod
-    def _migrate_presets(cls, thermostat, mode, eeprom_object):
-        # type: (Thermostat, str, Any) -> None
+    def _migrate_presets(cls, db, thermostat, mode, eeprom_object):
+        # type: (Session, Thermostat, str, Any) -> None
         for preset_type, src_field in cls.PRESET_MAPPING:
             value = getattr(eeprom_object, src_field)
             if value not in (None, 255):
-                preset, _ = Preset.get_or_create(thermostat=thermostat, type=preset_type)
+                preset = db.query(Preset).where(
+                    (Preset.thermostat == thermostat) &
+                    (Preset.type == preset_type)
+                ).one_or_none()
+                if preset is None:
+                    preset = Preset(thermostat=thermostat,
+                                    type=preset_type)
+                    db.add(preset)
                 if mode == ThermostatGroup.Modes.HEATING:
                     preset.heating_setpoint = value
                 else:
                     preset.cooling_setpoint = value
-                preset.save()
 
     @classmethod
-    def _migrate_schedules(cls, thermostat, mode, eeprom_object):
+    def _migrate_schedules(cls, db, thermostat, mode, eeprom_object):
         start_night = 0
         night_end = int(timedelta(hours=24, minutes=0, seconds=0).total_seconds())
 
@@ -419,78 +444,63 @@ class ThermostatsMigrator(BaseMigrator):
                              end_day_1: temp_night,
                              start_day_2: temp_day_2,
                              end_day_2: temp_night}
-            DaySchedule.create(thermostat=thermostat, mode=mode, index=i, schedule_data=schedule_data)
+            schedule = DaySchedule(thermostat=thermostat, mode=mode, index=i, schedule_data=schedule_data)
+            db.add(schedule)
 
     @classmethod
-    def _migrate_pump_group(cls, eeprom_object):
-        # type: (Any) -> None
+    def _migrate_pump_group(cls, db, eeprom_object):
+        # type: (Session, Any) -> None
         if eeprom_object.output not in (None, 255):
-            output = Output.get(number=eeprom_object.output)
+            output = db.query(Output).where(Output.number == eeprom_object.output).one()
             name = 'Pump (output {0})'.format(output.number)
-            pump = Pump.create(id=eeprom_object.id, name=name, output=output)
+            pump = Pump(name=name, output=output)
+            db.add(pump)
             for output_nr in (int(x) for x in eeprom_object.outputs.split(',')):
-                output = Output.get(number=output_nr)
-                name = 'Valve (output {0})'.format(output.number)
-                valve, _ = Valve.get_or_create(output=output, defaults={'name': name})
-                PumpToValve.create(pump=pump, valve=valve)
+                linked_output = db.query(Output).where(Output.number == output_nr).one()
+                name = 'Valve (output {0})'.format(linked_output.number)
+                valve = db.query(Valve).where(Valve.output == linked_output).one_or_none()
+                if valve is None:
+                    valve = Valve(output=linked_output,
+                                  name=name)
+                    db.add(valve)
+                pump_to_valve = PumpToValveAssociation(pump=pump, valve=valve)
+                db.add(pump_to_valve)
 
     @classmethod
-    def _migrate_thermostat_group(cls, thermostat_group, eeprom_object):
-        # type: (ThermostatGroup, Any) -> None
+    def _migrate_thermostat_group(cls, db, thermostat_group, eeprom_object):
+        # type: (Session, ThermostatGroup, Any) -> None
         temperature = Sensor.PhysicalQuantities.TEMPERATURE
         if eeprom_object.outside_sensor not in (None, 255):
-            sensor = Sensor.get_or_none(physical_quantity=temperature, external_id=str(eeprom_object.outside_sensor))
+            sensor = db.query(Sensor).where(
+                (Sensor.physical_quantity == temperature) &
+                (Sensor.external_id == str(eeprom_object.outside_sensor))
+            ).one_or_none()
             if sensor is None:
-                sensor = Sensor.get_or_none(physical_quantity=None, external_id=str(eeprom_object.outside_sensor))
-                sensor.physical_quantity = temperature
-                sensor.unit = Sensor.Units.CELCIUS
-                sensor.save()
+                sensor = db.query(Sensor).where(
+                    (Sensor.physical_quantity == None) &  # Must be `==` for SQLAlchemy
+                    (Sensor.external_id == str(eeprom_object.outside_sensor))
+                ).one_or_none()
+                if sensor is not None:
+                    sensor.physical_quantity = temperature
+                    sensor.unit = Sensor.Units.CELCIUS
             if sensor is None:
                 raise ValueError('Thermostat <Sensor external_id={}> does not exist'.format(eeprom_object.outside_sensor))
             thermostat_group.sensor = sensor
         if eeprom_object.threshold_temp not in (None, 255):
             thermostat_group.threshold_temperature = eeprom_object.threshold_temp
-        thermostat_group.save()
 
-        mode = ThermostatGroup.Modes.HEATING  # type: str
-        if eeprom_object.switch_to_heating_output_0 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_heating_output_0)
-            value = 0 if eeprom_object.switch_to_heating_value_0 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=0)
-        if eeprom_object.switch_to_heating_output_1 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_heating_output_1)
-            value = 0 if eeprom_object.switch_to_heating_value_1 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=1)
-        if eeprom_object.switch_to_heating_output_2 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_heating_output_2)
-            value = 0 if eeprom_object.switch_to_heating_value_2 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=2)
-        if eeprom_object.switch_to_heating_output_3 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_heating_output_3)
-            value = 0 if eeprom_object.switch_to_heating_value_3 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=3)
+        for mode in [ThermostatGroup.Modes.HEATING, ThermostatGroup.Modes.COOLING]:
+            for i in range(4):
+                output_field = 'switch_to_{0}_output_{1}'.format(mode, i)
+                value_field = 'switch_to_{0}_value_{1}'.format(mode, i)
+                if getattr(eeprom_object, output_field) not in (None, 255):
+                    output = db.query(Output).where(Output.number == getattr(eeprom_object, output_field)).one()
+                    value = 0 if getattr(eeprom_object, value_field) in (None, 255, 0) else 100
+                    o2tg = OutputToThermostatGroupAssociation(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=0)
+                    db.add(o2tg)
 
-        mode = ThermostatGroup.Modes.COOLING
-        if eeprom_object.switch_to_cooling_output_0 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_cooling_output_0)
-            value = 0 if eeprom_object.switch_to_cooling_value_0 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=0)
-        if eeprom_object.switch_to_cooling_output_1 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_cooling_output_1)
-            value = 0 if eeprom_object.switch_to_cooling_value_1 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=1)
-        if eeprom_object.switch_to_cooling_output_2 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_cooling_output_2)
-            value = 0 if eeprom_object.switch_to_cooling_value_2 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=2)
-        if eeprom_object.switch_to_cooling_output_3 not in (None, 255):
-            output = Output.get(number=eeprom_object.switch_to_cooling_output_3)
-            value = 0 if eeprom_object.switch_to_cooling_value_3 in (None, 255, 0) else 100
-            OutputToThermostatGroup.create(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=3)
-
-        for valve in Valve.select():
+        for valve in db.query(Valve).all():
             valve.delay = eeprom_object.pump_delay
-            valve.save()
 
     @staticmethod
     @Inject

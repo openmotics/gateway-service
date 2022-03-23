@@ -386,6 +386,9 @@ class PumpToValveAssociation(Base):
     pump_id = Column(Integer, ForeignKey('pump.id', ondelete='CASCADE'), primary_key=True)
     valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
 
+    pump = relationship('Pump')
+    valve = relationship('Valve')
+
 
 class Pump(Base):
     __tablename__ = 'pump'
