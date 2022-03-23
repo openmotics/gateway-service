@@ -42,6 +42,7 @@ if False:  # MYPY
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
     from gateway.module_controller import ModuleController
+    from gateway.shutter_controller import ShutterController
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO
 
@@ -74,8 +75,8 @@ class MetricsCollector(object):
 
     @Inject
     def __init__(self, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
-                 output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
-                 module_controller=INJECTED, energy_module_controller=INJECTED):
+                 output_controller=INJECTED, shutter_controller=INJECTED, input_controller=INJECTED,
+                 sensor_controller=INJECTED, module_controller=INJECTED, energy_module_controller=INJECTED):
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
@@ -83,10 +84,12 @@ class MetricsCollector(object):
         self._plugin_controller = None
         self._environment_inputs = {}  # type: Dict[int, InputDTO]
         self._environment_outputs = {}  # type: Dict[int, Tuple[OutputDTO, Dict[str, int]]]
+        self._environment_shutters = {}  # type: Dict[int, ShutterDTO]
         self._environment_sensors = {}  # type: Dict[int, SensorDTO]
         self._environment_pulse_counters = {}  # type: Dict[int, PulseCounterDTO]
         self._min_intervals = {'system': 60,
                                'output': 60,
+                               'shutter': 60,
                                'sensor': 5,
                                'thermostat': 30,
                                'error': 120,
@@ -104,6 +107,7 @@ class MetricsCollector(object):
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
         self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
         self._output_controller = output_controller  # type: OutputController
+        self._shutter_controller = shutter_controller # type: ShutterController
         self._input_controller = input_controller  # type: InputController
         self._sensor_controller = sensor_controller  # type: SensorController
         self._module_controller = module_controller  # type: ModuleController
@@ -116,6 +120,7 @@ class MetricsCollector(object):
         MetricsCollector._start_thread(self._load_environment_configurations, 'load_configuration', 900)
         MetricsCollector._start_thread(self._run_system, 'system')
         MetricsCollector._start_thread(self._run_outputs, 'output')
+        MetricsCollector._start_thread(self._run_shutters, 'shutter')
         MetricsCollector._start_thread(self._run_sensors, 'sensor')
         MetricsCollector._start_thread(self._run_thermostats, 'thermostat')
         MetricsCollector._start_thread(self._run_errors, 'error')
@@ -507,7 +512,7 @@ class MetricsCollector(object):
                     output_status.update({'status': output_state_dto.status,
                                           'dimmer': output_state_dto.dimmer})
             except CommunicationFailure as ex:
-                logger.info('Error getting output status: {}'.format(ex))
+                logger.error('Error getting output status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting output status: {0}'.format(ex))
             self._process_outputs(list(self._environment_outputs.keys()), metric_type)
@@ -515,13 +520,49 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
+    def _run_shutters(self, metric_type):
+        while not self._stopped:
+            start = time.time()
+            try:
+                self._process_shutters(metric_type)
+            except CommunicationFailure as ex:
+                logger.error('Error getting shutter status: {}'.format(ex))
+            except Exception as ex:
+                logger.exception('Error getting shutter status: {0}'.format(ex))
+            if self._stopped:
+                return
+            self._pause(start, metric_type)
+
+    def _process_shutters(self, metric_type):
+        # type: (str) -> None
+        now = time.time()
+
+        status_map = {s.id: s for s in self._shutter_controller.get_shutters_status()}
+        for shutter_id, shutter_dto in self._environment_shutters.items():
+            # TODO: Add a flag to the ORM to store this "in use" metadata
+            if shutter_dto.name in ('', 'NOT_IN_USE'):
+                continue
+            tags = {'id': shutter_dto.id,
+                    'name': shutter_dto.name}
+            values = {}  # type: Dict[str, Any]
+            shutter_status_dto = status_map.get(shutter_dto.id)
+            if shutter_status_dto is None:
+                continue
+            values['state'] = shutter_status_dto.state
+            values['position'] = shutter_status_dto.position
+            values['desired_position'] = shutter_status_dto.desired_position
+            self._enqueue_metrics(metric_type=metric_type,
+                                  values=values,
+                                  tags=tags,
+                                  timestamp=now)
+
     def _run_sensors(self, metric_type):
         while not self._stopped:
             start = time.time()
             try:
                 self._process_sensors(metric_type)
             except CommunicationFailure as ex:
-                logger.info('Error getting sensor status: {}'.format(ex))
+                logger.error('Error getting sensor status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting sensor status: {0}'.format(ex))
             if self._stopped:
@@ -864,6 +905,21 @@ class MetricsCollector(object):
                 logger.error('Error while loading output configurations: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error while loading output configurations: {0}'.format(ex))
+            # Shutters
+            try:
+                shutters = self._shutter_controller.load_shutters()
+                ids = []
+                for shutter_dto in shutters:
+                    shutter_id = shutter_dto.id
+                    ids.append(shutter_id)
+                    self._environment_shutters[shutter_id] = shutter_dto
+                for shutter_id in self._environment_shutters.keys():
+                    if shutter_id not in ids:
+                        del self._environment_shutters[shutter_id]
+            except CommunicationFailure as ex:
+                logger.error('Error while loading shutter configurations: {}'.format(ex))
+            except Exception as ex:
+                logger.exception('Error while loading shutter configurations: {0}'.format(ex))
             # Sensors
             try:
                 sensors = self._sensor_controller.load_sensors()
@@ -1110,6 +1166,22 @@ class MetricsCollector(object):
                           'description': 'Output state',
                           'type': 'gauge',
                           'unit': ''}]},
+            # shutter
+            {'type': 'shutter',
+             'tags': ['id', 'name'],
+             'metrics': [{'name': 'state',
+                          'description': 'Shutter state',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'position',
+                          'description': 'Shutter position',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'desired_position',
+                          'description': 'Shutter desired position',
+                          'type': 'gauge',
+                          'unit': ''}
+                         ]},
             # sensor
             {'type': 'sensor',
              'tags': ['id', 'name'],
