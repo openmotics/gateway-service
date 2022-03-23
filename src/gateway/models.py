@@ -578,8 +578,8 @@ class ValveToThermostatAssociation(Base):
 
     thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), primary_key=True)
     valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
+    mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False, primary_key=True)
 
-    mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)
     priority = Column(Integer, default=0, nullable=False)
 
     thermostat = relationship('Thermostat', backref='valve_associations')
@@ -669,16 +669,6 @@ class DataMigration(Base):
     migrated = Column(Boolean, nullable=False)
 
 
-class Apartment(Base):
-    __tablename__ = 'apartment'
-    __table_args__ = {'sqlite_autoincrement': True}
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False)
-    mailbox_rebus_id = Column(Integer, nullable=True, unique=True)
-    doorbell_rebus_id = Column(Integer, nullable=True, unique=True)
-
-
 class User(Base):
     __tablename__ = 'user'
     __table_args__ = {'sqlite_autoincrement': True}
@@ -698,43 +688,6 @@ class User(Base):
     pin_code = Column(String(255), nullable=True, unique=True)
     language = Column(String(255), nullable=False)  # options: See languages
     password = Column(String(255), nullable=False)
-    apartment_id = Column(Integer, ForeignKey('apartment.id', ondelete='SET NULL'), nullable=True, default=None)
     is_active = Column(Boolean, default=True, nullable=False)
     accepted_terms = Column(Integer, default=0, nullable=False)
     email = Column(String(255), nullable=True, unique=False)
-
-
-class RFID(Base):
-    __tablename__ = 'rfid'
-    __table_args__ = {'sqlite_autoincrement': True}
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tag_string = Column(String(255), nullable=False, unique=True)
-    uid_manufacturer = Column(String(255), nullable=False, unique=True)
-    uid_extension = Column(String(255), nullable=True)
-    enter_count = Column(Integer, nullable=False)
-    blacklisted = Column(Boolean, nullable=False, default=False)
-    label = Column(String(255), nullable=False)
-    timestamp_created = Column(String(255), nullable=False)
-    timestamp_last_used = Column(String(255), nullable=True)
-    user_id = Column(Integer, ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
-
-
-class Delivery(Base):
-    __tablename__ = 'delivery'
-    __table_args__ = {'sqlite_autoincrement': True}
-
-    class DeliveryType(object):
-        DELIVERY = 'DELIVERY'
-        RETURN = 'RETURN'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    type = Column(String(255), nullable=False)  # options: DeliveryType
-    timestamp_delivery = Column(String(255), nullable=False)
-    timestamp_pickup = Column(String(255), nullable=True)
-    courier_firm = Column(String(255), nullable=True)
-    signature_delivery = Column(String(255), nullable=True)
-    signature_pickup = Column(String(255), nullable=True)
-    parcelbox_rebus_id = Column(Integer, nullable=False)
-    user_delivery_id = Column(Integer, ForeignKey('user.id'), nullable=True)
-    user_pickup_id = Column(Integer, ForeignKey('user.id'), nullable=True)
