@@ -130,6 +130,14 @@ class GatewayEvent(BaseEvent):
                   'value': int},      # Optional, dimmer value
        'location': {'room_id': int}}  # Room ID
 
+    * SHUTTER_CHANGE
+      {'id': int,                             # Shutter ID
+       'status': {'state': str,               # GOING_UP|GOING_DOWN|STOPPED|UP|DOWN
+                  'position': int,            # Optional, position value
+                  'desired_position': int,    # Optional, desired position value
+                  'last_change': int}         # timestamp of last change
+       'location': {'room_id': int}}          # Room ID
+
     * SENSOR_CHANGE
       {'id': int,       # Sensor ID
        'plugin': str,   # Target Plugin

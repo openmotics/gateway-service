@@ -20,7 +20,7 @@ from gateway.dto.base import BaseDTO
 from gateway.dto.module import ModuleDTO
 
 if False:  # MYPY
-    from typing import Optional
+    from typing import Optional, Any
 
 
 class ShutterDTO(BaseDTO):
@@ -36,3 +36,23 @@ class ShutterDTO(BaseDTO):
         self.room = room  # type: Optional[int]
         self.steps = steps  # type: Optional[int]
         self.module = module  # type: Optional[ModuleDTO]
+
+
+class ShutterStatusDTO(BaseDTO):
+    def __init__(self, id, state=None, position=None, desired_position=None, last_change=None):
+        # type: (int, Optional[str], Optional[int], Optional[int], Optional[float]) -> None
+        self.id = id
+        self.state = str(state) if state is not None else None
+        self.position = int(position) if position is not None else None
+        self.desired_position = int(desired_position) if desired_position is not None else None
+        self.last_change = float(last_change) if last_change is not None else None
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, ShutterStatusDTO):
+            return False
+        return (self.id == other.id and
+                self.state == other.state and
+                self.position == other.position and
+                self.desired_position == other.desired_position and
+                self.last_change == other.last_change)

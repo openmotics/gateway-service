@@ -197,11 +197,13 @@ class UpdateController(object):
                 if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
                     current_version = self._fetch_version(firmware_type=firmware_type, logger=global_logger)
                     if current_version == target_version:
-                        state_number = 3
+                        state_number = 3 # OK
                     else:
-                        state_number = 1
+                        state_number = 1 # UPDATING
                         if success is not None:
-                            state_number = 2 if success else 0
+                            state_number = 2 if success else 0  # SKIPPED or ERROR
+                        elif not self._pending_updates:
+                            state_number = 2  # SKIPPED
                     state = min(state, state_number)
                     states.append({'firmware_type': firmware_type,
                                    'state': state_map[state_number],
@@ -211,12 +213,14 @@ class UpdateController(object):
                     for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
                         for module in modules.get(module_type, []):
                             if module.firmware_version == target_version:
-                                state_number = 3
+                                state_number = 3 # OK
                             else:
-                                state_number = 1
+                                state_number = 1 # UPDATING
                                 update_success = module.update_success
                                 if update_success is not None:
-                                    state_number = 2 if update_success else 0
+                                    state_number = 2 if update_success else 0  # SKIPPED or ERROR
+                                elif not self._pending_updates:
+                                    state_number = 2  # SKIPPED
                             state = min(state, state_number)
                             states.append({'firmware_type': firmware_type,
                                            'state': state_map[state_number],

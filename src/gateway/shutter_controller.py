@@ -23,6 +23,7 @@ from threading import Lock
 from gateway.daemon_thread import DaemonThread
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import ShutterDTO, ShutterGroupDTO
+from gateway.dto.shutter import ShutterStatusDTO
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
@@ -538,6 +539,7 @@ class ShutterController(BaseController):
 
         self._publish_shutter_state(shutter_id, shutter, self._states[shutter_id])
 
+    # TODO: deprecate
     def get_states(self):  # type: () -> Dict[str, Any]
         all_states = []
         for i in sorted(self._states.keys()):
@@ -549,11 +551,32 @@ class ShutterController(BaseController):
                                         'last_change': self._states[shutter_id][0]}
                            for shutter_id in self._shutters}}
 
+    def get_shutter_status(self, shutter_id):  # type: (int) -> Optional[ShutterStatusDTO]
+        """ Get the current status of a shutter.
+        """
+        if shutter_id not in self._shutters:
+            return None
+        return ShutterStatusDTO(id=shutter_id,
+                                state=self._states[shutter_id][1].upper(),
+                                position=self._actual_positions[shutter_id],
+                                desired_position=self._desired_positions[shutter_id],
+                                last_change=self._states[shutter_id][0])
+
+    def get_shutters_status(self):  # type: () -> List[ShutterStatusDTO]
+        """ Get the current status of all shutters.
+        """
+        return [ShutterStatusDTO(id=shutter_id,
+                                 state=self._states[shutter_id][1].upper(),
+                                 position=self._actual_positions[shutter_id],
+                                 desired_position=self._desired_positions[shutter_id],
+                                 last_change=self._states[shutter_id][0]) for shutter_id in self._shutters]
+
     def _publish_shutter_state(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, Tuple[float, str]) -> None
         gateway_event = GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
                                      data={'id': shutter_id,
                                            'status': {'state': shutter_state[1].upper(),
                                                       'position': self._actual_positions.get(shutter_id),
+                                                      'desired_position': self._desired_positions.get(shutter_id),
                                                       'last_change': shutter_state[0]},
                                            'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}})
         logger.debug('_publish_shutter_change: {}'.format(gateway_event))
