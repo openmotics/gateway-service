@@ -51,6 +51,7 @@ pipeline {
                 rm -f etc/gateway.db
                 mkdir -p etc
                 cd src
+                git clean -fd
                 alembic upgrade head
                 alembic revision -m jenkins --autogenerate
                 # Second autogenerate fails with "Target database is not up to date" if there where unexpected changes.
@@ -62,6 +63,13 @@ pipeline {
                     exit 1
                 fi
                 '''
+            }
+            post {
+                always {
+                    sh '''
+                        git clean -fd
+                        '''
+                }
             }
         }
 
