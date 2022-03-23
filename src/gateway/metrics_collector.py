@@ -512,7 +512,7 @@ class MetricsCollector(object):
                     output_status.update({'status': output_state_dto.status,
                                           'dimmer': output_state_dto.dimmer})
             except CommunicationFailure as ex:
-                logger.info('Error getting output status: {}'.format(ex))
+                logger.error('Error getting output status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting output status: {0}'.format(ex))
             self._process_outputs(list(self._environment_outputs.keys()), metric_type)
@@ -526,7 +526,7 @@ class MetricsCollector(object):
             try:
                 self._process_shutters(metric_type)
             except CommunicationFailure as ex:
-                logger.info('Error getting shutter status: {}'.format(ex))
+                logger.error('Error getting shutter status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting shutter status: {0}'.format(ex))
             if self._stopped:
@@ -562,7 +562,7 @@ class MetricsCollector(object):
             try:
                 self._process_sensors(metric_type)
             except CommunicationFailure as ex:
-                logger.info('Error getting sensor status: {}'.format(ex))
+                logger.error('Error getting sensor status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting sensor status: {0}'.format(ex))
             if self._stopped:
@@ -1166,6 +1166,22 @@ class MetricsCollector(object):
                           'description': 'Output state',
                           'type': 'gauge',
                           'unit': ''}]},
+            # shutter
+            {'type': 'shutter',
+             'tags': ['id', 'name'],
+             'metrics': [{'name': 'state',
+                          'description': 'Shutter state',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'position',
+                          'description': 'Shutter position',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'desired_position',
+                          'description': 'Shutter desired position',
+                          'type': 'gauge',
+                          'unit': ''}
+                         ]},
             # sensor
             {'type': 'sensor',
              'tags': ['id', 'name'],

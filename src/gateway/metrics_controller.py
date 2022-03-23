@@ -262,18 +262,23 @@ class MetricsController(object):
         # get definition for metric source and type, getting the definitions for a metric_source is case sensitive!
         definition = self.definitions.get(metric_source, {}).get(metric_type)
         if definition is None:
+            logger.warning('No metric definition found for source %s and type %s', metric_source, metric_type)
             return False
 
         if Config.get_entry('cloud_enabled', False) is False:
+            logger.debug('Metrics upload to cloud is disabled by config')
             return False
 
         if metric_source == 'OpenMotics':
-            if Config.get_entry('cloud_metrics_enabled|{0}'.format(metric_type), True) is False:
+            config_key = 'cloud_metrics_enabled|{0}'.format(metric_type)
+            if Config.get_entry(config_key, True) is False:
+                logger.warning('Metrics upload disabled for metric_type %s (config: %s)', metric_type, config_key)
                 return False
 
             # filter openmotics metrics that are not listed in cloud_metrics_types
             metric_types = Config.get_entry('cloud_metrics_types', [])
             if metric_type not in metric_types:
+                logger.warning('Unknown metric type %s (config: cloud_metrics_types)', metric_type)
                 return False
 
         else:
@@ -281,6 +286,7 @@ class MetricsController(object):
             metric_sources = Config.get_entry('cloud_metrics_sources', [])
             # make sure to get the lowercase metric_source
             if metric_source.lower() not in metric_sources:
+                logger.warning('Unknown metric source %s (config: cloud_metrics_sources)', metric_source)
                 return False
 
         return True
@@ -375,6 +381,8 @@ class MetricsController(object):
             self._cloud_last_try = now
             try:
                 # Try to send the metrics
+                amount_metrics = len(self._cloud_buffer) + len(self._cloud_queue)
+                logger.info('Uploading %d metrics to cloud...', amount_metrics)
                 request = requests.post(metrics_endpoint,
                                         data={'metrics': json.dumps(self._cloud_buffer + self._cloud_queue)},
                                         timeout=30.0,
@@ -382,6 +390,7 @@ class MetricsController(object):
                 return_data = json.loads(request.text)
                 if return_data.get('success', False) is False:
                     raise RuntimeError('{0}'.format(return_data.get('error')))
+                logger.info('Uploaded metrics successfully')
                 # If successful; clear buffers
                 if self._metrics_cache_controller.clear_buffer(metric['timestamp']) > 0:
                     self._load_cloud_buffer()
@@ -391,7 +400,7 @@ class MetricsController(object):
                 if self._throttled_down:
                     self._refresh_cloud_interval()
             except Exception as ex:
-                logger.exception('Error sending metrics to Cloud: {0}'.format(ex))
+                logger.exception('Error uploading metrics to cloud: {0}'.format(ex))
                 if time_ago_send > 60 * 60:
                     # Decrease metrics rate, but at least every 2 hours
                     # Decrease cloud try interval, but at least every hour
