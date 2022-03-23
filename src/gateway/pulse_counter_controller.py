@@ -60,7 +60,7 @@ class PulseCounterController(BaseController):
                     for pulse_counter_dto in self._master_controller.load_pulse_counters():
                         pulse_counter_id = pulse_counter_dto.id
                         ids.append(pulse_counter_id)
-                        pulse_counter = db.query(PulseCounter).where(number=pulse_counter_id).one_or_none()
+                        pulse_counter = db.query(PulseCounter).where(PulseCounter.number == pulse_counter_id).one_or_none()
                         if pulse_counter is None:
                             new_pulse_counters.append(PulseCounter(number=pulse_counter_id,
                                                                    name='PulseCounter {0}'.format(pulse_counter_id),
