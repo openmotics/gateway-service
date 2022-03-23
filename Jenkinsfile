@@ -59,6 +59,7 @@ pipeline {
                     file=$(git status -z gateway/alembic/versions | sed 's,?? src/,,')
                     cat "$file"
                     echo
+                    exit 1
                 fi
                 '''
             }
