@@ -14,7 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
-from gateway.models import DataMigration
+
+from gateway.models import Database, DataMigration
 
 if False:  # MYPY
     from typing import Optional
@@ -38,19 +39,24 @@ class BaseMigrator(object):
                 return
 
             # Check if migration already done
-            migration = DataMigration.get_or_none(name=cls.MIGRATION_KEY)
-            if migration is None:
-                migration = DataMigration.create(name=cls.MIGRATION_KEY, migrated=False)
-            if migration.migrated:
-                return
+            with Database.get_session() as db:
+                migration = db.query(DataMigration).filter_by(name=cls.MIGRATION_KEY).one_or_none()  # type: Optional[DataMigration]
+                if migration is None:
+                    migration = DataMigration(name=cls.MIGRATION_KEY, migrated=False)
+                    db.add(migration)
+                    db.commit()
+                if migration.migrated:
+                    return
 
             logger.info('Migrating ({0})...'.format(cls.__name__))
             cls._migrate()
             logger.info('Migrating ({0})... Done'.format(cls.__name__))
 
             # Migration complete
-            migration.migrated = True
-            migration.save()
+            with Database.get_session() as db:
+                db.add(migration)
+                migration.migrated = True
+                db.commit()
         except Exception:
             logger.exception('Unexpected error in {0}'.format(cls.__name__))
 

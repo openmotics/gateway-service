@@ -1,4 +1,4 @@
-# Copyright (C) 2020 OpenMotics BV
+# Copyright (C) 2021 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -17,228 +17,187 @@ from __future__ import absolute_import
 import unittest
 
 import mock
-from peewee import SqliteDatabase
-from pytest import mark
-
-from gateway.migrations.thermostats import CoolingConfiguration, DaySchedule, \
-    GlobalThermostatConfiguration, OutputToThermostatGroupAssociation, \
-    PumpGroupConfiguration, ThermostatConfiguration, ThermostatsMigrator
-from gateway.models import DaySchedule, Output, Preset, Pump, PumpToValveAssociation, \
-    Room, Sensor, Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
-from gateway.thermostat.thermostat_controller import ThermostatController
-from ioc import SetTestMode, SetUpTestInjections
-from master.classic.eeprom_controller import EepromController
-from master.classic.master_communicator import MasterCommunicator
-from platform_utils import Platform
-
-MODELS = [DaySchedule, Output, OutputToThermostatGroupAssociation, Preset, Pump,
-          PumpToValveAssociation, Room, Sensor, Thermostat, ThermostatGroup,
-          Valve, ValveToThermostatAssociation]
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from gateway.models import Base, Database, ThermostatGroup, Sensor, Output, \
+    Thermostat, Valve, ValveToThermostatAssociation, NoResultFound
+from gateway.migrations.thermostats import ThermostatsMigrator, \
+    GlobalThermostatConfiguration, ThermostatConfiguration, CoolingConfiguration, PumpGroupConfiguration
+from ioc import SetTestMode
 
 
-class ThermostatsMigratorTest(unittest.TestCase):
+class ThermostatMigratorTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
-        self.master_communicator = mock.Mock(MasterCommunicator)
-        self.eeprom_controller = mock.Mock(EepromController)
-        self.eeprom_controller.read_all.side_effect = ([], [])
-        SetUpTestInjections(master_communicator=self.master_communicator,
-                            eeprom_controller=self.eeprom_controller,
-                            thermostat_controller=mock.Mock(ThermostatController))
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
-    def tearDown(self):
-        self.test_db.close()
+    @mock.patch.object(ThermostatsMigrator, '_read_global_configuration')
+    @mock.patch.object(ThermostatsMigrator, '_read_heating_configuration')
+    @mock.patch.object(ThermostatsMigrator, '_read_cooling_configuration')
+    @mock.patch.object(ThermostatsMigrator, '_read_pump_group_configuration')
+    @mock.patch.object(ThermostatsMigrator, '_enumerate_schedules')
+    @mock.patch.object(ThermostatsMigrator, '_disable_master_thermostats')
+    def test_migration(self, dmt, es, rpgc, rcc, rhc, rgc):
+        gc_data = {'outside_sensor': 1,
+                   'threshold_temp': 37,
+                   'pump_delay': 15}
+        for mode in [ThermostatGroup.Modes.HEATING, ThermostatGroup.Modes.COOLING]:
+            for i in range(4):
+                output_key = 'switch_to_{0}_output_{1}'.format(mode, i)
+                value_key = 'switch_to_{0}_value_{1}'.format(mode, i)
+                if i == 0:
+                    gc_data[output_key] = 10 if mode == ThermostatGroup.Modes.HEATING else 11
+                    gc_data[value_key] = 33
+                else:
+                    gc_data[output_key] = 255
+                    gc_data[value_key] = 255
+        gc = GlobalThermostatConfiguration.from_dict(gc_data)
+        rgc.return_value = gc
+        rhc.return_value = [
+            ThermostatConfiguration.from_dict({'id': 0,
+                                               'name': 'Heating 0',
+                                               'setp0': 14.0, 'setp1': 15.0, 'setp2': 16.0, 'setp3': 17.0, 'setp4': 18.0, 'setp5': 19.0,
+                                               'sensor': 2,
+                                               'output0': 5, 'output1': 255,
+                                               'pid_p': 1, 'pid_i': 2, 'pid_d': 3, 'pid_int': 4,
+                                               'permanent_manual': 255}),
+            ThermostatConfiguration.from_dict({'id': 1,
+                                               'name': 'Heating 1',
+                                               'setp0': 14.5, 'setp1': 15.5, 'setp2': 16.5, 'setp3': 17.5,
+                                               'setp4': 18.5, 'setp5': 19.5,
+                                               'sensor': 3,
+                                               'output0': 6, 'output1': 7,
+                                               'pid_p': 5, 'pid_i': 6, 'pid_d': 7, 'pid_int': 8,
+                                               'permanent_manual': 255})
+        ]
+        rcc.return_value = [
+            CoolingConfiguration.from_dict({'id': 0,
+                                            'name': 'Cooling 0',
+                                            'setp0': 14.0, 'setp1': 15.0, 'setp2': 16.0, 'setp3': 17.0, 'setp4': 18.0, 'setp5': 19.0,
+                                            'sensor': 4,  # This sensor will be ignored due to architecture
+                                            'output0': 6, 'output1': 255,
+                                            'pid_p': 10, 'pid_i': 20, 'pid_d': 30, 'pid_int': 40,
+                                            'permanent_manual': 255})
+        ]
+        rpgc.return_value = [
+            PumpGroupConfiguration.from_dict({'id': 0,
+                                              'output': 8,
+                                              'outputs': '5,6,7'})
+        ]
+        es.return_value = enumerate([])
 
-    @mark.skip
-    def test_migrate(self):
-        room, _ = Room.get_or_create(number=0)
-        sensor_outside = Sensor.create(source='master', physical_quantity='temperature', unit='celcius', external_id='0', name='sensor_0')
-        sensor_thermostat = Sensor.create(source='master', physical_quantity='temperature', unit='celcius', external_id='1', name='sensor_1')
-        output_mode1 = Output.create(number=5, name='output_5')
-        output_mode2 = Output.create(number=6, name='output_6')
-        output_mode3 = Output.create(number=7, name='output_7')
-        output_heating0 = Output.create(number=8, name='output_8')
-        output_heating_pump = Output.create(number=9, name='pump_9')
-        output_cooling0 = Output.create(number=16, name='output_16')
-        output_cooling1 = Output.create(number=17, name='output_17')
-        output_cooling_pump = Output.create(number=18, name='pump_18')
-        thermostat_group = ThermostatGroup.create(number=0, name='Default')
+        with self.session as db:
+            sensor_1 = Sensor(external_id='1',
+                              physical_quantity=Sensor.PhysicalQuantities.TEMPERATURE,
+                              source=Sensor.Sources.MASTER,
+                              name='Sensor 1')
+            sensor_2 = Sensor(external_id='2',
+                              physical_quantity=Sensor.PhysicalQuantities.TEMPERATURE,
+                              source=Sensor.Sources.MASTER,
+                              name='Sensor 2')
+            sensor_3 = Sensor(external_id='3',
+                              physical_quantity=Sensor.PhysicalQuantities.TEMPERATURE,
+                              source=Sensor.Sources.MASTER,
+                              name='Sensor 3')
+            sensor_4 = Sensor(external_id='4',
+                              physical_quantity=Sensor.PhysicalQuantities.TEMPERATURE,
+                              source=Sensor.Sources.MASTER,
+                              name='Sensor 4')
+            output_5 = Output(number=5)
+            output_6 = Output(number=6)
+            output_7 = Output(number=7)
+            output_8 = Output(number=8)
+            output_10 = Output(number=10)
+            output_11 = Output(number=11)
+            objects = [sensor_1, sensor_2, sensor_3, sensor_4,
+                       output_5, output_6, output_7, output_8, output_10, output_11]
+            db.add_all(objects)
+            db.commit()
+            for o in objects:
+                db.refresh(o)
 
-        eeprom_data = {
-            GlobalThermostatConfiguration: GlobalThermostatConfiguration.deserialize({
-                'outside_sensor': 0,
-                'threshold_temp': 20.0,
-                'pump_delay': 120,
-                'switch_to_heating_output_0': 255,
-                'switch_to_heating_value_0': 255,
-                'switch_to_heating_output_1': 255,
-                'switch_to_heating_value_1': 255,
-                'switch_to_heating_output_2': 6,
-                'switch_to_heating_value_2': 0,
-                'switch_to_heating_output_3': 7,
-                'switch_to_heating_value_3': 100,
-                'switch_to_cooling_output_0': 255,
-                'switch_to_cooling_value_0': 255,
-                'switch_to_cooling_output_1': 5,
-                'switch_to_cooling_value_1': 100,
-                'switch_to_cooling_output_2': 255,
-                'switch_to_cooling_value_2': 255,
-                'switch_to_cooling_output_3': 255,
-                'switch_to_cooling_value_3': 255,
-            }),
-            ThermostatConfiguration: [ThermostatConfiguration.deserialize({
-                'id': 0,
-                'name': 'thermostat_0',
-                'setp0': None,
-                'setp1': None,
-                'setp2': None,
-                'setp3': 16.0,
-                'setp4': 10.0,
-                'setp5': 22.5,
-                'room': 0,
-                'sensor': 1,
-                'output0': 8,
-                'output1': 255,
-                'pid_p': 255,
-                'pid_i': 255,
-                'pid_d': 255,
-                'pid_int': 255,
-                'permanent_manual': False,
-                'auto_mon': [16.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
-                'auto_tue': [16.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
-                'auto_wed': [16.0, '07:00', '09:00', 20.0, '12:30', '22:00', 21.0],
-                'auto_thu': [16.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
-                'auto_fri': [16.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
-                'auto_sat': [16.0, '07:00', '18:00', 20.0, '18:00', '22:00', 21.0],
-                'auto_sun': [16.0, '07:00', '18:00', 20.0, '18:00', '22:00', 21.0],
-            })],
-            CoolingConfiguration: [CoolingConfiguration.deserialize({
-                'id': 0,
-                'name': 'thermostat_0',
-                'setp0': None,
-                'setp1': None,
-                'setp2': None,
-                'setp3': 28.0,
-                'setp4': 32.0,
-                'setp5': 22.5,
-                'room': 0,
-                'sensor': 1,
-                'output0': 16,
-                'output1': 17,
-                'pid_p': 200,
-                'pid_i': 50,
-                'pid_d': 50,
-                'pid_int': 255,
-                'permanent_manual': False,
-                'auto_mon': [16.0, '07:00', '09:00', 26.0, '17:00', '22:00', 25.0],
-                'auto_tue': [16.0, '07:00', '09:00', 26.0, '17:00', '22:00', 25.0],
-                'auto_wed': [16.0, '07:00', '09:00', 26.0, '12:30', '22:00', 25.0],
-                'auto_thu': [16.0, '07:00', '09:00', 26.0, '17:00', '22:00', 25.0],
-                'auto_fri': [16.0, '07:00', '09:00', 26.0, '17:00', '22:00', 25.0],
-                'auto_sat': [16.0, '07:00', '18:00', 26.0, '18:00', '22:00', 25.0],
-                'auto_sun': [16.0, '07:00', '18:00', 26.0, '18:00', '22:00', 25.0],
-            })],
-            PumpGroupConfiguration: [
-                PumpGroupConfiguration.deserialize({
-                    'id': 6,
-                    'output': 9,
-                    'outputs': '8',
-                }),
-                PumpGroupConfiguration.deserialize({
-                    'id': 7,
-                    'output': 18,
-                    'outputs': '16,17',
-                })
-            ]
-        }
+            with self.assertRaises(NoResultFound):
+                ThermostatsMigrator._migrate()
 
-        def _read_eeprom(model):
-            return eeprom_data[model]
+            db.add(ThermostatGroup(number=0,
+                                   name='Default group'))
+            db.commit()
 
-        self.eeprom_controller.read_all.side_effect = _read_eeprom
-        self.eeprom_controller.read.side_effect = _read_eeprom
-
-        with mock.patch.object(Platform, 'get_platform', return_value=Platform.Type.CLASSIC):
             ThermostatsMigrator._migrate()
 
-        self.assertEqual(ThermostatGroup.select().count(), 1)
-        thermostat_group = ThermostatGroup.get(number=0)
-        self.assertEqual(thermostat_group.sensor, sensor_outside)
-        self.assertEqual(thermostat_group.threshold_temperature, 20.0)
+            dmt.assert_called_once()
 
-        self.assertEqual(OutputToThermostatGroup.select().count(), 3)
-        group_output = OutputToThermostatGroup.get(mode='heating', index=2)
-        self.assertEqual(group_output.output, output_mode2)
-        self.assertEqual(group_output.value, 0)
-        group_output = OutputToThermostatGroup.get(mode='heating', index=3)
-        self.assertEqual(group_output.output, output_mode3)
-        self.assertEqual(group_output.value, 100)
-        group_output = OutputToThermostatGroup.get(mode='cooling', index=1)
-        self.assertEqual(group_output.output, output_mode1)
-        self.assertEqual(group_output.value, 100)
+            thermostat_groups = db.query(ThermostatGroup).all()
+            self.assertEqual(1, len(thermostat_groups))
+            thermostat_group = thermostat_groups[0]  # type: ThermostatGroup
+            self.assertEqual('Default group', thermostat_group.name)
+            thermostats = db.query(Thermostat).all()
+            self.assertEqual(2, len(thermostats))
+            thermostat_0 = thermostats[0]  # type: Thermostat
+            expected_thermostat_0 = {'id': thermostat_0.id, 'number': 0,
+                                     'thermostat_group_id': thermostat_group.id,
+                                     'name': 'Heating 0',
+                                     'sensor_id': sensor_2.id,
+                                     'pid_heating_p': 1.0, 'pid_heating_i': 2.0, 'pid_heating_d': 3.0,
+                                     'pid_cooling_p': 10.0, 'pid_cooling_i': 20.0, 'pid_cooling_d': 30.0,
+                                     'valve_config': 'cascade',
+                                     'state': 'on', 'automatic': True,
+                                     'room_id': None}
+            self.assertEqual(expected_thermostat_0,
+                             ThermostatMigratorTest._extract_dict(thermostat_0,
+                                                                  expected_thermostat_0.keys()))
+            heating_valve = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_0) &
+                                                                                     (ValveToThermostatAssociation.mode == 'heating')).one()  # type: Valve
+            self.assertEqual([{'priority': 0, 'thermostat_id': thermostat_0.id, 'mode': 'heating', 'valve_id': heating_valve.id}],
+                             [ThermostatMigratorTest._extract_dict(x) for x in thermostat_0.heating_valve_associations])
+            self.assertEqual(output_5.id, heating_valve.output_id)
+            cooling_valve = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_0) &
+                                                                                     (ValveToThermostatAssociation.mode == 'cooling')).one()  # type: Valve
+            self.assertEqual([{'priority': 0, 'thermostat_id': thermostat_0.id, 'mode': 'cooling', 'valve_id': cooling_valve.id}],
+                             [ThermostatMigratorTest._extract_dict(x) for x in thermostat_0.cooling_valve_associations])
+            self.assertEqual(output_6.id, cooling_valve.output_id)
+            self.assertEqual(sensor_2.id, thermostat_0.sensor.id)
 
-        self.assertEqual(Thermostat.select().count(), 1)
-        thermostat = Thermostat.get(number=0)
-        self.assertEqual(thermostat.name, 'thermostat_0')
-        self.assertEqual(thermostat.room, room)
-        self.assertEqual(thermostat.sensor, sensor_thermostat)
-        self.assertEqual(thermostat.heating_valves, [Valve.get(output=output_heating0)])
-        self.assertEqual(thermostat.cooling_valves, [Valve.get(output=output_cooling0),
-                                                     Valve.get(output=output_cooling1)])
-        valve = Valve.get(output=output_heating0)
-        self.assertEqual(valve.delay, 120.0)
-        valve = Valve.get(output=output_cooling0)
-        self.assertEqual(valve.delay, 120.0)
-        valve = Valve.get(output=output_cooling1)
-        self.assertEqual(valve.delay, 120.0)
+            thermostat_1 = thermostats[1]  # type: Thermostat
+            expected_thermostat_1 = {'id': thermostat_1.id, 'number': 1,
+                                     'thermostat_group_id': thermostat_group.id,
+                                     'name': 'Heating 1',
+                                     'sensor_id': sensor_3.id,
+                                     'pid_heating_p': 5.0, 'pid_heating_i': 6.0, 'pid_heating_d': 7.0,
+                                     'pid_cooling_p': 120.0, 'pid_cooling_i': 0.0, 'pid_cooling_d': 0.0,
+                                     'valve_config': 'cascade',
+                                     'state': 'on', 'automatic': True,
+                                     'room_id': None}
+            self.assertEqual(expected_thermostat_1,
+                             ThermostatMigratorTest._extract_dict(thermostat_1,
+                                                                  expected_thermostat_1.keys()))
+            heating_valves = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_1) &
+                                                                                      (ValveToThermostatAssociation.mode == 'heating'))
+            self.assertEqual([{'priority': heating_valve.thermostat_associations[0].priority, 'thermostat_id': thermostat_1.id,
+                               'mode': 'heating', 'valve_id': heating_valve.id}
+                              for heating_valve in heating_valves],
+                             [ThermostatMigratorTest._extract_dict(x) for x in thermostat_1.heating_valve_associations])
+            self.assertEqual(sorted([output_6.id, output_7.id]), sorted(v.output_id for v in heating_valves))
+            cooling_valve = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_1) &
+                                                                                     (ValveToThermostatAssociation.mode == 'cooling')).first()
+            self.assertIsNone(cooling_valve)
+            self.assertEqual(sensor_3.id, thermostat_1.sensor.id)
 
-        self.assertEqual(thermostat.pid_heating_p, 120)
-        self.assertEqual(thermostat.pid_heating_i, 0)
-        self.assertEqual(thermostat.pid_heating_d, 0)
-        self.assertEqual(thermostat.pid_cooling_p, 200)
-        self.assertEqual(thermostat.pid_cooling_i, 50)
-        self.assertEqual(thermostat.pid_cooling_d, 50)
-
-        self.assertEqual(Preset.select().count(), 3)
-        preset = Preset.get(type='away')
-        self.assertEqual(preset.heating_setpoint, 16.0)
-        self.assertEqual(preset.cooling_setpoint, 28.0)
-        preset = Preset.get(type='vacation')
-        self.assertEqual(preset.heating_setpoint, 10.0)
-        self.assertEqual(preset.cooling_setpoint, 32.0)
-        preset = Preset.get(type='party')
-        self.assertEqual(preset.heating_setpoint, 22.5)
-        self.assertEqual(preset.cooling_setpoint, 22.5)
-
-        self.assertEqual(DaySchedule.select().count(), 14)
-        schedules = [x.schedule_data for x in thermostat.heating_schedules]
-        self.assertEqual(schedules, [
-            {0: 16.0, 25200: 20.0, 32400: 16.0, 61200: 21.0, 79200: 16.0},
-            {0: 16.0, 25200: 20.0, 32400: 16.0, 61200: 21.0, 79200: 16.0},
-            {0: 16.0, 25200: 20.0, 32400: 16.0, 45000: 21.0, 79200: 16.0},
-            {0: 16.0, 25200: 20.0, 32400: 16.0, 61200: 21.0, 79200: 16.0},
-            {0: 16.0, 25200: 20.0, 32400: 16.0, 61200: 21.0, 79200: 16.0},
-            {0: 16.0, 25200: 20.0, 64800: 16.0, 65400: 21.0, 79200: 16.0},
-            {0: 16.0, 25200: 20.0, 64800: 16.0, 65400: 21.0, 79200: 16.0}
-        ])
-
-        self.assertEqual(Pump.select().count(), 2)
-        pump = Pump.get(output=output_heating_pump)
-        self.assertEqual(pump.heating_valves, [Valve.get(output=output_heating0)])
-        self.assertEqual(pump.cooling_valves, [])
-        pump = Pump.get(output=output_cooling_pump)
-        self.assertEqual(pump.cooling_valves, [Valve.get(output=output_cooling0),
-                                               Valve.get(output=output_cooling1)])
-        self.assertEqual(pump.heating_valves, [])
-
-        self.master_communicator.do_command.assert_called()
-        payload = self.master_communicator.do_command.call_args_list[0][0][1]
-        self.assertEqual(payload, {'bank': 0, 'address': 40, 'data': bytearray([0x00])})
+    @staticmethod
+    def _extract_dict(orm_entity, fields=None):
+        return {c.name: getattr(orm_entity, c.name)
+                for c in orm_entity.__table__.columns
+                if fields is None or c.name in fields}
