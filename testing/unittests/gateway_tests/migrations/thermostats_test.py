@@ -21,7 +21,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from gateway.models import Base, Database, ThermostatGroup, Sensor, Output, \
-    Thermostat, Valve, ValveToThermostatAssociation, NoResultFound
+    Thermostat, Valve, ValveToThermostatAssociation, NoResultFound, \
+    Preset, DaySchedule, Pump
 from gateway.migrations.thermostats import ThermostatsMigrator, \
     GlobalThermostatConfiguration, ThermostatConfiguration, CoolingConfiguration, PumpGroupConfiguration
 from ioc import SetTestMode
@@ -48,9 +49,8 @@ class ThermostatMigratorTest(unittest.TestCase):
     @mock.patch.object(ThermostatsMigrator, '_read_heating_configuration')
     @mock.patch.object(ThermostatsMigrator, '_read_cooling_configuration')
     @mock.patch.object(ThermostatsMigrator, '_read_pump_group_configuration')
-    @mock.patch.object(ThermostatsMigrator, '_enumerate_schedules')
     @mock.patch.object(ThermostatsMigrator, '_disable_master_thermostats')
-    def test_migration(self, dmt, es, rpgc, rcc, rhc, rgc):
+    def test_migration(self, dmt, rpgc, rcc, rhc, rgc):
         gc_data = {'outside_sensor': 1,
                    'threshold_temp': 37,
                    'pump_delay': 15}
@@ -73,7 +73,14 @@ class ThermostatMigratorTest(unittest.TestCase):
                                                'sensor': 2,
                                                'output0': 5, 'output1': 255,
                                                'pid_p': 1, 'pid_i': 2, 'pid_d': 3, 'pid_int': 4,
-                                               'permanent_manual': 255}),
+                                               'permanent_manual': 255,
+                                               'auto_mon': [19.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
+                                               'auto_tue': [19.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
+                                               'auto_wed': [19.0, '07:00', '09:00', 20.0, '12:30', '22:00', 21.0],
+                                               'auto_thu': [19.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
+                                               'auto_fri': [19.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0],
+                                               'auto_sat': [19.0, '07:00', '18:00', 20.0, '18:00', '22:00', 21.0],
+                                               'auto_sun': [19.0, '07:00', '18:00', 20.0, '18:00', '22:00', 21.0]}),
             ThermostatConfiguration.from_dict({'id': 1,
                                                'name': 'Heating 1',
                                                'setp0': 14.5, 'setp1': 15.5, 'setp2': 16.5, 'setp3': 17.5,
@@ -81,23 +88,36 @@ class ThermostatMigratorTest(unittest.TestCase):
                                                'sensor': 3,
                                                'output0': 6, 'output1': 7,
                                                'pid_p': 5, 'pid_i': 6, 'pid_d': 7, 'pid_int': 8,
-                                               'permanent_manual': 255})
+                                               'permanent_manual': 255,
+                                               'auto_mon': [19.5, '07:10', '09:00', 20.5, '17:00', '22:00', 21.5],
+                                               'auto_tue': [19.5, '07:10', '09:00', 20.5, '17:00', '22:00', 21.5],
+                                               'auto_wed': [19.5, '07:10', '09:00', 20.5, '12:30', '22:00', 21.5],
+                                               'auto_thu': [19.5, '07:10', '09:00', 20.5, '17:00', '22:00', 21.5],
+                                               'auto_fri': [19.5, '07:10', '09:00', 20.5, '17:00', '22:00', 21.5],
+                                               'auto_sat': [19.5, '07:10', '18:00', 20.5, '18:00', '22:00', 21.5],
+                                               'auto_sun': [19.5, '07:10', '18:00', 20.5, '18:00', '22:00', 21.5]})
         ]
         rcc.return_value = [
             CoolingConfiguration.from_dict({'id': 0,
                                             'name': 'Cooling 0',
-                                            'setp0': 14.0, 'setp1': 15.0, 'setp2': 16.0, 'setp3': 17.0, 'setp4': 18.0, 'setp5': 19.0,
+                                            'setp0': 24.0, 'setp1': 25.0, 'setp2': 26.0, 'setp3': 27.0, 'setp4': 28.0, 'setp5': 29.0,
                                             'sensor': 4,  # This sensor will be ignored due to architecture
                                             'output0': 6, 'output1': 255,
                                             'pid_p': 10, 'pid_i': 20, 'pid_d': 30, 'pid_int': 40,
-                                            'permanent_manual': 255})
+                                            'permanent_manual': 255,
+                                            'auto_mon': [29.0, '07:20', '09:00', 30.0, '17:00', '22:00', 31.0],
+                                            'auto_tue': [29.0, '07:20', '09:00', 30.0, '17:00', '22:00', 31.0],
+                                            'auto_wed': [29.0, '07:20', '09:00', 30.0, '12:30', '22:00', 31.0],
+                                            'auto_thu': [29.0, '07:20', '09:00', 30.0, '17:00', '22:00', 31.0],
+                                            'auto_fri': [29.0, '07:20', '09:00', 30.0, '17:00', '22:00', 31.0],
+                                            'auto_sat': [29.0, '07:20', '18:00', 30.0, '18:00', '22:00', 31.0],
+                                            'auto_sun': [29.0, '07:20', '18:00', 30.0, '18:00', '22:00', 31.0]})
         ]
         rpgc.return_value = [
             PumpGroupConfiguration.from_dict({'id': 0,
                                               'output': 8,
                                               'outputs': '5,6,7'})
         ]
-        es.return_value = enumerate([])
 
         with self.session as db:
             sensor_1 = Sensor(external_id='1',
@@ -195,6 +215,45 @@ class ThermostatMigratorTest(unittest.TestCase):
                                                                                      (ValveToThermostatAssociation.mode == 'cooling')).first()
             self.assertIsNone(cooling_valve)
             self.assertEqual(sensor_3.id, thermostat_1.sensor.id)
+
+            presets = db.query(Preset).where(Preset.thermostat == thermostat_0).all()
+            preset_map = {p.type: p for p in presets}
+            self.assertEqual(17.0, preset_map['away'].heating_setpoint)
+            self.assertEqual(27.0, preset_map['away'].cooling_setpoint)
+            self.assertEqual(18.0, preset_map['vacation'].heating_setpoint)
+            self.assertEqual(28.0, preset_map['vacation'].cooling_setpoint)
+            self.assertEqual(19.0, preset_map['party'].heating_setpoint)
+            self.assertEqual(29.0, preset_map['party'].cooling_setpoint)
+
+            schedules = db.query(DaySchedule).where(DaySchedule.thermostat == thermostat_0).all()
+            possible_schedules = [s for s in schedules if s.mode == 'heating' and s.index == 0]
+            self.assertEqual(1, len(possible_schedules))
+            self.assertEqual({0: 19.0,
+                              7 * 60 * 60: 20.0,
+                              9 * 60 * 60: 19.0,
+                              17 * 60 * 60: 21.0,
+                              22 * 60 * 60: 19.0},  # 'auto_mon': [19.0, '07:00', '09:00', 20.0, '17:00', '22:00', 21.0]
+                             possible_schedules[0].schedule_data)
+            possible_schedules = [s for s in schedules if s.mode == 'heating' and s.index == 5]
+            self.assertEqual(1, len(possible_schedules))
+            self.assertEqual({0: 19.0,
+                              7 * 60 * 60: 20.0,
+                              18 * 60 * 60: 19.0,
+                              18 * 60 * 60 + 600: 21.0,
+                              22 * 60 * 60: 19.0},  # 'auto_sat': [19.0, '07:00', '18:00', 20.0, '18:00', '22:00', 21.0]
+                             possible_schedules[0].schedule_data)
+            possible_schedules = [s for s in schedules if s.mode == 'cooling' and s.index == 0]
+            self.assertEqual(1, len(possible_schedules))
+            self.assertEqual({0: 29.0,
+                              7 * 60 * 60 + 20 * 60: 30.0,
+                              9 * 60 * 60: 29.0,
+                              17 * 60 * 60: 31.0,
+                              22 * 60 * 60: 29.0},  # 'auto_mon': [29.0, '07:20', '09:00', 30.0, '17:00', '22:00', 31.0]
+                             possible_schedules[0].schedule_data)
+
+            pump = db.query(Pump).one()
+            self.assertEqual(output_8.id, pump.output.id)
+            self.assertEqual(sorted([output_5.id, output_6.id, output_7.id]), sorted(v.output.id for v in pump.valves))
 
     @staticmethod
     def _extract_dict(orm_entity, fields=None):
