@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
+from platform_utils import System
+System.import_libs()
 
 import argparse
 import logging
@@ -28,9 +30,6 @@ logger = logging.getLogger('openmotics')
 
 
 def cmd_feature_thermostats(args):
-    from platform_utils import System
-    System.import_libs()
-
     from gateway.models import Database, DataMigration, Feature
     if args.enable and args.disable:
         logger.error('--enable and --disable are mutually exclusive')
