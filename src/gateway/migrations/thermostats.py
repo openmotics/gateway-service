@@ -295,7 +295,7 @@ class ThermostatsMigrator(BaseMigrator):
 
     @classmethod
     def _migrate_thermostat(cls, db, thermostat_group, mode, eeprom_object):
-        # type: (Session, ThermostatGroup, str, Any) -> None
+        # type: (Any, ThermostatGroup, str, Any) -> None
         if eeprom_object.sensor == 240:
             raise RuntimeError('Thermostat {} with timer only configuration, this can\'t be migrated'.format(eeprom_object.id))
         if eeprom_object.sensor in (None, 255):
@@ -353,7 +353,7 @@ class ThermostatsMigrator(BaseMigrator):
 
     @classmethod
     def _migrate_output(cls, db, thermostat, mode, output_nr, valve_priority):
-        # type: (Session, Thermostat, str, int, int) -> None
+        # type: (Any, Thermostat, str, int, int) -> None
         if output_nr not in (None, 255):
             output = db.query(Output).where(Output.number == output_nr).one()
             name = 'Valve (output {0})'.format(output.number)
@@ -379,7 +379,7 @@ class ThermostatsMigrator(BaseMigrator):
 
     @classmethod
     def _migrate_presets(cls, db, thermostat, mode, eeprom_object):
-        # type: (Session, Thermostat, str, Any) -> None
+        # type: (Any, Thermostat, str, Any) -> None
         for preset_type, src_field in cls.PRESET_MAPPING:
             value = getattr(eeprom_object, src_field)
             if value not in (None, 255):
@@ -444,12 +444,13 @@ class ThermostatsMigrator(BaseMigrator):
                              end_day_1: temp_night,
                              start_day_2: temp_day_2,
                              end_day_2: temp_night}
-            schedule = DaySchedule(thermostat=thermostat, mode=mode, index=i, schedule_data=schedule_data)
+            schedule = DaySchedule(thermostat=thermostat, mode=mode, index=i)
+            schedule.schedule_data = schedule_data
             db.add(schedule)
 
     @classmethod
     def _migrate_pump_group(cls, db, eeprom_object):
-        # type: (Session, Any) -> None
+        # type: (Any, Any) -> None
         if eeprom_object.output not in (None, 255):
             output = db.query(Output).where(Output.number == eeprom_object.output).one()
             name = 'Pump (output {0})'.format(output.number)
@@ -468,7 +469,7 @@ class ThermostatsMigrator(BaseMigrator):
 
     @classmethod
     def _migrate_thermostat_group(cls, db, thermostat_group, eeprom_object):
-        # type: (Session, ThermostatGroup, Any) -> None
+        # type: (Any, ThermostatGroup, Any) -> None
         temperature = Sensor.PhysicalQuantities.TEMPERATURE
         if eeprom_object.outside_sensor not in (None, 255):
             sensor = db.query(Sensor).where(
