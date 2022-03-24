@@ -25,7 +25,9 @@ import mock
 import time
 import unittest
 
-from peewee import SqliteDatabase
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 import platform_utils
 from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod, AuthenticationToken
@@ -33,12 +35,10 @@ from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.exceptions import GatewayException, StateException
 from gateway.mappers.user import UserMapper
-from gateway.models import User, Delivery
+from gateway.models import User, Base, Database
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 from platform_utils import Platform
-
-MODELS = [User, Delivery]
 
 
 class UserControllerTest(unittest.TestCase):
@@ -49,7 +49,6 @@ class UserControllerTest(unittest.TestCase):
     def setUpClass(cls):
         super(UserControllerTest, cls).setUpClass()
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
         fakesleep.monkey_patch()
 
     @classmethod
@@ -58,9 +57,17 @@ class UserControllerTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
         self.get_platform_patch = mock.patch('platform_utils.Platform.get_platform')
         self.get_platform_mock = self.get_platform_patch.start()
         self.get_platform_mock.return_value = 'CLASSIC'
@@ -87,8 +94,6 @@ class UserControllerTest(unittest.TestCase):
     def tearDown(self):
         self.controller.stop()
         self.get_platform_patch.stop()
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def test_save_user(self):
         """ Test that the users are saved correctly """
@@ -96,7 +101,8 @@ class UserControllerTest(unittest.TestCase):
         num_users = self.controller.get_number_of_users()
         self.assertEqual(1, num_users)
 
-        num_users = User.select().count()
+        with Database.get_session() as db:
+            num_users = db.query(User).count()
         self.assertEqual(1, num_users)
 
         # setup test credentials
@@ -107,7 +113,8 @@ class UserControllerTest(unittest.TestCase):
         user_dto.set_password("test")
         self.controller.save_user(user_dto)
 
-        user_orm = User.select().where(User.username == 'fred').first()
+        with Database.get_session() as db:
+            user_orm = db.query(User).where(User.username == 'fred').one_or_none()
         self.assertIsNotNone(user_orm)
         self.assertEqual('fred@test.com', user_orm.email)
         self.assertEqual('en', user_orm.language)
@@ -134,7 +141,8 @@ class UserControllerTest(unittest.TestCase):
         user_dto.set_password("test")
         self.controller.save_user(user_dto)
 
-        user_orm = User.select().where(User.username == 'nikolatesla').first()  # username gets saved as lowercase
+        with Database.get_session() as db:
+            user_orm = db.query(User).where(User.username == 'nikolatesla').one_or_none()  # username gets saved as lowercase
         self.assertIsNotNone(user_orm)
         self.assertEqual('nikola@test.com', user_orm.email)
         self.assertEqual('fr', user_orm.language)
@@ -168,14 +176,15 @@ class UserControllerTest(unittest.TestCase):
     def test_terms(self):
         """ Tests acceptance of the terms """
         # adding test user to the DB
-        user_to_add = User(
-            username='test',
-            password=UserDTO._hash_password('test'),
-            pin_code='1234',
-            role=User.UserRoles.ADMIN,
-            language='en'
-        )
-        user_to_add.save()
+        with Database.get_session() as db:
+            db.add(User(
+                username='test',
+                password=UserDTO._hash_password('test'),
+                pin_code='1234',
+                role=User.UserRoles.ADMIN,
+                language='en'
+            ))
+            db.commit()
 
         # setup test credentials
         user_dto = UserDTO(username='test')
@@ -183,17 +192,17 @@ class UserControllerTest(unittest.TestCase):
 
         # check if login is possible
         success, data = self.controller.login(user_dto)
-        self.assertFalse(success)
+        self.assertFalse(success, data)
         self.assertEqual(data, 'terms_not_accepted')
 
         # login with accepted terms fields set
         success, data = self.controller.login(user_dto, accept_terms=True)
-        self.assertTrue(success)
+        self.assertTrue(success, data)
         self.assertIsNotNone(data)
 
         # login again to see if fields has been saved
         success, data = self.controller.login(user_dto)
-        self.assertTrue(success)
+        self.assertTrue(success, data)
         self.assertIsNotNone(data)
 
     def test_all(self):
@@ -364,15 +373,16 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual('om', users_in_controller[0].username)
         self.assertEqual('SUPER', users_in_controller[0].role)
 
-        user_to_add = User(
-            username='admin_1',
-            password=UserDTO._hash_password('test'),
-            pin_code='1111',
-            role=User.UserRoles.ADMIN,
-            accepted_terms=True,
-            language='en'
-        )
-        user_to_add.save()
+        with Database.get_session() as db:
+            db.add(User(
+                username='admin_1',
+                password=UserDTO._hash_password('test'),
+                pin_code='1111',
+                role=User.UserRoles.ADMIN,
+                accepted_terms=True,
+                language='en'
+            ))
+            db.commit()
 
         # check if the user has been added to the list
         users_in_controller = self.controller.load_users()
@@ -385,36 +395,31 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(2, num_users)
 
         # Add a normal user and then load only normal users
-        user_to_add = User(
-            username='user_1',
-            password=UserDTO._hash_password('test'),
-            pin_code='2222',
-            role=User.UserRoles.USER,
-            accepted_terms=True,
-            language='en'
-        )
-        user_to_add.save()
-
-        user_to_add = User(
-            username='user_2',
-            password=UserDTO._hash_password('test'),
-            pin_code='3333',
-            role=User.UserRoles.USER,
-            accepted_terms=True,
-            is_active=False,
-            language='en'
-        )
-        user_to_add.save()
-
-        user_to_add = User(
-            username='courier_1',
-            password=UserDTO._hash_password('test'),
-            pin_code='4444',
-            role=User.UserRoles.COURIER,
-            accepted_terms=True,
-            language='en'
-        )
-        user_to_add.save()
+        with Database.get_session() as db:
+            db.add_all([User(
+                username='user_1',
+                password=UserDTO._hash_password('test'),
+                pin_code='2222',
+                role=User.UserRoles.USER,
+                accepted_terms=True,
+                language='en'
+            ), User(
+                username='user_2',
+                password=UserDTO._hash_password('test'),
+                pin_code='3333',
+                role=User.UserRoles.USER,
+                accepted_terms=True,
+                is_active=False,
+                language='en'
+            ), User(
+                username='courier_1',
+                password=UserDTO._hash_password('test'),
+                pin_code='4444',
+                role=User.UserRoles.COURIER,
+                accepted_terms=True,
+                language='en'
+            )])
+            db.commit()
 
         # check if the number of users is correct
         num_users = self.controller.get_number_of_users()
@@ -451,25 +456,23 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(1, self.controller.get_number_of_users())
 
         # create a new user to test with
-        user_to_add = User(
-            username='test',
-            password=UserDTO._hash_password('test'),
-            pin_code='1234',
-            role=User.UserRoles.ADMIN,
-            accepted_terms=True,
-            language='en'
-        )
-        user_to_add.save()
-
-        user_to_add = User(
-            username='test2',
-            password=UserDTO._hash_password('test'),
-            pin_code=None,
-            role=User.UserRoles.USER,
-            accepted_terms=True,
-            language='en'
-        )
-        user_to_add.save()
+        with Database.get_session() as db:
+            db.add_all([User(
+                username='test',
+                password=UserDTO._hash_password('test'),
+                pin_code='1234',
+                role=User.UserRoles.ADMIN,
+                accepted_terms=True,
+                language='en'
+            ), User(
+                username='test2',
+                password=UserDTO._hash_password('test'),
+                pin_code=None,
+                role=User.UserRoles.USER,
+                accepted_terms=True,
+                language='en'
+            )])
+            db.commit()
 
         # creating equal credentials to use
         user_dto = UserDTO(username='test')
@@ -519,7 +522,6 @@ class UserControllerTest(unittest.TestCase):
         except GatewayException as ex:
             self.assertIn(UserEnums.DeleteErrors.LAST_ACCOUNT, ex.message)
 
-
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
         # check that there is only one user in the system
@@ -534,19 +536,19 @@ class UserControllerTest(unittest.TestCase):
 
         # verify that the user can log in with regular username
         success, token = self.controller.login(user_dto, accept_terms=True)
-        self.assertTrue(success)
+        self.assertTrue(success, token)
         self.assertTrue(self.controller.check_token(token))
 
         # verify that the user can log in with capitals
         user_dto.username = 'TeSt'
         success, token = self.controller.login(user_dto)
-        self.assertTrue(success)
+        self.assertTrue(success, token)
         self.assertTrue(self.controller.check_token(token))
 
         # verify that the user can not login with password with changed capitals
         user_dto.set_password('TeSt')
         success, token = self.controller.login(user_dto)
-        self.assertFalse(success)
+        self.assertFalse(success, token)
         self.assertEqual(UserEnums.AuthenticationErrors.INVALID_CREDENTIALS, token)
 
         # verify that the user has been added
@@ -559,31 +561,35 @@ class UserControllerTest(unittest.TestCase):
     def test_user_mapper(self):
 
         def validate_two_way(user):
-            user_orm = UserMapper.dto_to_orm(user)
-            user_dto_converted = UserMapper.orm_to_dto(user_orm)
-            for field in user.loaded_fields:
-                if field != 'password':
-                    self.assertEqual(getattr(user, field), getattr(user_dto_converted, field))
+            with Database.get_session() as db:
+                mapper = UserMapper(db)
+                user_orm = mapper.dto_to_orm(user)
+                user_dto_converted = mapper.orm_to_dto(user_orm)
+                for field in user.loaded_fields:
+                    if field != 'password':
+                        self.assertEqual(getattr(user, field), getattr(user_dto_converted, field))
 
         def convert_back_and_forth(user):
-            user_orm = UserMapper.dto_to_orm(user)
+            with Database.get_session() as db:
+                mapper = UserMapper(db)
+                user_orm = mapper.dto_to_orm(user)
 
-            self.assertEqual(True, hasattr(user_orm, "username"))
-            self.assertEqual(True, hasattr(user_orm, "password"))
-            self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
-            self.assertEqual(True, hasattr(user_orm, "role"))
+                self.assertEqual(True, hasattr(user_orm, "username"))
+                self.assertEqual(True, hasattr(user_orm, "password"))
+                self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
+                self.assertEqual(True, hasattr(user_orm, "role"))
 
-            self.assertEqual(User.UserRoles.USER, user_orm.role)
-            self.assertEqual(user.pin_code, user_orm.pin_code)
+                self.assertEqual(User.UserRoles.USER, user_orm.role)
+                self.assertEqual(user.pin_code, user_orm.pin_code)
 
-            self.assertEqual(user.username, user_orm.username)
-            self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
-            self.assertEqual(user.accepted_terms, user_orm.accepted_terms)
+                self.assertEqual(user.username, user_orm.username)
+                self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
+                self.assertEqual(user.accepted_terms, user_orm.accepted_terms)
 
-            user_dto_converted = UserMapper.orm_to_dto(user_orm)
-            self.assertEqual(user.username, user_dto_converted.username)
-            self.assertEqual(user_orm.password, user_dto_converted.hashed_password)
-            self.assertEqual(user.accepted_terms, user_dto_converted.accepted_terms)
+                user_dto_converted = mapper.orm_to_dto(user_orm)
+                self.assertEqual(user.username, user_dto_converted.username)
+                self.assertEqual(user_orm.password, user_dto_converted.hashed_password)
+                self.assertEqual(user.accepted_terms, user_dto_converted.accepted_terms)
 
         user_dto = UserDTO(username='test',
                            role=User.UserRoles.USER,
@@ -623,7 +629,6 @@ class UserControllerTest(unittest.TestCase):
         success, data = self.controller.authentication_controller.login_with_user_code('9876', accept_terms=True)
         self.assertFalse(success)
         self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
-
 
     def test_impersonate_happy(self):
         user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)

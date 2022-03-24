@@ -21,16 +21,17 @@ Tests for the pulses module.
 from __future__ import absolute_import
 import unittest
 import xmlrunner
-from peewee import SqliteDatabase, DoesNotExist
+import mock
 from mock import Mock
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.dto import PulseCounterDTO
 from gateway.pulse_counter_controller import PulseCounterController
 from gateway.hal.master_controller_classic import MasterClassicController
-from gateway.models import PulseCounter, Room
-
-MODELS = [PulseCounter, Room]
+from gateway.models import NoResultFound, Database, Base, PulseCounter, Room
 
 
 class PulseCounterControllerTest(unittest.TestCase):
@@ -42,19 +43,21 @@ class PulseCounterControllerTest(unittest.TestCase):
     def setUpClass(cls):
         SetTestMode()
         SetUpTestInjections(pubsub=Mock())
-        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):  # pylint: disable=C0103
         """ Run before each test. """
-        self.maxDiff = None
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
-    def tearDown(self):  # pylint: disable=C0103
-        """ Run after each test. """
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
+        self.maxDiff = None
 
     def test_pulse_counter_up_down(self):
         """ Test adding and removing pulse counters. """
@@ -64,8 +67,12 @@ class PulseCounterControllerTest(unittest.TestCase):
                             maintenance_controller=Mock())
         controller = PulseCounterController()
 
+        counters = []
         for i in range(24):
-            PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False).save()
+            counters.append(PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False))
+        with Database.get_session() as db:
+            db.add_all(counters)
+            db.commit()
 
         # Only master pulse counters
         controller.set_amount_of_pulse_counters(24)
@@ -109,8 +116,12 @@ class PulseCounterControllerTest(unittest.TestCase):
         SetUpTestInjections(master_controller=MasterClassicController(),
                             maintenance_controller=Mock())
 
+        counters = []
         for i in range(24):
-            PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False).save()
+            counters.append(PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False))
+        with Database.get_session() as db:
+            db.add_all(counters)
+            db.commit()
 
         controller = PulseCounterController()
         controller.set_amount_of_pulse_counters(26)
@@ -122,7 +133,7 @@ class PulseCounterControllerTest(unittest.TestCase):
         self.assertEqual(list(range(0, 24)) + [123, 456], values)
 
         # Set pulse counter for unexisting pulse counter
-        with self.assertRaises(DoesNotExist):
+        with self.assertRaises(NoResultFound):
             controller.set_value(26, 789)
 
         # Set pulse counter for physical pulse counter
@@ -147,9 +158,16 @@ class PulseCounterControllerTest(unittest.TestCase):
         controller = PulseCounterController()
 
         # Simulate master contents & initial sync
+        counters = []
         for i in range(24):
             master_pulse_counters[i] = PulseCounterDTO(id=i, name=u'PulseCounter {0}'.format(i), persistent=False)
-            PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False).save()
+            counters.append(PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False))
+        with Database.get_session() as db:
+            db.add_all(counters)
+            db.add_all([Room(number=1),
+                        Room(number=2),
+                        Room(number=3)])
+            db.commit()
 
         controller.set_amount_of_pulse_counters(26)
         controller.save_pulse_counters([
@@ -174,11 +192,11 @@ class PulseCounterControllerTest(unittest.TestCase):
         self.assertEqual(PulseCounterDTO(id=1, name='Water', input_id=10, room=1, persistent=False), controller.load_pulse_counter(1))
 
         # Get configuration for unexisting pulse counter
-        with self.assertRaises(DoesNotExist):
+        with self.assertRaises(NoResultFound):
             controller.save_pulse_counters([PulseCounterDTO(id=26, name='Electricity')])
 
         # Set configuration for unexisting pulse counter
-        with self.assertRaises(DoesNotExist):
+        with self.assertRaises(NoResultFound):
             controller.load_pulse_counter(26)
 
 

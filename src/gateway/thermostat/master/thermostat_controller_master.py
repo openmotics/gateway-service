@@ -21,16 +21,16 @@ from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
     ThermostatAircoStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
     ThermostatGroupStatusDTO, ThermostatScheduleDTO, ThermostatStatusDTO
 from gateway.events import GatewayEvent
-from gateway.exceptions import CommunicationFailure, FeatureUnavailableException
+from gateway.exceptions import CommunicationFailure, \
+    FeatureUnavailableException
 from gateway.hal.master_event import MasterEvent
-from gateway.models import Sensor
+from gateway.models import Database, Sensor
 from gateway.pubsub import PubSub
 from gateway.thermostat.master.thermostat_status_master import \
     ThermostatStatusMaster
 from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
-from master.classic.eeprom_controller import EepromAddress, \
-    EepromController
+from master.classic.eeprom_controller import EepromAddress, EepromController
 from master.classic.master_communicator import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -96,7 +96,6 @@ class ThermostatControllerMaster(ThermostatController):
     def _thermostat_changed(self, thermostat_id, status):
         # type: (int, Dict[str,Any]) -> None
         """ Executed by the Thermostat Status tracker when an output changed state """
-        location = {'room_id': Toolbox.denonify(self._thermostats_config[thermostat_id].room, 255)}
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_id,
                                       'status': {'preset': status['preset'],
@@ -106,16 +105,14 @@ class ThermostatControllerMaster(ThermostatController):
                                                  'actual_temperature': status['actual_temperature'],
                                                  'output_0': status['output_0'],
                                                  'output_1': status['output_1'],
-                                                 'steering_power': status['steering_power']},
-                                      'location': location})
+                                                 'steering_power': status['steering_power']}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def _thermostat_group_changed(self, status):
         # type: (Dict[str,Any]) -> None
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                      {'id': 0,
-                                      'status': {'mode': status['mode'].upper()},
-                                      'location': {}})
+                                      'status': {'mode': status['mode'].upper()}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     @staticmethod
@@ -259,27 +256,29 @@ class ThermostatControllerMaster(ThermostatController):
         if sensor_id in (None, 240, 255):
             return sensor_id
         else:
-            sensor = Sensor.select() \
-                .where(Sensor.source == Sensor.Sources.MASTER) \
-                .where(Sensor.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE) \
-                .where(Sensor.external_id == str(sensor_id)) \
-                .first()
-            if sensor is None:
-                logger.warning('Invalid <Sensor external_id={}> configured on thermostat'.format(sensor_id))
-                return None
-            else:
-                return sensor.id
+            with Database.get_session() as db:
+                sensor = db.query(Sensor) \
+                    .filter_by(source=Sensor.Sources.MASTER,
+                               physical_quantity=Sensor.PhysicalQuantities.TEMPERATURE,
+                               external_id=str(sensor_id)) \
+                    .first()
+                if sensor is None:
+                    logger.warning('Invalid <Sensor external_id={}> configured on thermostat'.format(sensor_id))
+                    return None
+                else:
+                    return sensor.id
 
     def _sensor_to_master(self, sensor_id):  # type: (Optional[int]) -> Optional[int]
         if sensor_id in (None, 240, 255):
             return sensor_id
         else:
-            sensor = Sensor.get(Sensor.id == sensor_id)
-            if sensor.source != Sensor.Sources.MASTER:
-                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.source))
-            if sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
-                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.physical_quantity))
-            return int(sensor.external_id)
+            with Database.get_session() as db:
+                sensor = db.get(Sensor, sensor_id)
+                if sensor.source != Sensor.Sources.MASTER:
+                    raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.source))
+                if sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
+                    raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.physical_quantity))
+                return int(sensor.external_id)
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         return self._master_controller.load_cooling_pump_group(pump_group_id)

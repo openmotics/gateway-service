@@ -197,8 +197,12 @@ class AuthenticationControllerTest(unittest.TestCase):
             self.assertIsNotNone(result_1)
             self.assertEqual(token_1, result_1)
 
-
-from peewee import SqliteDatabase
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+from logs import Logs
+from ioc import SetTestMode
+from gateway.models import Config, Database, Base
 from gateway.mappers import UserMapper
 from gateway.exceptions import ItemDoesNotExistException
 
@@ -210,18 +214,27 @@ class TokenStoreTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     def save_user(self, user):
         _ = self
-        user_orm = UserMapper.dto_to_orm(user)
-        user_orm.save()
-        user.id = user_orm.id
+        with Database.get_session() as db:
+            user_orm = UserMapper(db).dto_to_orm(user)
+            db.add(user_orm)
+            db.commit()
+            user.id = user_orm.id
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
         SetUpTestInjections(token_timeout=3)
         self.store = TokenStore()
@@ -281,9 +294,6 @@ class TokenStoreTest(unittest.TestCase):
         self.test_user_2.set_password('test')
         self.save_user(self.test_user_2)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def assert_token_valid(self, token):
         # check both string and authentication token verification

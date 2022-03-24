@@ -15,7 +15,6 @@
 
 from __future__ import absolute_import
 
-from logs import Logs
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -30,16 +29,20 @@ from threading import Lock
 from serial import Serial
 from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
+from sqlalchemy import select
 
 import constants
 import gateway
 from bus.om_bus_client import MessageClient
-from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
+from gateway.energy.energy_communicator import EnergyCommunicator
+from gateway.energy.energy_module_updater import EnergyModuleUpdater
+from gateway.hal.frontpanel_controller_classic import \
+    FrontpanelClassicController
 from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
-from gateway.hal.master_controller_dummy import MasterDummyController
 from gateway.hal.master_controller_core_dummy import MasterCoreDummyController
+from gateway.hal.master_controller_dummy import MasterDummyController
 from gateway.models import Database, Feature
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
@@ -47,14 +50,17 @@ from gateway.thermostat.master.thermostat_controller_master import \
     ThermostatControllerMaster
 from gateway.uart_controller import UARTController
 from ioc import INJECTED, Inject, Injectable
+from logs import Logs
 from master.classic.maintenance import MaintenanceClassicCommunicator
 from master.classic.master_communicator import MasterCommunicator
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
 from master.core.memory_file import MemoryFile
-from gateway.energy.energy_communicator import EnergyCommunicator
-from gateway.energy.energy_module_updater import EnergyModuleUpdater
+from platform_utils import Platform, System
 from serial_utils import RS485
+
+
+
 
 
 if False:  # MYPY
@@ -103,14 +109,12 @@ def lock_file(file):
 
 def apply_migrations():
     # type: () -> None
-    from peewee_migrate import Router
     logger.info('Applying migrations')
     # Run all unapplied migrations
-    db = Database.get_db()
-    gateway_src = os.path.abspath(os.path.join(__file__, '..'))
-    from peewee_migrate import Router
-    router = Router(db, migrate_dir=os.path.join(gateway_src, 'migrations/orm'))
-    router.run()
+    from alembic import command, config
+    cfg = config.Config(os.path.abspath(os.path.join(__file__, '../../alembic.ini')))
+    cfg.set_main_option('sqlalchemy.url', 'sqlite:///{0}'.format(constants.get_gateway_database_file()))
+    command.upgrade(cfg, 'head')
 
 
 @Inject
@@ -353,9 +357,9 @@ def setup_target_platform(target_platform, message_client_name):
         logger.warning('Unhandled frontpanel implementation for %s', target_platform)
 
     # Thermostats
-    thermostats_gateway_enabled = Feature.select(Feature.enabled) \
-        .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
-        .scalar()
+    with Database.get_session() as db:
+        stmt = select(Feature.enabled).filter_by(name=Feature.THERMOSTATS_GATEWAY)  # type: ignore
+        thermostats_gateway_enabled = db.execute(stmt).scalar()
     if target_platform not in Platform.ClassicTypes or thermostats_gateway_enabled:
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:

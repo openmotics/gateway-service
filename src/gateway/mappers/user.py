@@ -23,10 +23,12 @@ from gateway.models import User
 
 
 class UserMapper(object):
+    def __init__(self, db):
+        self._db = db
 
-    @staticmethod
-    def orm_to_dto(orm_object):
+    def orm_to_dto(self, orm_object):
         # type: (User) -> UserDTO
+        _ = self
         user_dto = UserDTO(id=orm_object.id,
                            username=orm_object.username,
                            first_name=orm_object.first_name,
@@ -41,11 +43,9 @@ class UserMapper(object):
         user_dto.hashed_password = orm_object.password
         return user_dto
 
-    @staticmethod
-    def dto_to_orm(dto_object):
+    def dto_to_orm(self, dto_object):
         # type: (UserDTO) -> User
-        user_orm = User.get_or_none(username=dto_object.username)
-
+        user_orm = self._db.query(User).where(User.username == dto_object.username).one_or_none()
         if user_orm is None:
             mandatory_fields = {'username'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
@@ -53,7 +53,9 @@ class UserMapper(object):
                                  .format('`, `'.join(mandatory_fields),
                                          dto_object.loaded_fields,
                                          mandatory_fields - set(dto_object.loaded_fields)))
-            user_orm = User(username=dto_object.username.lower())
+            user_orm = User(username=dto_object.username.lower(),
+                            accepted_terms=0)
+            self._db.add(user_orm)
 
         # Set the default role to a normal user
         if dto_object.role is None:

@@ -30,7 +30,7 @@ import six
 import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
-from peewee import DoesNotExist
+from sqlalchemy.orm.exc import NoResultFound
 from six.moves.urllib.parse import unquote_plus
 
 import constants
@@ -329,15 +329,10 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Communication failure during API call %s', f.__name__)
         status = 503  # Service Unavailable
         data = {'success': False, 'msg': 'Internal communication failure'}
-    except DoesNotExist as ex:
-        class_name = ex.__class__.__name__
-        if class_name != 'DoesNotExist' and class_name.endswith('DoesNotExist'):
-            class_name = class_name.replace('DoesNotExist', '')
-        else:
-            class_name = 'Object'
+    except NoResultFound as ex:
         status = 200  # OK
-        logger.error('Could not find the {0}'.format(class_name))
-        data = {'success': False, 'msg': '{0} not found'.format(class_name)}
+        logger.error(ex)
+        data = {'success': False, 'msg': 'Object not found'}
     except UnsupportedException:
         logger.error('Some features for API call %s are unsupported on this device', f.__name__)
         status = 200  # OK
@@ -1504,7 +1499,7 @@ class WebInterface(object):
     def _fetch_heating_thermostat_dto(self, thermostat_id):
         try:
             return self._thermostat_controller.load_heating_thermostat(thermostat_id=thermostat_id)
-        except DoesNotExist:
+        except NoResultFound:
             if thermostat_id >= 32:
                 raise
             mode = 'heating'  # type: Literal['heating']
@@ -1646,7 +1641,7 @@ class WebInterface(object):
     def _fetch_cooling_thermostat_dto(self, thermostat_id):
         try:
             return self._thermostat_controller.load_cooling_thermostat(thermostat_id=thermostat_id)
-        except DoesNotExist:
+        except NoResultFound:
             if thermostat_id >= 32:
                 raise
             mode = 'cooling'  # type: Literal['cooling']
@@ -1985,7 +1980,7 @@ class WebInterface(object):
         """
         try:
             room_dto = self._room_controller.load_room(room_id=id)
-        except DoesNotExist:
+        except NoResultFound:
             if 0 <= id < 100:
                 room_dto = RoomDTO(id=id)
             else:
@@ -2029,11 +2024,9 @@ class WebInterface(object):
         """
         energy_dirty = self._energy_dirty
         self._energy_dirty = False
-        orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
         return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
-                'power': energy_dirty,
-                'orm': orm_dirty}
+                'power': energy_dirty}
 
     @openmotics_api(auth=True, check=types(level=str, logger_name=str))
     def set_loglevel(self, level='INFO', logger_name=None):  # type: (str, Optional[str]) -> Dict

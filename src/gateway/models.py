@@ -15,265 +15,113 @@
 
 from __future__ import absolute_import
 
-import inspect
 import json
 import logging
-import sys
 import time
 
-from peewee import AutoField, BooleanField, CharField, \
-    DoesNotExist, FloatField, ForeignKeyField, IntegerField, SqliteDatabase, \
-    TextField, SQL
-from playhouse.signals import Model, post_save
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, \
+    Text, UniqueConstraint, and_, create_engine
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import RelationshipProperty, relationship, \
+    scoped_session, sessionmaker
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.schema import MetaData
 
 import constants
 
+_ = and_, NoResultFound  # For easier import
+
 if False:  # MYPY
-    from typing import Dict, List, Any, TypeVar
+    from typing import Any, Dict, List, Optional, TypeVar
+    from sqlalchemy.orm import RelationshipProperty
     T = TypeVar('T')
 
 logger = logging.getLogger(__name__)
 
-
-class Database(object):
-
-    filename = constants.get_gateway_database_file()
-    _db = SqliteDatabase(filename, pragmas={'foreign_keys': 1})
-
-    # Used to store database metrics (e.g. number of saves)
-    _metrics = {}  # type: Dict[str,int]
-    _dirty_flag = False
-
-    @classmethod
-    def get_db(cls):
-        return cls._db
-
-    @classmethod
-    def incr_metrics(cls, sender, incr=1):
-        cls._metrics.setdefault(sender, 0)
-        cls._metrics[sender] += incr
-
-    @classmethod
-    def get_dirty_flag(cls):
-        dirty = cls._dirty_flag
-        cls._dirty_flag = False
-        return dirty
-
-    @classmethod
-    def set_dirty(cls):
-        cls._dirty_flag = True
-
-    @classmethod
-    def get_models(cls):
-        models = set()
-        for (class_name, class_member) in inspect.getmembers(sys.modules[__name__], inspect.isclass):
-            if issubclass(class_member, BaseModel):
-                models.add(class_member.__name__)
-        return models
-
-    @classmethod
-    def get_metrics(cls):
-        return cls._metrics
+SQLALCHEMY_DATABASE_URL = "sqlite:///{}".format(constants.get_gateway_database_file())
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Session = scoped_session(session_factory)
 
 
-@post_save()
-def db_metrics_handler(sender, instance, created):
-    _, _ = instance, created
-    Database.set_dirty()
-    Database.incr_metrics(sender.__name__.lower())
+class Database:
+    @staticmethod
+    def get_session():
+        return Session()
 
 
-class BaseModel(Model):
-    class Meta:
-        database = Database.get_db()
+# https://alembic.sqlalchemy.org/en/latest/naming.html
+convention = {
+  "ix": "ix_%(column_0_label)s",
+  "uq": "uq_%(table_name)s_%(column_0_name)s",
+  "ck": "ck_%(table_name)s_%(constraint_name)s",
+  "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+  "pk": "pk_%(table_name)s"
+}
+
+Base = declarative_base(metadata=MetaData(naming_convention=convention))
 
 
-class Room(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    name = CharField(null=True)
+class Feature(Base):
+    __tablename__ = 'feature'
+    __table_args__ = {'sqlite_autoincrement': True}
 
-
-class Feature(BaseModel):
-    id = AutoField()
-    name = CharField(unique=True)
-    enabled = BooleanField()
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), unique=True, nullable=False)
+    enabled = Column(Boolean, nullable=False)
 
     THERMOSTATS_GATEWAY = 'thermostats_gateway'
 
 
-class Output(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='outputs')
+class MasterNumber(object):
+    number = Column(Integer, unique=True, nullable=False)
+
+    def __init__(self, number=None):
+        # type: (int) -> None
+        pass
 
 
-class Input(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    event_enabled = BooleanField(default=False)
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='inputs')
+class Input(Base, MasterNumber):
+    __tablename__ = 'input'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_enabled = Column(Boolean, default=False, nullable=False)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
+    room = relationship('Room', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
-class Shutter(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutters')
+class Output(Base, MasterNumber):
+    __tablename__ = 'output'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    pump = relationship('Pump', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Pump]]
+    valve = relationship('Valve', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Valve]]
 
 
-class ShutterGroup(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutter_groups')
+class Sensor(Base):
+    __tablename__ = 'sensor'
+    __table_args__ = (UniqueConstraint('source', 'plugin_id', 'external_id', 'physical_quantity'), {'sqlite_autoincrement': True})
 
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(255), nullable=False)
+    external_id = Column(String(255), nullable=False)
+    physical_quantity = Column(String(255), nullable=True)
+    unit = Column(String(255), nullable=True)
+    name = Column(String(255), nullable=False)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
 
-class PulseCounter(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    name = CharField()
-    source = CharField()  # Options: 'master' or 'gateway'
-    persistent = BooleanField()
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='pulse_counters')
-
-
-class GroupAction(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-
-
-class Module(BaseModel):
-    id = AutoField()
-    source = CharField()
-    address = CharField()
-    module_type = CharField(null=True)
-    hardware_type = CharField()
-    firmware_version = CharField(null=True)
-    hardware_version = CharField(null=True)
-    order = IntegerField(null=True)
-    last_online_update = IntegerField(null=True)
-    update_success = BooleanField(null=True)
-
-
-class EnergyModule(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    version = IntegerField()
-    name = CharField(default='')
-    module = ForeignKeyField(Module, on_delete='CASCADE', backref='energy_modules', unique=True)
-
-
-class EnergyCT(BaseModel):
-    id = AutoField()
-    number = IntegerField()
-    name = CharField(default='')
-    sensor_type = IntegerField()
-    times = CharField()
-    inverted = BooleanField(default=False)
-    energy_module = ForeignKeyField(EnergyModule, on_delete='CASCADE', backref='cts')
-
-    class Meta:
-        indexes = (
-            (('number', 'energy_module_id'), True),
-        )
-
-
-class DataMigration(BaseModel):
-    id = AutoField()
-    name = CharField()
-    migrated = BooleanField()
-
-
-class Schedule(BaseModel):
-    id = AutoField()
-    source = CharField()  # Options: 'gateway' or 'thermostats'
-    external_id = CharField(null=True)
-    name = CharField()
-    start = FloatField()
-    repeat = CharField(null=True)
-    duration = FloatField(null=True)
-    end = FloatField(null=True)
-    action = CharField()
-    arguments = CharField(null=True)
-    status = CharField()
-
-    class Sources:
-        GATEWAY = 'gateway'
-        THERMOSTATS = 'thermostats'
-
-    class Meta:
-        indexes = (
-            (('source', 'external_id'), True),
-        )
-
-
-class Config(BaseModel):
-    id = AutoField()
-    setting = CharField(unique=True)
-    data = CharField()
-
-    CACHE_EXPIRY_DURATION = 60
-    CACHE = {}
-
-    @staticmethod
-    def get_entry(key, fallback):
-        # type: (str, T) -> T
-        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
-        key = key.lower()
-        if key in Config.CACHE:
-            data, expire_at = Config.CACHE[key]
-            if expire_at > time.time():
-                return data
-        raw_data = Config.select(Config.data).where(Config.setting == key).dicts().first()
-        if raw_data is not None:
-            data = json.loads(raw_data['data'])
-        else:
-            data = fallback
-        Config.CACHE[key] = (data, time.time() + Config.CACHE_EXPIRY_DURATION)
-        return data
-
-    @staticmethod
-    def set_entry(key, value):
-        # type: (str, Any) -> None
-        """ Sets a setting in the DB, does overwrite if already existing """
-        key = key.lower()
-        data = json.dumps(value)
-        config_orm = Config.get_or_none(Config.setting == key)
-        if config_orm is not None:
-            # if the key already exists, update the value
-            config_orm.data = data
-            config_orm.save()
-        else:
-            # create a new setting if it was non existing
-            config_orm = Config(setting=key, data=data)
-            config_orm.save()
-        Config.CACHE[key] = (value, time.time() + Config.CACHE_EXPIRY_DURATION)
-
-    @staticmethod
-    def remove_entry(key):
-        # type: (str) -> int
-        """ Removes a setting from the DB """
-        amount = Config.delete().where(
-            Config.setting == key.lower()
-        ).execute()
-        Config.CACHE.pop(key, None)
-        return amount
-
-
-class Plugin(BaseModel):
-    id = AutoField()
-    name = CharField(unique=True)
-    version = CharField()
-
-
-class Sensor(BaseModel):
-    id = AutoField()
-    source = CharField()  # Options: 'master' or 'plugin'
-    plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
-    external_id = CharField()
-    physical_quantity = CharField(null=True)
-    unit = CharField(null=True)
-    name = CharField()
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
 
     class Sources(object):
         MASTER = 'master'
@@ -299,226 +147,449 @@ class Sensor(BaseModel):
         MICRO_GRAM_PER_CUBIC_METER = 'micro_gram_per_cubic_meter'
         PARTS_PER_MILLION = 'parts_per_million'
 
-    class Meta:
-        indexes = (
-            (('source', 'plugin_id', 'external_id', 'physical_quantity'), True),
-        )
+
+class Shutter(Base, MasterNumber):
+    __tablename__ = 'shutter'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
-class Ventilation(BaseModel):
-    id = AutoField()
-    source = CharField()  # Options: 'gateway' or 'plugin'
-    plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
-    external_id = CharField()  # eg. serial number
-    name = CharField()
-    amount_of_levels = IntegerField()
-    device_vendor = CharField()
-    device_type = CharField()
-    device_serial = CharField()
+class ShutterGroup(Base, MasterNumber):
+    __tablename__ = 'shuttergroup'
+    __table_args__ = {'sqlite_autoincrement': True}
 
-    class Meta:
-        indexes = (
-            (('source', 'plugin_id', 'external_id'), True),
-        )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
-class ThermostatGroup(BaseModel):
+class PulseCounter(Base, MasterNumber):
+    __tablename__ = 'pulsecounter'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    source = Column(String(255), nullable=False)  # Options: 'master' or 'gateway'
+    persistent = Column(Boolean, nullable=False)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+
+
+class GroupAction(Base, MasterNumber):
+    __tablename__ = 'groupaction'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+
+class Module(Base):
+    __tablename__ = 'module'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(255), nullable=False)
+    address = Column(String(255), nullable=False)
+    module_type = Column(String(255), nullable=True)
+    hardware_type = Column(String(255), nullable=False)
+    firmware_version = Column(String(255), nullable=True)
+    hardware_version = Column(String(255), nullable=True)
+    order = Column(Integer, nullable=True)
+    last_online_update = Column(Integer, nullable=True)
+    update_success = Column(Boolean, nullable=True)
+
+
+class EnergyModule(Base, MasterNumber):
+    __tablename__ = 'energymodule'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    version = Column(Integer, nullable=False)
+    name = Column(String(255), default='', nullable=False)
+    module_id = Column(Integer, ForeignKey('module.id', ondelete="CASCADE"), unique=True, nullable=False)
+    module = relationship('Module', foreign_keys=[module_id])
+    cts = relationship("EnergyCT",  lazy='joined', innerjoin=False, back_populates="energy_module")  # type: RelationshipProperty[List[EnergyCT]]
+
+
+class EnergyCT(Base):
+    __tablename__ = 'energyct'
+    __table_args__ = (UniqueConstraint('number', 'energy_module_id'), {'sqlite_autoincrement': True})
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), default='', nullable=False)
+    number = Column(Integer, unique=False, nullable=False)
+    sensor_type = Column(Integer, nullable=False)
+    times = Column(String(255), nullable=False)
+    inverted = Column(Boolean, default=False, nullable=False)
+    energy_module_id = Column(Integer, ForeignKey('energymodule.id', ondelete="CASCADE"), nullable=False)
+    energy_module = relationship("EnergyModule",  lazy='joined', innerjoin=False, back_populates="cts")  # type: RelationshipProperty[Optional[EnergyModule]]
+
+
+class Schedule(Base):
+    __tablename__ = 'schedule'
+    __table_args__ = (UniqueConstraint('source', 'external_id'), {'sqlite_autoincrement': True})
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(255), nullable=False)  # Options: 'gateway' or 'thermostats'
+    external_id = Column(String(255), nullable=True)
+    name = Column(String(255), nullable=False)
+    start = Column(Float, nullable=False)
+    repeat = Column(String(255), nullable=True)
+    duration = Column(Float, nullable=True)
+    end = Column(Float, nullable=True)
+    action = Column(String(255), nullable=False)
+    arguments = Column(String(255), nullable=True)
+    status = Column(String(255), nullable=False)
+
+    class Sources:
+        GATEWAY = 'gateway'
+        THERMOSTATS = 'thermostats'
+
+
+class Config(Base):
+    __tablename__ = 'config'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    setting = Column(String(255), unique=True, nullable=False)
+    data = Column(String(255), nullable=False)
+
+    CACHE_EXPIRY_DURATION = 60
+    CACHE = {}  # type: Dict[str,Any]
+
+    @staticmethod
+    def get_entry(key, fallback):
+        # type: (str, T) -> T
+        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
+        key = key.lower()
+        if key in Config.CACHE:
+            data, expire_at = Config.CACHE[key]
+            if expire_at > time.time():
+                return data
+        with Database.get_session() as db:
+            raw_data = db.query(Config.data).where(Config.setting == key).one_or_none()
+        if raw_data is not None:
+            data = json.loads(raw_data[0])
+        else:
+            data = fallback
+        Config.CACHE[key] = (data, time.time() + Config.CACHE_EXPIRY_DURATION)
+        return data
+
+    @staticmethod
+    def set_entry(key, value):
+        # type: (str, Any) -> None
+        """ Sets a setting in the DB, does overwrite if already existing """
+        key = key.lower()
+        data = json.dumps(value)
+        with Database.get_session() as db:
+            config_orm = db.query(Config).where(Config.setting == key).one_or_none()
+            if config_orm is not None:
+                # if the key already exists, update the value
+                config_orm.data = data
+            else:
+                # create a new setting if it was non existing
+                config_orm = Config(setting=key, data=data)
+            db.add(config_orm)
+            db.commit()
+        Config.CACHE[key] = (value, time.time() + Config.CACHE_EXPIRY_DURATION)
+
+    @staticmethod
+    def remove_entry(key):
+        # type: (str) -> int
+        """ Removes a setting from the DB """
+        with Database.get_session() as db:
+            rows_deleted = db.query(Config).where(Config.setting == key.lower()).delete()
+            db.commit()
+        Config.CACHE.pop(key, None)
+        return rows_deleted
+
+
+class Plugin(Base):
+    __tablename__ = 'plugin'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), unique=True, nullable=False)
+    version = Column(String(255), nullable=False)
+
+
+class Ventilation(Base):
+    __tablename__ = 'ventilation'
+    __table_args__ = (UniqueConstraint('source', 'plugin_id', 'external_id'), {'sqlite_autoincrement': True})
+
+    class Sources(object):
+        PLUGIN = 'plugin'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(255), nullable=False)  # Options: 'gateway' or 'plugin'
+    plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
+    external_id = Column(String(255), nullable=False)  # eg. serial number
+    name = Column(String(255), nullable=False)
+    amount_of_levels = Column(Integer, nullable=False)
+    device_vendor = Column(String(255), nullable=False)
+    device_type = Column(String(255), nullable=False)
+    device_serial = Column(String(255), nullable=False)
+
+    plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
+
+
+class ThermostatGroup(Base, MasterNumber):
+    __tablename__ = 'thermostatgroup'
+    __table_args__ = {'sqlite_autoincrement': True}
+
     class Modes(object):
         HEATING = 'heating'
         COOLING = 'cooling'
 
-    id = AutoField()
-    number = IntegerField(unique=True)
-    name = CharField()
-    threshold_temperature = FloatField(null=True, default=None)
-    sensor = ForeignKeyField(Sensor, null=True, backref='thermostat_groups', on_delete='SET NULL')
-    mode = CharField(default=Modes.HEATING)  # Options: 'heating' or 'cooling'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    threshold_temperature = Column(Float, nullable=True, default=None)
+    sensor_id = Column(Integer, ForeignKey('sensor.id', ondelete='SET NULL'), nullable=True)
+    mode = Column(String(255), default=Modes.HEATING, nullable=False)  # Options: 'heating' or 'cooling'
+
+    sensor = relationship('Sensor')  # type: RelationshipProperty[Optional[Sensor]]
+    thermostats = relationship('Thermostat', back_populates='group')  # type: RelationshipProperty[List[Thermostat]]
+    outputs = relationship('Output', secondary='outputtothermostatgroup')  # type: RelationshipProperty[List[Output]]
+
+    heating_output_associations = relationship('OutputToThermostatGroupAssociation',
+                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "heating")',
+                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
+                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
+    cooling_output_associations = relationship('OutputToThermostatGroupAssociation',
+                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "cooling")',
+                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
+                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
 
 
-class OutputToThermostatGroup(BaseModel):
-    id = AutoField()
-    output = ForeignKeyField(Output, on_delete='CASCADE')
-    thermostat_group = ForeignKeyField(ThermostatGroup, on_delete='CASCADE')
-    index = IntegerField()  # The index of this output in the config 0-3
-    mode = CharField()  # The mode this config is used for. Options: 'heating' or 'cooling'
-    value = IntegerField()  # The value that needs to be set on the output when in this mode (0-100)
+class OutputToThermostatGroupAssociation(Base):
+    __tablename__ = 'outputtothermostatgroup'
+    __table_args__ = {'sqlite_autoincrement': True}
 
-    class Meta:
-        indexes = (
-            (('output_id', 'thermostat_group_id', 'mode'), True),
-        )
+    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), primary_key=True)
+    thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), primary_key=True)
+    mode = Column(String(255), nullable=False, primary_key=True)  # The mode this config is used for. Options: 'heating' or 'cooling'
 
+    index = Column(Integer, nullable=False)  # The index of this output in the config 0-3
+    value = Column(Integer, nullable=False)  # The value that needs to be set on the output when in this mode (0-100)
 
-class Pump(BaseModel):
-    id = AutoField()
-    name = CharField()
-    output = ForeignKeyField(Output, null=True, backref='pumps', on_delete='SET NULL', unique=True)
-
-    @property
-    def valves(self):  # type: () -> List[Valve]
-        return [valve for valve in Valve.select(Valve)
-                                        .join(PumpToValve)
-                                        .where(PumpToValve.pump == self.id)]
-
-    @property
-    def heating_valves(self):  # type: () -> List[Valve]
-        return self._valves(mode=ThermostatGroup.Modes.HEATING)
-
-    @property
-    def cooling_valves(self):  # type: () -> List[Valve]
-        return self._valves(mode=ThermostatGroup.Modes.COOLING)
-
-    def _valves(self, mode):  # type: (str) -> List[Valve]
-        return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
-                                        .distinct()
-                                        .join_from(Valve, ValveToThermostat)
-                                        .join_from(Valve, PumpToValve)
-                                        .join_from(PumpToValve, Pump)
-                                        .where((ValveToThermostat.mode == mode) &
-                                               (Pump.id == self.id))
-                                        .order_by(ValveToThermostat.priority)]
+    output = relationship('Output')
+    thermostat_group = relationship('ThermostatGroup')
 
 
-class Valve(BaseModel):
-    id = AutoField()
-    name = CharField()
-    delay = IntegerField(default=60)
-    output = ForeignKeyField(Output, backref='valves', on_delete='CASCADE', unique=True)
+class PumpToValveAssociation(Base):
+    __tablename__ = 'pumptovalve'
+    __table_args__ = {'sqlite_autoincrement': True}
 
-    @property
-    def pumps(self):  # type: () -> List[Pump]
-        return [pump for pump in Pump.select(Pump)
-                                     .join(PumpToValve)
-                                     .where(PumpToValve.valve == self.id)]
+    pump_id = Column(Integer, ForeignKey('pump.id', ondelete='CASCADE'), primary_key=True)
+    valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
+
+    pump = relationship('Pump')
+    valve = relationship('Valve')
 
 
-class PumpToValve(BaseModel):
-    id = AutoField()
-    pump = ForeignKeyField(Pump, on_delete='CASCADE')
-    valve = ForeignKeyField(Valve, on_delete='CASCADE')
+class Pump(Base):
+    __tablename__ = 'pump'
+    __table_args__ = {'sqlite_autoincrement': True}
 
-    class Meta:
-        indexes = (
-            (('pump_id', 'valve_id'), True),
-        )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), nullable=True, unique=True)
+
+    output = relationship('Output', lazy='joined', back_populates='pump')
+
+    valves = relationship('Valve', back_populates='pump', secondary='pumptovalve')  # type: RelationshipProperty[List[Valve]]
+
+    # heating_valves = relationship('Valve', back_populates='pump', secondary='pumptovalve',
+    #                               secondaryjoin='and_(Valve.id == PumpToValveAssociation.valve_id, Valve.mode == "heating")')
+    # cooling_valves = relationship('Valve', back_populates='pump', secondary='pumptovalve',
+    #                               secondaryjoin='and_(Valve.id == PumpToValveAssociation.valve_id, Valve.mode == "cooling")')
+
+    # TODO: implement custom filters
+    # @property
+    # def heating_valves(self):  # type: () -> List[Valve]
+    #     return self._valves(mode=ThermostatGroup.Modes.HEATING)
+    #
+    # @property
+    # def cooling_valves(self):  # type: () -> List[Valve]
+    #     return self._valves(mode=ThermostatGroup.Modes.COOLING)
+    #
+    # def _valves(self, mode):  # type: (str) -> List[Valve]
+    #     return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
+    #                                     .distinct()
+    #                                     .join_from(Valve, ValveToThermostat)
+    #                                     .join_from(Valve, PumpToValve)
+    #                                     .join_from(PumpToValve, Pump)
+    #                                     .where((ValveToThermostat.mode == mode) &
+    #                                            (Pump.id == self.id))
+    #                                     .order_by(ValveToThermostat.priority)]
 
 
-class Thermostat(BaseModel):
+class Valve(Base):
+    __tablename__ = 'valve'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    delay = Column(Integer, default=60, nullable=False)
+    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), unique=True, nullable=False)
+
+    output = relationship('Output', lazy='joined', back_populates='valve')
+    pump = relationship('Pump', secondary='pumptovalve')  # type: RelationshipProperty[Optional[Pump]]
+    # associations = relationship('ValveToThermostatAssociation', lazy='joined')
+
+
+class Thermostat(Base, MasterNumber):
+    __tablename__ = 'thermostat'
+    __table_args__ = {'sqlite_autoincrement': True}
+
     class ValveConfigs(object):
         CASCADE = 'cascade'
         EQUAL = 'equal'
 
-    id = AutoField()
-    number = IntegerField(unique=True)
-    name = CharField(default='Thermostat')
-    state = CharField(default='on')
-    sensor = ForeignKeyField(Sensor, null=True, backref='thermostats', on_delete='SET NULL')
-    pid_heating_p = FloatField(default=120)
-    pid_heating_i = FloatField(default=0)
-    pid_heating_d = FloatField(default=0)
-    pid_cooling_p = FloatField(default=120)
-    pid_cooling_i = FloatField(default=0)
-    pid_cooling_d = FloatField(default=0)
-    automatic = BooleanField(default=True)
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='thermostats')
-    start = IntegerField()
-    valve_config = CharField(default=ValveConfigs.CASCADE)  # Options: 'cascade' or 'equal'
-    thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE')
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), default='Thermostat', nullable=False)
+    state = Column(String(255), default='on', nullable=False)
+    sensor_id = Column(Integer, ForeignKey('sensor.id', ondelete='SET NULL'), nullable=True)
+    pid_heating_p = Column(Float, default=120, nullable=False)
+    pid_heating_i = Column(Float, default=0, nullable=False)
+    pid_heating_d = Column(Float, default=0, nullable=False)
+    pid_cooling_p = Column(Float, default=120, nullable=False)
+    pid_cooling_i = Column(Float, default=0, nullable=False)
+    pid_cooling_d = Column(Float, default=0, nullable=False)
+    automatic = Column(Boolean, default=True, nullable=False)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    start = Column(Integer, nullable=False)
+    valve_config = Column(String(255), default=ValveConfigs.CASCADE, nullable=False)  # Options: 'cascade' or 'equal'
+    thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), nullable=False)
 
-    def get_preset(self, preset_type):  # type: (str) -> Preset
-        if preset_type not in Preset.ALL_TYPES:
-            raise ValueError('Preset type `{0}` unknown'.format(preset_type))
-        preset = Preset.get_or_none((Preset.type == preset_type) &
-                                    (Preset.thermostat_id == self.id))
-        if preset is None:
-            preset = Preset(thermostat=self, type=preset_type)
-            if preset_type in Preset.DEFAULT_PRESET_TYPES:
-                preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
-                preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
-            preset.save()
-        return preset
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    sensor = relationship('Sensor')
+    group = relationship('ThermostatGroup')
 
-    @property
-    def setpoint(self):
-        return self.active_preset.heating_setpoint if self.mode == ThermostatGroup.Modes.HEATING else self.active_preset.cooling_setpoint
+    presets = relationship('Preset', back_populates='thermostat')  # type: RelationshipProperty[List[Preset]]
+    active_preset = relationship('Preset',
+                                 primaryjoin='and_(Thermostat.id == Preset.thermostat_id, Preset.active == True)',
+                                 back_populates='thermostat', uselist=False)  # type: RelationshipProperty[Preset]
 
-    @property
-    def active_preset(self):
-        preset = Preset.get_or_none(thermostat=self.id, active=True)
-        if preset is None:
-            preset = self.get_preset(Preset.Types.AUTO)
-            preset.active = True
-            preset.save()
-        return preset
+    valves = relationship('Valve', secondary='valvetothermostat',
+                          order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[Valve]]
+    heating_valve_associations = relationship('ValveToThermostatAssociation',
+                                              primaryjoin='and_(Thermostat.id == ValveToThermostatAssociation.thermostat_id, ValveToThermostatAssociation.mode == "heating")',
+                                              order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[ValveToThermostatAssociation]]
+    cooling_valve_associations = relationship('ValveToThermostatAssociation',
+                                              primaryjoin='and_(Thermostat.id == ValveToThermostatAssociation.thermostat_id, ValveToThermostatAssociation.mode == "cooling")',
+                                              order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[ValveToThermostatAssociation]]
 
-    @active_preset.setter
-    def active_preset(self, value):
-        if value is None or value.thermostat_id != self.id:
-            raise ValueError('The given Preset does not belong to this Thermostat')
-        if value != self.active_preset:
-            if self.active_preset is not None:
-                current_active_preset = self.active_preset
-                current_active_preset.active = False
-                current_active_preset.save()
-            value.active = True
-            value.save()
+    schedules = relationship('DaySchedule', back_populates='thermostat')  # type: RelationshipProperty[List[DaySchedule]]
+    heating_schedules = relationship('DaySchedule',
+                                     primaryjoin='and_(Thermostat.id == DaySchedule.thermostat_id, DaySchedule.mode == "heating")',
+                                     order_by='asc(DaySchedule.index)')  # type: RelationshipProperty[List[DaySchedule]]
+    cooling_schedules = relationship('DaySchedule',
+                                     primaryjoin='and_(Thermostat.id == DaySchedule.thermostat_id, DaySchedule.mode == "cooling")',
+                                     order_by='asc(DaySchedule.index)')  # type: RelationshipProperty[List[DaySchedule]]
 
-    @property
-    def valves(self):  # type: () -> List[Valve]
-        return [valve for valve in Valve.select(Valve)
-                                        .join(ValveToThermostat)
-                                        .where(ValveToThermostat.thermostat_id == self.id)
-                                        .order_by(ValveToThermostat.priority)]
+    # def get_preset(self, preset_type):  # type: (str) -> Preset
+    #     if preset_type not in Preset.ALL_TYPES:
+    #         raise ValueError('Preset type `{0}` unknown'.format(preset_type))
+    #     preset = Preset.get_or_none((Preset.type == preset_type) &
+    #                                 (Preset.thermostat_id == self.id))
+    #     if preset is None:
+    #         preset = Preset(thermostat=self, type=preset_type)
+    #         if preset_type in Preset.DEFAULT_PRESET_TYPES:
+    #             preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
+    #             preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
+    #         preset.save()
+    #     return preset
+    #
+    # @property
+    # def setpoint(self):
+    #     return self.active_preset.heating_setpoint if self.mode == ThermostatGroup.Modes.HEATING else self.active_preset.cooling_setpoint
+    #
+    # @property
+    # def active_preset(self):
+    #     preset = Preset.get_or_none(thermostat=self.id, active=True)
+    #     if preset is None:
+    #         preset = self.get_preset(Preset.Types.AUTO)
+    #         preset.active = True
+    #         preset.save()
+    #     return preset
+    #
+    # @active_preset.setter
+    # def active_preset(self, value):
+    #     if value is None or value.thermostat_id != self.id:
+    #         raise ValueError('The given Preset does not belong to this Thermostat')
+    #     if value != self.active_preset:
+    #         if self.active_preset is not None:
+    #             current_active_preset = self.active_preset
+    #             current_active_preset.active = False
+    #             current_active_preset.save()
+    #         value.active = True
+    #         value.save()
+    #
+    # @property
+    # def valves(self):  # type: () -> List[Valve]
+    #     return [valve for valve in Valve.select(Valve)
+    #                                     .join(ValveToThermostat)
+    #                                     .where(ValveToThermostat.thermostat_id == self.id)
+    #                                     .order_by(ValveToThermostat.priority)]
+    #
+    # @property
+    # def active_valves(self):  # type: () -> List[Valve]
+    #     return self._valves(mode=self.thermostat_group.mode)
+    #
+    # @property
+    # def heating_valves(self):  # type: () -> List[Valve]
+    #     return self._valves(mode=ThermostatGroup.Modes.HEATING)
+    #
+    # @property
+    # def cooling_valves(self):  # type: () -> List[Valve]
+    #     return self._valves(mode=ThermostatGroup.Modes.COOLING)
+    #
+    # def _valves(self, mode):  # type: (str) -> List[Valve]
+    #     return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
+    #                                     .join(ValveToThermostat)
+    #                                     .where((ValveToThermostat.thermostat_id == self.id) &
+    #                                            (ValveToThermostat.mode == mode))
+    #                                     .order_by(ValveToThermostat.priority)]
+    #
+    # @property
+    # def heating_schedules(self):  # type: () -> List[DaySchedule]
+    #     return [schedule for schedule in
+    #             DaySchedule.select()
+    #                        .where((DaySchedule.thermostat == self.id) &
+    #                               (DaySchedule.mode == ThermostatGroup.Modes.HEATING))
+    #                        .order_by(DaySchedule.index)]
+    #
+    # @property
+    # def cooling_schedules(self):  # type: () -> List[DaySchedule]
+    #     return [x for x in
+    #             DaySchedule.select()
+    #                        .where((DaySchedule.thermostat == self.id) &
+    #                               (DaySchedule.mode == ThermostatGroup.Modes.COOLING))
+    #                        .order_by(DaySchedule.index)]
 
-    @property
-    def active_valves(self):  # type: () -> List[Valve]
-        return self._valves(mode=self.thermostat_group.mode)
 
-    @property
-    def heating_valves(self):  # type: () -> List[Valve]
-        return self._valves(mode=ThermostatGroup.Modes.HEATING)
+class ValveToThermostatAssociation(Base):
+    __tablename__ = 'valvetothermostat'
+    __table_args__ = {'sqlite_autoincrement': True}
 
-    @property
-    def cooling_valves(self):  # type: () -> List[Valve]
-        return self._valves(mode=ThermostatGroup.Modes.COOLING)
+    thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), primary_key=True)
+    valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
+    mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False, primary_key=True)
 
-    def _valves(self, mode):  # type: (str) -> List[Valve]
-        return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
-                                        .join(ValveToThermostat)
-                                        .where((ValveToThermostat.thermostat_id == self.id) &
-                                               (ValveToThermostat.mode == mode))
-                                        .order_by(ValveToThermostat.priority)]
+    priority = Column(Integer, default=0, nullable=False)
 
-    @property
-    def heating_schedules(self):  # type: () -> List[DaySchedule]
-        return [schedule for schedule in
-                DaySchedule.select()
-                           .where((DaySchedule.thermostat == self.id) &
-                                  (DaySchedule.mode == ThermostatGroup.Modes.HEATING))
-                           .order_by(DaySchedule.index)]
-
-    @property
-    def cooling_schedules(self):  # type: () -> List[DaySchedule]
-        return [x for x in
-                DaySchedule.select()
-                           .where((DaySchedule.thermostat == self.id) &
-                                  (DaySchedule.mode == ThermostatGroup.Modes.COOLING))
-                           .order_by(DaySchedule.index)]
+    thermostat = relationship('Thermostat', backref='valve_associations')
+    valve = relationship('Valve', lazy='joined', backref='thermostat_associations')
 
 
-class ValveToThermostat(BaseModel):
-    valve = ForeignKeyField(Valve, on_delete='CASCADE')
-    thermostat = ForeignKeyField(Thermostat, on_delete='CASCADE')
-    mode = CharField(default=ThermostatGroup.Modes.HEATING)
-    priority = IntegerField(default=0)
+class Preset(Base):
+    __tablename__ = 'preset'
+    __table_args__ = {'sqlite_autoincrement': True}
 
-    class Meta:
-        indexes = (
-            (('valve_id', 'thermostat_id', 'mode'), True),
-        )
-
-
-class Preset(BaseModel):
     class Types(object):
         MANUAL = 'manual'
         AUTO = 'auto'
@@ -536,24 +607,31 @@ class Preset(BaseModel):
     SETPOINT_TO_TYPE = {setpoint: preset_type
                         for preset_type, setpoint in TYPE_TO_SETPOINT.items()}
 
-    id = AutoField()
-    type = CharField()  # Options: see Preset.Types
-    heating_setpoint = FloatField(default=14.0)
-    cooling_setpoint = FloatField(default=30.0)
-    active = BooleanField(default=False)
-    thermostat = ForeignKeyField(Thermostat, backref='presets', on_delete='CASCADE')
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(String(255), nullable=False)  # Options: see Preset.Types
+    heating_setpoint = Column(Float, default=14.0, nullable=False)
+    cooling_setpoint = Column(Float, default=30.0, nullable=False)
+    active = Column(Boolean, default=False, nullable=False)
+    thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), nullable=False)
+
+    thermostat = relationship('Thermostat', back_populates='presets')
 
 
-class DaySchedule(BaseModel):
+class DaySchedule(Base):
+    __tablename__ = 'dayschedule'
+    __table_args__ = {'sqlite_autoincrement': True}
+
     DEFAULT_SCHEDULE_TIMES = [0, 6 * 3600, 8 * 3600, 16 * 3600, 22 * 3600]
     DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [19.0, 21.0, 19.0, 21.0, 19.0])),
                         ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [26.0, 23.0, 26.0, 23.0, 26.0]))}
 
-    id = AutoField()
-    index = IntegerField()
-    content = TextField()
-    mode = CharField(default=ThermostatGroup.Modes.HEATING)
-    thermostat = ForeignKeyField(Thermostat, backref='day_schedules', on_delete='CASCADE')
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)
+    thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), nullable=False)
+
+    thermostat = relationship('Thermostat', back_populates='schedules')
 
     @property
     def schedule_data(self):  # type: () -> Dict[int, float]
@@ -563,7 +641,7 @@ class DaySchedule(BaseModel):
     def schedule_data(self, value):  # type: (Dict[int, float]) -> None
         self.content = json.dumps(value)
 
-    def get_scheduled_temperature(self, seconds_in_day):  # type: (int) -> float
+    def get_scheduled_temperature(self, seconds_in_day):  # type: (int) -> Optional[float]
         seconds_in_day = seconds_in_day % 86400
         data = self.schedule_data
         last_value = data.get(0)
@@ -574,14 +652,27 @@ class DaySchedule(BaseModel):
         return last_value
 
 
-class Apartment(BaseModel):
-    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
-    name = CharField(null=False)
-    mailbox_rebus_id = IntegerField(unique=True, null=True)
-    doorbell_rebus_id = IntegerField(unique=True, null=True)
+class Room(Base, MasterNumber):
+    __tablename__ = 'room'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=True)
 
 
-class User(BaseModel):
+class DataMigration(Base):
+    __tablename__ = 'datamigration'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    migrated = Column(Boolean, nullable=False)
+
+
+class User(Base):
+    __tablename__ = 'user'
+    __table_args__ = {'sqlite_autoincrement': True}
+
     class UserRoles(object):
         SUPER = 'SUPER'
         USER = 'USER'
@@ -589,46 +680,14 @@ class User(BaseModel):
         TECHNICIAN = 'TECHNICIAN'
         COURIER = 'COURIER'
 
-    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
-    username = CharField(null=False, unique=True)
-    first_name = CharField(null=True)
-    last_name = CharField(null=True)
-    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHNICIAN, COURIER, SUPER
-    pin_code = CharField(null=True, unique=True)
-    language = CharField(null=False)  # options: See languages
-    password = CharField()
-    apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
-    is_active = BooleanField(default=True)
-    accepted_terms = IntegerField(default=0)
-    email = CharField(null=True, unique=False)
-
-
-class RFID(BaseModel):
-    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
-    tag_string = CharField(null=False, unique=True)
-    uid_manufacturer = CharField(null=False, unique=True)
-    uid_extension = CharField(null=True)
-    enter_count = IntegerField(null=False)
-    blacklisted = BooleanField(null=False, default=False)
-    label = CharField()
-    timestamp_created = CharField(null=False)
-    timestamp_last_used = CharField(null=True)
-    user = ForeignKeyField(User, null=False, backref='rfids', on_delete='CASCADE')
-
-
-class Delivery(BaseModel):
-    class DeliveryType(object):
-        DELIVERY = 'DELIVERY'
-        RETURN = 'RETURN'
-
-    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
-    type = CharField(null=False)  # options: DeliveryType
-    timestamp_delivery = CharField(null=False)
-    timestamp_pickup = CharField(null=True)
-    courier_firm = CharField(null=True)
-    signature_delivery = CharField(null=True)
-    signature_pickup = CharField(null=True)
-    parcelbox_rebus_id = IntegerField(null=False)
-    user_delivery = ForeignKeyField(User, backref='deliveries', on_delete='SET NULL', null=True)
-    user_pickup = ForeignKeyField(User, backref='pickups', on_delete='SET NULL', null=True)
-
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(255), nullable=False, unique=True)
+    first_name = Column(String(255), nullable=True)
+    last_name = Column(String(255), nullable=True)
+    role = Column(String(255), default=UserRoles.USER, nullable=False)  # options USER, ADMIN, TECHNICIAN, COURIER, SUPER
+    pin_code = Column(String(255), nullable=True, unique=True)
+    language = Column(String(255), nullable=False)  # options: See languages
+    password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    accepted_terms = Column(Integer, default=0, nullable=False)
+    email = Column(String(255), nullable=True, unique=False)

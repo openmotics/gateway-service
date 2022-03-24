@@ -21,7 +21,7 @@ from __future__ import absolute_import
 import logging
 
 from gateway.dto.sensor import MasterSensorDTO, SensorDTO, SensorSourceDTO
-from gateway.models import Plugin, Room, Sensor
+from gateway.models import Database, Plugin, Room, Sensor
 
 if False:  # MYPY
     from typing import Optional
@@ -32,12 +32,15 @@ logger = logging.getLogger(__name__)
 class SensorMapper(object):
     BYTE_MAX = 255
 
-    @staticmethod
-    def orm_to_dto(sensor):  # type: (Sensor) -> SensorDTO
+    def __init__(self, db):
+        self._db = db
+
+    def orm_to_dto(self, sensor):  # type: (Sensor) -> SensorDTO
         source_dto = SensorSourceDTO(type=sensor.source)
-        if source_dto.is_plugin:
-            source_dto.id = sensor.plugin.id
-            source_dto.name = sensor.plugin.name
+        plugin = sensor.plugin
+        if sensor.source == Sensor.Sources.PLUGIN and plugin is not None:
+            source_dto.id = plugin.id
+            source_dto.name = plugin.name
         room = sensor.room.number if sensor.room else None
         return SensorDTO(sensor.id,
                          source=source_dto,
@@ -47,40 +50,38 @@ class SensorMapper(object):
                          name=sensor.name,
                          room=room)
 
-    @staticmethod
-    def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> Sensor
-        plugin = None
+    def dto_to_orm(self, sensor_dto):  # type: (SensorDTO) -> Sensor
+        plugin = None  # type: Optional[Plugin]
+        room = None  # type: Optional[Room]
         if sensor_dto.id is not None:
-            query = Sensor.select().where(Sensor.id == sensor_dto.id)
+            sensor = self._db.get(Sensor, sensor_dto.id)
         elif sensor_dto.source and sensor_dto.external_id and sensor_dto.physical_quantity:
             if sensor_dto.source and sensor_dto.source.is_plugin:
-                plugin = Plugin.get(name=sensor_dto.source.name)
-            query = Sensor.select() \
-                .where(Sensor.source == sensor_dto.source.type) \
-                .where(Sensor.plugin == plugin) \
-                .where(Sensor.external_id == sensor_dto.external_id) \
-                .where(Sensor.physical_quantity == sensor_dto.physical_quantity)
+                plugin = self._db.query(Plugin).filter_by(name=sensor_dto.source.name).one()
+            sensor = self._db.query(Sensor) \
+                .filter_by(source=sensor_dto.source.type,
+                           external_id=sensor_dto.external_id,
+                           physical_quantity=sensor_dto.physical_quantity) \
+                .first()
         else:
             raise ValueError('Invalid sensor %s', sensor_dto)
-        sensor = query.first()
         if sensor is None:
             if sensor_dto.source and sensor_dto.source.is_master:
-                query = Sensor.select() \
-                    .where(Sensor.source == sensor_dto.source.type) \
-                    .where(Sensor.external_id == sensor_dto.external_id) \
-                    .where(Sensor.physical_quantity.is_null())
-                sensor = query.first()
+                sensor = self._db.query(Sensor) \
+                    .filter_by(source=sensor_dto.source.type,
+                               external_id=sensor_dto.external_id,
+                               physical_quantity=None) \
+                    .first()
         if sensor is None:
             if plugin is None and sensor_dto.source and sensor_dto.source.is_plugin:
-                plugin = Plugin.get(name=sensor_dto.source.name)
-            if 'room' in sensor_dto.loaded_fields:
-                room = Room.get_or_create(number=sensor_dto.room)
+                plugin = self._db.query(Plugin).filter_by(name=sensor_dto.source.name).one()
+            if 'room' in sensor_dto.loaded_fields and sensor_dto.room is not None:
+                room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
             else:
-                query = Sensor.select() \
-                    .where(Sensor.source == sensor_dto.source.type) \
-                    .where(Sensor.external_id == sensor_dto.external_id) \
-                    .where(~Sensor.room.is_null())
-                sensor = query.first()
+                query = (Sensor.source == sensor_dto.source.type) \
+                    & (Sensor.external_id == sensor_dto.external_id) \
+                    & (Sensor.room != None)
+                sensor = self._db.query(Sensor).where(query).first()
                 if sensor:
                     room = sensor.room
                 else:
@@ -100,15 +101,12 @@ class SensorMapper(object):
             if 'name' in sensor_dto.loaded_fields:
                 sensor.name = sensor_dto.name
             if 'room' in sensor_dto.loaded_fields:
-                if sensor_dto.room is None:
-                    room = None
-                elif 0 <= sensor_dto.room <= 100:
-                    room, _ = Room.get_or_create(number=sensor_dto.room)
+                if sensor_dto.room is not None and 0 <= sensor_dto.room <= 100:
+                    room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
                 sensor.room = room
         return sensor
 
-    @staticmethod
-    def dto_to_master_dto(sensor_dto):  # type: (SensorDTO) -> Optional[MasterSensorDTO]
+    def dto_to_master_dto(self, sensor_dto):  # type: (SensorDTO) -> Optional[MasterSensorDTO]
         if sensor_dto.source.is_master:
             master_id = int(sensor_dto.external_id)
             master_dto = MasterSensorDTO(id=master_id)

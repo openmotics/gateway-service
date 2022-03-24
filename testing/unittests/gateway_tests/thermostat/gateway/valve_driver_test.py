@@ -14,18 +14,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
-import unittest
-import fakesleep
-import mock
 import time
-from peewee import SqliteDatabase
+import unittest
 
-from gateway.models import Pump, Output, Valve, PumpToValve
-from gateway.thermostat.gateway.valve_driver import ValveDriver
+import mock
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import fakesleep
+from gateway.models import Base, Database, Output, Pump, \
+    PumpToValveAssociation, Valve
 from gateway.output_controller import OutputController
+from gateway.thermostat.gateway.valve_driver import ValveDriver
 from ioc import SetTestMode, SetUpTestInjections
-
-MODELS = [Pump, Output, Valve, PumpToValve]
 
 
 class ValveDriverTest(unittest.TestCase):
@@ -39,46 +41,55 @@ class ValveDriverTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.test_db = SqliteDatabase(':memory:')
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
-
-    def test_valve_driver(self):
-        valve_output_1 = Output.create(number=2)
-        valve_1 = Valve.create(number=1, name='valve 1', delay=30, output=valve_output_1)
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
-        driver_1 = ValveDriver(valve_1)
 
-        self.assertEqual(valve_1.id, driver_1.id)
-        self.assertEqual(0, driver_1.percentage)
-        self.assertEqual(0, driver_1._desired_percentage)
-        self.assertFalse(driver_1.is_open)
-        self.assertFalse(driver_1.in_transition)
 
-        driver_1.set(50)
-        self.assertEqual(50, driver_1._desired_percentage)
-        driver_1.close()
-        self.assertEqual(0, driver_1._desired_percentage)
-        driver_1.open()
-        self.assertEqual(100, driver_1._desired_percentage)
-        self.assertTrue(driver_1.will_open)
-        driver_1.steer_output()
-        driver_1._output_controller.set_output_status.assert_called_once()
-        self.assertFalse(driver_1.will_open)
-        self.assertEqual(100, driver_1.percentage)
-        self.assertFalse(driver_1.is_open)
-        self.assertTrue(driver_1.in_transition)
+    def test_valve_driver(self):
+        with self.session as db:
+            db.add(
+                Valve(name='valve 1', delay=30,
+                      output=Output(number=2))
+            )
+            db.commit()
+
+            valve = db.query(Valve).filter_by(id=1).one()
+            driver = ValveDriver(valve)
+            self.assertEqual(valve.id, driver.id)
+
+        self.assertEqual(0, driver.percentage)
+        self.assertEqual(0, driver._desired_percentage)
+        self.assertFalse(driver.is_open)
+        self.assertFalse(driver.in_transition)
+
+        driver.set(50)
+        self.assertEqual(50, driver._desired_percentage)
+        driver.close()
+        self.assertEqual(0, driver._desired_percentage)
+        driver.open()
+        self.assertEqual(100, driver._desired_percentage)
+        self.assertTrue(driver.will_open)
+        driver.steer_output()
+        driver._output_controller.set_output_status.assert_called_once()
+        self.assertFalse(driver.will_open)
+        self.assertEqual(100, driver.percentage)
+        self.assertFalse(driver.is_open)
+        self.assertTrue(driver.in_transition)
 
         time.sleep(20)
-        self.assertFalse(driver_1.is_open)
-        self.assertTrue(driver_1.in_transition)
+        self.assertFalse(driver.is_open)
+        self.assertTrue(driver.in_transition)
 
         time.sleep(15)
-        self.assertTrue(driver_1.is_open)
-        self.assertFalse(driver_1.in_transition)
+        self.assertTrue(driver.is_open)
+        self.assertFalse(driver.in_transition)

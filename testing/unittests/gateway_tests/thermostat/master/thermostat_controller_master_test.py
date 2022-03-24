@@ -73,8 +73,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                                      'actual_temperature': None,
                                      'output_0': None,
                                      'output_1': None,
-                                     'steering_power': None},
-                          'location': {'room_id': 255}}
+                                     'steering_power': None}}
             assert GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, event_data) in events
 
     def test_eeprom_events(self):

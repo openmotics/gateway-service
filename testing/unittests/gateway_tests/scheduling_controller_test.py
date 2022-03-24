@@ -18,22 +18,18 @@ Tests for the scheduling module.
 from __future__ import absolute_import
 
 import logging
-import os
-import tempfile
 import time
 import unittest
-from datetime import datetime, timedelta
-
+import mock
 from apscheduler.schedulers.background import BackgroundScheduler
-from mock import Mock
-from peewee import SqliteDatabase
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from gateway.dto import ScheduleDTO, ScheduleSetpointDTO
+from gateway.dto import ScheduleDTO
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.master_controller import MasterController
-from gateway.maintenance_controller import MaintenanceController
-from gateway.models import DaySchedule, Schedule
-from gateway.module_controller import ModuleController
+from gateway.models import Base, Database, DaySchedule, Schedule
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
 from gateway.system_controller import SystemController
@@ -47,25 +43,29 @@ MODELS = [DaySchedule, Schedule]
 class SchedulingControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        super(SchedulingControllerTest, cls).setUpClass()
         SetTestMode()
-        Logs.setup_logger(log_level_override=logging.DEBUG)
-        cls._db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls._db_filename)
-
-    @classmethod
-    def tearDownClass(cls):
-        if os.path.exists(cls._db_filename):
-            os.remove(cls._db_filename)
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.scheduling_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     def setUp(self):
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
-        self.group_action_controller = Mock(GroupActionController)
-        SetUpTestInjections(message_client=None,
+        self.db = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.db)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
+        self.group_action_controller = mock.Mock(GroupActionController)
+        self.master_controller = mock.Mock(MasterController)
+        SetUpTestInjections(master_controller=self.master_controller,
+                            message_client=None,
                             module_controller=None,
-                            pubsub=Mock(PubSub))
+                            pubsub=mock.Mock(PubSub))
         SetUpTestInjections(system_controller=SystemController())
         SetUpTestInjections(configuration_controller=None,
                             energy_module_controller=None,
@@ -87,28 +87,27 @@ class SchedulingControllerTest(unittest.TestCase):
         SetUpTestInjections(scheduling_controller=self.controller)
         self.web_interface = WebInterface()
         self.controller.set_webinterface(self.web_interface)
-        self.scheduler = Mock(BackgroundScheduler)
+        self.scheduler = mock.Mock(BackgroundScheduler)
         self.scheduler.get_job.return_value = None
         self.controller._scheduler = self.scheduler
-        self.controller.start()
-
+        # patch: do not wait to async sync_configuration using a new thread, but directly sync inline for testing
+        mock_refresh = mock.patch.object(self.controller, 'refresh_schedules',
+                                         side_effect=self.controller._sync_configuration)
+        mock_refresh.start()
+        self.controller._scheduler.start()
 
     def tearDown(self):
         self.controller.stop()
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def test_save_load(self):
         dto = ScheduleDTO(id=None, source='gateway', name='schedule', start=0, action='GROUP_ACTION', arguments=0)
         self.controller.save_schedules([dto])
-        time.sleep(0.2)
         loaded_dto = self.controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
         self.controller._schedules = {}  # Clear internal cache
-        self.controller.refresh_schedules()
-        time.sleep(0.2)
+        self.controller._sync_configuration()
         loaded_dto = self.controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
@@ -179,14 +178,12 @@ class SchedulingControllerTest(unittest.TestCase):
         self.group_action_controller.do_group_action.return_value = {}
         self.group_action_controller.do_basic_action.return_value = {}
 
-
         schedule_dto = ScheduleDTO(id=None,
                                    source='gateway',
                                    name='schedule',
                                    start=time.time() + 0.5,
                                    action='GROUP_ACTION',
                                    arguments=1)
-        self.controller.save_schedules([schedule_dto])
         self.controller._execute_schedule(schedule_dto)
         assert schedule_dto.last_executed is not None
         assert schedule_dto.status == 'COMPLETED'
@@ -266,7 +263,6 @@ class SchedulingControllerTest(unittest.TestCase):
                                    arguments={'name': 'do_basic_action',
                                               'parameters': {'action_type': 3,
                                                              'action_number': 4}})
-        self.controller.save_schedules([schedule_dto])
         self.controller._execute_schedule(schedule_dto)
         assert schedule_dto.last_executed is not None
         assert schedule_dto.status == 'COMPLETED'
@@ -283,7 +279,6 @@ class SchedulingControllerTest(unittest.TestCase):
         for s in schedules:
             if s.name == 'group_action':
                 self.controller.remove_schedules([s])
-        time.sleep(0.1)
         schedules = self.controller.load_schedules()
         self.assertEqual(1, len(schedules))
         self.assertEqual('basic_action', schedules[0].name)
@@ -295,7 +290,6 @@ class SchedulingControllerTest(unittest.TestCase):
                            arguments=1,
                            status='ACTIVE')
         schedule = self.controller.load_schedules()[0]
-        time.sleep(0.2)
         self.assertEqual(schedule.status, 'ACTIVE')
         self.assertIsNone(schedule.last_executed)
 
@@ -312,10 +306,5 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertIsNone(schedule.last_executed)
 
     def _add_schedule(self, **kwargs):
-        schedules = self.controller.load_schedules()
         dto = ScheduleDTO(id=None, source='gateway', **kwargs)
         self.controller.save_schedules([dto])
-        for _ in range(60):
-            if len(self.controller.load_schedules()) > len(schedules):
-                break
-            time.sleep(0.1)

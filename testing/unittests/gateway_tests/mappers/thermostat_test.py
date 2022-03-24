@@ -16,93 +16,118 @@ from __future__ import absolute_import
 
 import unittest
 
-from peewee import SqliteDatabase
+import mock
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from gateway.dto import PumpGroupDTO, SensorStatusDTO, ThermostatDTO, \
     ThermostatScheduleDTO
 from gateway.hal.mappers_classic import PumpGroupMapper
 from gateway.mappers.thermostat import ThermostatMapper, \
     ThermostatScheduleMapper
-from gateway.models import DaySchedule, Feature, Output, \
-    OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, ValveToThermostat
+from gateway.models import Base, Database, DaySchedule, Feature, Output, \
+    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
+    Room, Sensor, Thermostat, ThermostatGroup, Valve, \
+    ValveToThermostatAssociation
+from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 from master.classic.eeprom_models import PumpGroupConfiguration
-
-MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
-          Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule,
-          Room]
 
 
 class ThermostatMapperTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Logs.setup_logger(log_level_override=logging.DEBUG)
-        cls.test_db = SqliteDatabase(':memory:')
+        SetTestMode()
 
     def setUp(self):
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
     def test_thermostat(self):
-        from gateway.mappers.thermostat import ThermostatMapper
-        Sensor.create(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor')
-        ThermostatGroup.create(id=2, number=1, name='group')
+        with self.session as db:
+            db.add_all([
+                Sensor(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor'),
+                ThermostatGroup(id=2, number=1, name='group')
+            ])
+            db.commit()
 
         thermostat_dto = ThermostatDTO(id=0, name='thermostat', sensor=510)
-        thermostat = ThermostatMapper.dto_to_orm(thermostat_dto)
-        assert thermostat.id is None
-        assert thermostat.number == 0
-        assert thermostat.name == 'thermostat'
-        assert thermostat.room is None
-        assert thermostat.sensor.name == 'sensor'
-        assert thermostat.thermostat_group.name == 'group'
-        updated = thermostat.save()
-        assert thermostat.id is not None
-        thermostat = ThermostatMapper.dto_to_orm(thermostat_dto)
-        thermostat.save()  # update existing
-        assert Thermostat.select().count() == 1
+        with self.session as db:
+            thermostat = ThermostatMapper(db).dto_to_orm(thermostat_dto)
+            assert thermostat.id is None
+            assert thermostat.number == 0
+            assert thermostat.name == 'thermostat'
+            assert thermostat.room is None
+            assert thermostat.sensor.name == 'sensor'
+            assert thermostat.group.name == 'group'
+            db.add(thermostat)
+            db.commit()
+
+        with self.session as db:
+            thermostat = ThermostatMapper(db).dto_to_orm(thermostat_dto)
+            db.add(thermostat)
+            db.commit()
+
+        with self.session as db:
+            query = db.query(Thermostat)
+            assert query.count() == 1, query.all()
 
     def test_valve_to_thermostats(self):
-        from gateway.mappers.thermostat import ThermostatMapper
-        Sensor.create(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor')
-        Output.create(number=8)
-        Output.create(number=9)
-        ThermostatGroup.create(number=1, name='group')
-
-        thermostat = Thermostat.create(number=0, name='thermostat', start=0, thermostat_group_id=1)
+        with self.session as db:
+            db.add_all([
+                Sensor(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor'),
+                Output(number=8),
+                Output(number=9),
+                ThermostatGroup(id=2, number=1, name='group'),
+                Thermostat(number=0, name='thermostat', start=0, thermostat_group_id=1),
+                Valve(name='Valve (output 8)', output_id=1),
+                ValveToThermostatAssociation(valve_id=1, thermostat_id=1, priority=3)
+            ])
+            db.commit()
 
         thermostat_dto = ThermostatDTO(id=0, output0=8, output1=9)
-        update, _ = ThermostatMapper.get_valve_links(thermostat_dto, 'heating')
-        assert [x.valve.name for x in update] == ['Valve (output 8)', 'Valve (output 9)']
-        for link in update:
-            link.valve.save()
-            link.save()
-        assert [x.name for x in thermostat.heating_valves] == ['Valve (output 8)', 'Valve (output 9)']
+        with self.session as db:
+            update, _ = ThermostatMapper(db).get_valve_links(thermostat_dto, 'heating')
+            assert [x.valve.name for x in update] == ['Valve (output 8)', 'Valve (output 9)']
+            db.add_all(update)
+            db.commit()
 
-        update, remove = ThermostatMapper.get_valve_links(thermostat_dto, 'heating')
-        assert [x.valve.name for x in update] == []  # no changes
-        assert [x.valve.name for x in remove] == []
+        with self.session as db:
+            thermostat = db.get(Thermostat, 1)
+            assert [x.name for x in thermostat.valves] == ['Valve (output 8)', 'Valve (output 9)']
+            assert [x.priority for x in thermostat.heating_valve_associations] == [0, 1]
+
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_valve_links(thermostat_dto, 'heating')
+            assert [x.valve.name for x in update] == []  # no changes
+            assert [x.valve.name for x in remove] == []
 
         thermostat_dto = ThermostatDTO(id=0, output0=8)
-        update, remove = ThermostatMapper.get_valve_links(thermostat_dto, 'heating')
-        assert [x.valve.name for x in update] == []
-        assert len(remove) == 1
-        assert [x.priority for x in remove] == [1]
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_valve_links(thermostat_dto, 'heating')
+            assert [x.valve.name for x in update] == []
+            assert len(remove) == 1
+            assert [x.priority for x in remove] == [1]
 
     def test_day_schedules(self):
-        from gateway.mappers.thermostat import ThermostatMapper
-        Sensor.create(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor')
-        Output.create(number=8)
-        Output.create(number=9)
-        ThermostatGroup.create(number=1, name='group')
-
-        thermostat = Thermostat.create(number=0, name='thermostat', start=0, thermostat_group_id=1)
+        with self.session as db:
+            db.add_all([
+                Sensor(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor'),
+                Output(number=8),
+                Output(number=9),
+                ThermostatGroup(id=0, number=1, name='group'),
+                Thermostat(number=10, name='thermostat', start=0, thermostat_group_id=0)
+            ])
+            db.commit()
 
         schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
                                              start_day_1='06:00',
@@ -111,15 +136,16 @@ class ThermostatMapperTests(unittest.TestCase):
                                              start_day_2='16:00',
                                              end_day_2='22:00',
                                              temp_night=19.0)
-        thermostat_dto = ThermostatDTO(id=0, auto_mon=schedule_dto)
-        update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, 'heating')
-        assert [x.index for x in update] == [0]
-        assert [x.schedule_data for x in update] == [{0: 19.0, 21600: 21.0, 28800: 19.0, 57600: 21.0, 79200: 19.0}]
-        for day_schedule in update:
-            day_schedule.save()
+        thermostat_dto = ThermostatDTO(id=10, auto_mon=schedule_dto)
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_schedule_links(thermostat_dto, 'heating')
+            assert [x.index for x in update] == [0]
+            assert [x.schedule_data for x in update] == [{0: 19.0, 21600: 21.0, 28800: 19.0, 57600: 21.0, 79200: 19.0}]
+            db.commit()
 
-        update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, 'heating')
-        assert [x.schedule_data for x in update] == []  # no changes
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_schedule_links(thermostat_dto, 'heating')
+            assert [x.schedule_data for x in update] == []  # no changes
 
         schedule_dto = ThermostatScheduleDTO(temp_day_1=22.0,
                                              start_day_1='06:00',
@@ -128,39 +154,38 @@ class ThermostatMapperTests(unittest.TestCase):
                                              start_day_2='16:00',
                                              end_day_2='22:00',
                                              temp_night=19.0)
-        thermostat_dto = ThermostatDTO(id=0, auto_mon=schedule_dto)
-        update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, 'heating')
-        assert [x.schedule_data for x in update] == [{0: 19.0, 21600: 22.0, 28800: 19.0, 57600: 22.0, 79200: 19.0}]
+        thermostat_dto = ThermostatDTO(id=10, auto_mon=schedule_dto)
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_schedule_links(thermostat_dto, 'heating')
+            assert [x.schedule_data for x in update] == [{0: 19.0, 21600: 22.0, 28800: 19.0, 57600: 22.0, 79200: 19.0}]
 
-        thermostat_dto = ThermostatDTO(id=0, auto_mon=None)
-        update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, 'heating')
-        assert [x.schedule_data for x in update] == []
+        thermostat_dto = ThermostatDTO(id=10, auto_mon=None)
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_schedule_links(thermostat_dto, 'heating')
+            assert update == [], [x.schedule_data for x in update]
 
     def test_presets(self):
-        from gateway.mappers.thermostat import ThermostatMapper
-        Sensor.create(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor')
-        Output.create(number=8)
-        Output.create(number=9)
-        ThermostatGroup.create(number=1, name='group')
+        with self.session as db:
+            db.add_all([
+                Sensor(id=510, source='master', external_id='8', physical_quantity='temperature', unit='celcius', name='sensor'),
+                Output(number=8),
+                Output(number=9),
+                ThermostatGroup(id=0, number=1, name='group'),
+                Thermostat(number=10, name='thermostat', start=0, thermostat_group_id=0)
+            ])
+            db.commit()
 
-        thermostat = Thermostat.create(number=0, name='thermostat', start=0, thermostat_group_id=1)
+        thermostat_dto = ThermostatDTO(id=10, setp5=32.0)
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_preset_links(thermostat_dto, 'heating')
+            assert [x.heating_setpoint for x in update] == [32.0]
+            db.commit()
 
-        schedule_dto = ThermostatScheduleDTO(temp_day_1=21.0,
-                                             start_day_1='06:00',
-                                             end_day_1='08:00',
-                                             temp_day_2=21.0,
-                                             start_day_2='16:00',
-                                             end_day_2='22:00',
-                                             temp_night=19.0)
-        thermostat_dto = ThermostatDTO(id=0, auto_mon=schedule_dto)
-        update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, 'heating')
-        assert [x.index for x in update] == [0]
-        assert [x.schedule_data for x in update] == [{0: 19.0, 21600: 21.0, 28800: 19.0, 57600: 21.0, 79200: 19.0}]
-        for day_schedule in update:
-            day_schedule.save()
-
-        update, remove = ThermostatMapper.get_schedule_links(thermostat_dto, 'heating')
-        assert update == []  # no changes
+        thermostat_dto = ThermostatDTO(id=10)
+        with self.session as db:
+            update, remove = ThermostatMapper(db).get_preset_links(thermostat_dto, 'heating')
+            assert update == []  # no changes
+            assert remove == []  # no changes
 
 
 class ThermostatScheduleMapperTest(unittest.TestCase):
