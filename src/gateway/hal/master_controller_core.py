@@ -705,6 +705,7 @@ class MasterCoreController(MasterController):
             self._output_shutter_map.pop(shutter.outputs.output_0, None)
             self._output_shutter_map.pop(shutter.outputs.output_1, None)
             shutter.outputs.output_0 = 255 * 2
+            shutter.name = ''
             if output.output_type == OutputType.SHUTTER_RELAY:
                 output.output_type = OutputType.OUTLET
         setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
