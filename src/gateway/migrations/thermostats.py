@@ -401,6 +401,14 @@ class ThermostatsMigrator(BaseMigrator):
                     preset.heating_setpoint = value
                 else:
                     preset.cooling_setpoint = value
+        auto_preset = next((x for x in thermostat.presets if x.type == Preset.Types.AUTO), None)
+        if auto_preset is None:
+            auto_preset = Preset(thermostat=thermostat, type=Preset.Types.AUTO)
+            db.add(auto_preset)
+            db.commit()
+            db.refresh(auto_preset)
+        auto_preset.active = True
+        db.commit()
 
     @classmethod
     def _migrate_schedules(cls, db, thermostat, mode, eeprom_object):

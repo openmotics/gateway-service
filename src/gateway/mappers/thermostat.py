@@ -93,7 +93,6 @@ class ThermostatMapper(object):
             .one_or_none()  # type: Optional[Thermostat]
         if thermostat is None:
             thermostat = Thermostat(number=thermostat_dto.id,
-                                    thermostat_group_id=thermostat_dto.thermostat_group,
                                     start=0)
         if thermostat.group is None:
             thermostat.group = self._db.query(ThermostatGroup).limit(1).one()
