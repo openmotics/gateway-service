@@ -406,7 +406,6 @@ class ThermostatsMigrator(BaseMigrator):
             auto_preset = Preset(thermostat=thermostat, type=Preset.Types.AUTO)
             db.add(auto_preset)
             db.commit()
-            db.refresh(auto_preset)
         auto_preset.active = True
         db.commit()
 
