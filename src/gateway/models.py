@@ -184,6 +184,7 @@ class GroupAction(Base, MasterNumber):
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    show_in_app = Column(Boolean, nullable=False, default=True)
 
 
 class Module(Base):
