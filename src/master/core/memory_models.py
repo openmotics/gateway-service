@@ -46,16 +46,16 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
         full_handshake = CompositeBitField(bit=2)
 
     hardware_detection = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0))  # 0, 0
-    number_of_output_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1))  # 0, 1
-    number_of_input_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2))  # 0, 2
-    number_of_sensor_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3))  # 0, 3
-    scan_time_rs485_sensor_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 4))  # 0, 4
+    number_of_output_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1), default=0)  # 0, 1
+    number_of_input_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2), default=0)  # 0, 2
+    number_of_sensor_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3), default=0)  # 0, 3
+    scan_time_rs485_sensor_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 4), default=50)  # 0, 4
     number_of_can_inputs = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 5))  # 0, 5
     number_of_can_sensors = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 6))  # 0, 6
-    number_of_ucan_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 7))  # 0, 7
-    scan_time_rs485_bus = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 8))  # 0, 8
-    number_of_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 9))  # 0, 9
-    scan_time_rs485_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 10))  # 0, 10
+    number_of_ucan_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 7), default=0)  # 0, 7
+    scan_time_rs485_bus = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 8), default=8)  # 0, 8
+    number_of_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 9), default=0)  # 0, 9
+    scan_time_rs485_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 10), default=50)  # 0, 10
     automatic_module_discovery = _DiscoveryComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 11)))  # 0, 11
     can_bus_termination = MemoryBooleanField(MemoryTypes.EEPROM, address_spec=(0, 12), true_value=255, false_value=0, fallback=True)  # 0, 12
     debug = _DebugComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 13)))  # 0, 13
@@ -81,7 +81,7 @@ class OutputModuleConfiguration(MemoryModelDefinition):
         are_45_outputs = CompositeBitField(bit=6)
         are_67_outputs = CompositeBitField(bit=7)
 
-    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)))
+    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1), default=0))
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0), length=1, read_only=True)  # 1-80, 0-3
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0), read_only=True)  # 1-80, 0-3
     firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 4), read_only=True)  # 1-80, 4-6
@@ -114,7 +114,7 @@ class OutputConfiguration(MemoryModelDefinition):
     class _OutputLocking(CompositeMemoryModelDefinition):
         locked = CompositeBitField(bit=lambda id: id % 8)
 
-    id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)))
+    id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1), default=0))
     module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id // 8)
     timer_value = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 7 + id % 8 * 2))  # 1-80, 7-22
     timer_type = TimerType(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 23 + id % 8)))  # 1-80, 23-30
@@ -134,7 +134,7 @@ class OutputConfiguration(MemoryModelDefinition):
 
 
 class InputModuleConfiguration(MemoryModelDefinition):
-    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2)))
+    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2), default=0))
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0), length=1, read_only=True)  # 81-238, 0-3
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0), read_only=True)  # 81-238, 0-3
     firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 4), read_only=True)  # 81-238, 4-6
@@ -168,7 +168,7 @@ class InputConfiguration(MemoryModelDefinition):
         not_used = CompositeBitField(bit=14)  # This bit field is not used by the firmware, yet still needed
         enable_double_press = CompositeBitField(bit=15)
 
-    id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2)))
+    id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2), default=0))
     module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id // 8)
     input_config = _InputConfigComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 7 + id % 8)))  # 81-238, 7-14
     dali_mapping = _DALIInputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 15 + id % 8)))  # 81-238, 15-22
@@ -201,7 +201,7 @@ class InputConfiguration(MemoryModelDefinition):
 
 
 class SensorModuleConfiguration(MemoryModelDefinition):
-    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3)))
+    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3), default=0))
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0), length=1, read_only=True)  # 239-254, 0-3
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0), read_only=True)  # 239-254, 0-3
     firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 4), read_only=True)  # 239-254, 4-6
@@ -221,7 +221,7 @@ class SensorConfiguration(MemoryModelDefinition):
         dali_output_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
         dali_group_id = CompositeNumberField(start_bit=0, width=8, max_value=15, value_offset=64)
 
-    id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3)))
+    id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3), default=0))
     module = MemoryRelation(SensorModuleConfiguration, id_spec=lambda id: id // 8)
     temperature_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 8 + (id % 8) * 2))  # 239-254, 8-23
     humidity_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 24 + (id % 8) * 2))  # 239-254, 24-39
@@ -257,7 +257,7 @@ class ShutterConfiguration(MemoryModelDefinition):
         group_14 = CompositeBitField(bit=14, inverted=True)
         group_15 = CompositeBitField(bit=15, inverted=True)
 
-    id = IdField(limits=lambda f: (0, min(256, f * 4) - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)))
+    id = IdField(limits=lambda f: (0, min(256, f * 4) - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1), default=0))
     outputs = _OutputMappingComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (391, id)))  # 391, 0-255
     timer_up = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (393 + id // 128, id % 128 * 2))  # 393-394, 0-255
     timer_down = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (395 + id // 128, id % 128 * 2))  # 395-396, 0-255
@@ -270,7 +270,7 @@ class ShutterConfiguration(MemoryModelDefinition):
 
 
 class CanControlModuleConfiguration(MemoryModelDefinition):
-    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 9)))
+    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 9), default=0))
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), length=1, read_only=True)  # 255, 0-255
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), read_only=True)  # 255, 0-255
 
@@ -300,7 +300,7 @@ class UCanModuleConfiguration(MemoryModelDefinition):
         ucan_lux = CompositeBitField(bit=3)
         ucan_sound = CompositeBitField(bit=2)
 
-    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 7)))
+    id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 7), default=0))
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=1, read_only=True)  # 383-390, 0-255
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=3, read_only=True)  # 383-390, 0-255
     module = MemoryRelation(CanControlModuleConfiguration, id_spec=lambda id: None if id == 100 else id, field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 3)))
