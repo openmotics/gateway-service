@@ -20,7 +20,7 @@ from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration, \
     InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
-    SensorModuleConfiguration, ShutterConfiguration
+    SensorModuleConfiguration, ShutterConfiguration, GlobalConfiguration
 from master.core.system_value import Dimmer
 from mocked_core_helper import MockedCore
 
@@ -37,6 +37,14 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.controller = self.mocked_core.controller
         self.pubsub = self.mocked_core.pubsub
         self.return_data = self.mocked_core.return_data
+
+        # Provide wide set of configured modules for testing purposes
+        global_configuration = GlobalConfiguration()
+        global_configuration.number_of_output_modules = 50
+        global_configuration.number_of_input_modules = 50
+        global_configuration.number_of_sensor_modules = 50
+        global_configuration.number_of_can_control_modules = 50
+        global_configuration.save()
 
         # For testing purposes, remove read-only flag from certain properties
         for field_name in ['device_type', 'address', 'firmware_version']:
@@ -164,12 +172,15 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.assertEqual(data.id, 1)
 
     def test_load_inputs(self):
-        input_modules = list(map(get_core_input_dummy, range(1, 17)))
-        self.return_data['GC'] = {'input': 2}
+        global_configuration = GlobalConfiguration()
+        global_configuration.number_of_input_modules = 2
+        global_configuration.save()
+
+        input_modules = list(map(get_core_input_dummy, range(16)))
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                side_effect=input_modules):
             inputs = self.controller.load_inputs()
-            self.assertEqual([x.id for x in inputs], list(range(1, 17)))
+            self.assertEqual([x.id for x in inputs], list(range(16)))
 
     def test_save_inputs(self):
         data = [InputDTO(id=1, name='foo', module_type='I'),
@@ -391,7 +402,7 @@ def get_core_output_dummy(i):
     return OutputConfiguration.deserialize({
         'id': i,
         'name': 'foo',
-        'module': {'id': 20 + i,
+        'module': {'id': i // 8,
                    'device_type': 'O',
                    'address': '0.0.0.0',
                    'firmware_version': '0.0.1'}
@@ -402,7 +413,7 @@ def get_core_input_dummy(i):
     return InputConfiguration.deserialize({
         'id': i,
         'name': 'foo',
-        'module': {'id': 20 + i,
+        'module': {'id': i // 8,
                    'device_type': 'I',
                    'address': '0.0.0.0',
                    'firmware_version': '0.0.1'}

@@ -139,19 +139,16 @@ class DummyCommunicator(object):
         """
         This method reads the command, executes actions and returns an appropriate response.
         """
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         if command.instruction == b'GC':
             if command.request_fields[0]._data == bytearray([0]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 global_configuration = GlobalConfiguration()
                 return {'type': 0,
-                        'output': _default_if_255(global_configuration.number_of_output_modules, 0),
-                        'input': _default_if_255(global_configuration.number_of_input_modules, 0),
-                        'sensor': _default_if_255(global_configuration.number_of_sensor_modules, 0),
-                        'ucan': _default_if_255(global_configuration.number_of_ucan_modules, 0),
-                        'ucan_input': _default_if_255(global_configuration.number_of_can_inputs, 0),
-                        'ucan_sensor': _default_if_255(global_configuration.number_of_can_sensors, 0),
+                        'output': global_configuration.number_of_output_modules,
+                        'input': global_configuration.number_of_input_modules,
+                        'sensor': global_configuration.number_of_sensor_modules,
+                        'ucan': global_configuration.number_of_ucan_modules,
+                        'ucan_input': global_configuration.number_of_can_inputs,
+                        'ucan_sensor': global_configuration.number_of_can_sensors,
                         'power_rs485': 1, 'power_can': 1}
         if command.instruction == b'BA':
             basic_action = BasicAction(action_type=fields['type'], action=fields['action'],
@@ -181,10 +178,10 @@ class DummyCommunicator(object):
             if command.request_fields[0]._data == bytearray([2]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 global_configuration = GlobalConfiguration()
                 return {'info_type': 2,
-                        'amount_output_modules': _default_if_255(global_configuration.number_of_output_modules, 0),
-                        'amount_input_modules': _default_if_255(global_configuration.number_of_input_modules, 0),
-                        'amount_sensor_modules': _default_if_255(global_configuration.number_of_sensor_modules, 0),
-                        'amount_can_control_modules': _default_if_255(global_configuration.number_of_can_control_modules, 0)}
+                        'amount_output_modules': global_configuration.number_of_output_modules,
+                        'amount_input_modules': global_configuration.number_of_input_modules,
+                        'amount_sensor_modules': global_configuration.number_of_sensor_modules,
+                        'amount_can_control_modules': global_configuration.number_of_can_control_modules}
         if command.instruction == b'CD':
             if command.request_fields[0]._data == bytearray([0]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 return {'amount_of_ucans': 0}
@@ -192,7 +189,7 @@ class DummyCommunicator(object):
             global_configuration = GlobalConfiguration()
             if command.request_fields[0]._data == bytearray([0]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 information = []
-                for module_id in range(_default_if_255(global_configuration.number_of_output_modules, 0)):
+                for module_id in range(global_configuration.number_of_output_modules):
                     output_byte = 0
                     for entry_id in range(8):
                         output_id = module_id * 8 + entry_id
@@ -203,7 +200,7 @@ class DummyCommunicator(object):
                 return {'type': 0, 'information': information}
             if command.request_fields[0]._data == bytearray([1]):  # type: ignore  # It's not a `Field` but a `LiteralBytesField`
                 information = []
-                for module_id in range(_default_if_255(global_configuration.number_of_input_modules, 0)):
+                for module_id in range(global_configuration.number_of_input_modules):
                     input_byte = 0
                     for entry_id in range(8):
                         input_id = module_id * 8 + entry_id
