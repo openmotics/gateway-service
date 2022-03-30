@@ -262,23 +262,19 @@ class MetricsController(object):
         # get definition for metric source and type, getting the definitions for a metric_source is case sensitive!
         definition = self.definitions.get(metric_source, {}).get(metric_type)
         if definition is None:
-            logger.warning('No metric definition found for source %s and type %s', metric_source, metric_type)
             return False
 
         if Config.get_entry('cloud_enabled', False) is False:
-            logger.debug('Metrics upload to cloud is disabled by config')
             return False
 
         if metric_source == 'OpenMotics':
             config_key = 'cloud_metrics_enabled|{0}'.format(metric_type)
             if Config.get_entry(config_key, True) is False:
-                logger.warning('Metrics upload disabled for metric_type %s (config: %s)', metric_type, config_key)
                 return False
 
             # filter openmotics metrics that are not listed in cloud_metrics_types
             metric_types = Config.get_entry('cloud_metrics_types', [])
             if metric_type not in metric_types:
-                logger.warning('Unknown metric type %s (config: cloud_metrics_types)', metric_type)
                 return False
 
         else:
@@ -286,7 +282,6 @@ class MetricsController(object):
             metric_sources = Config.get_entry('cloud_metrics_sources', [])
             # make sure to get the lowercase metric_source
             if metric_source.lower() not in metric_sources:
-                logger.warning('Unknown metric source %s (config: cloud_metrics_sources)', metric_source)
                 return False
 
         return True
