@@ -476,13 +476,13 @@ class MemorySignedTemperatureField(MemoryField):
 
     def encode(self, value, field_name):  # type: (Optional[float], str) -> bytearray
         if value is None:
-            value = 0
+            value = 0.0
         self._check_limits(value, field_name)
         return bytearray(struct.pack('b', int(value * 2)))
 
     def decode(self, data):  # type: (bytearray) -> Optional[float]
         temperature = float(struct.unpack('b', data)[0]) / 2.0
-        if temperature == 0:
+        if temperature == 0.0:
             return None
         return temperature
 
