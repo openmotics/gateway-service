@@ -129,6 +129,22 @@ class MemoryTypesTest(unittest.TestCase):
                                                   [{'limits': (-15, 15)}, 15, bytearray([94])],
                                                   [{'limits': (-15, 15)}, 15.5, ValueError]])
 
+    def test_signed_temperature_field(self):
+        self._test_field(MemorySignedTemperatureField, [[{}, -64.5, ValueError],
+                                                        [{}, -64, bytearray([128])],
+                                                        [{}, -63.5, bytearray([129])],
+                                                        [{}, -0.5, bytearray([255])],
+                                                        [{}, 0, bytearray([0])],
+                                                        [{}, 0.5, bytearray([1])],
+                                                        [{}, 63.5, bytearray([127])],
+                                                        [{}, 64, ValueError],
+                                                        [{}, None, ValueError],
+                                                        [{'limits': (-15, 15)}, -16, ValueError],
+                                                        [{'limits': (-15, 15)}, -15, bytearray([226])],
+                                                        [{'limits': (-15, 15)}, 0, bytearray([0])],
+                                                        [{'limits': (-15, 15)}, 15, bytearray([30])],
+                                                        [{'limits': (-15, 15)}, 16, ValueError]])
+
     def test_boolean_field(self):
         self._test_field(MemoryBooleanField, [[{'true_value': 0, 'false_value': 255, 'fallback': True}, 0, ValueError],
                                               [{'true_value': 0, 'false_value': 255, 'fallback': True}, 'foo', ValueError],
@@ -150,7 +166,7 @@ class MemoryTypesTest(unittest.TestCase):
                     field.encode(value, None)
                 continue
             result_bytes = field.encode(value, None)
-            self.assertEqual(expected_bytes, result_bytes)
+            self.assertEqual(expected_bytes, result_bytes, '{0}: {1} != {2}'.format(value, list(expected_bytes), list(result_bytes)))
             result_value = field.decode(result_bytes)
             self.assertEqual(expected_value, result_value)
 

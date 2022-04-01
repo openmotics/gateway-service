@@ -25,7 +25,7 @@ from master.core.memory_file import MemoryTypes
 from master.core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDefinition,
                                       MemoryRelation,
                                       MemoryByteField, MemoryWordField, MemoryAddressField, MemoryStringField, MemoryVersionField, MemoryBasicActionField,
-                                      MemoryTemperatureField, MemoryBooleanField,
+                                      MemorySignedTemperatureField, MemoryBooleanField,
                                       MemoryByteArrayField, Memory3BytesField,
                                       CompositeMemoryModelDefinition, CompositeNumberField, CompositeBitField,
                                       MemoryEnumDefinition, EnumEntry, IdField,
@@ -229,9 +229,9 @@ class SensorConfiguration(MemoryModelDefinition):
     aqi_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 56 + (id % 8) * 2))  # 239-254, 56-71
     dali_mapping = _DALISensorComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 72 + (id % 8))))  # 239-254, 72-79
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 128 + (id % 8) * 16), length=16)  # 239-254, 128-255
-    temperature_offset = MemoryTemperatureField(MemoryTypes.FRAM, address_spec=lambda id: (51, id * 2), limits=(-31.5, 95),
-                                                checksum=MemoryChecksum(field=MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (51, (id * 2) + 1)),
-                                                                        check=MemoryChecksum.Types.INVERTED, default=0))  # 51, 0-255
+    temperature_offset = MemorySignedTemperatureField(MemoryTypes.FRAM, address_spec=lambda id: (51, id * 2), limits=(-10, 10),
+                                                      checksum=MemoryChecksum(field=MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (51, (id * 2) + 1)),
+                                                                              check=MemoryChecksum.Types.INVERTED, default=0))  # 51, 0-255
 
 
 class ShutterConfiguration(MemoryModelDefinition):

@@ -465,6 +465,23 @@ class MemoryTemperatureField(MemoryField):
         return temperature
 
 
+class MemorySignedTemperatureField(MemoryField):
+    def __init__(self, memory_type, address_spec, limits=None, read_only=False, checksum=None):
+        super(MemorySignedTemperatureField, self).__init__(memory_type=memory_type,
+                                                           address_spec=address_spec,
+                                                           read_only=read_only,
+                                                           checksum=checksum,
+                                                           limits=limits if limits is not None else (-64, 63.5),
+                                                           length=1)
+
+    def encode(self, value, field_name):  # type: (float, str) -> bytearray
+        self._check_limits(value, field_name)
+        return bytearray(struct.pack('b', int(value * 2)))
+
+    def decode(self, data):  # type: (bytearray) -> float
+        return float(struct.unpack('b', data)[0]) / 2.0
+
+
 class MemoryWordField(MemoryField):
     def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
         super(MemoryWordField, self).__init__(memory_type=memory_type,
