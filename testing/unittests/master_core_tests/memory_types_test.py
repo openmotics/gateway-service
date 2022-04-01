@@ -134,14 +134,14 @@ class MemoryTypesTest(unittest.TestCase):
                                                         [{}, -64, bytearray([128])],
                                                         [{}, -63.5, bytearray([129])],
                                                         [{}, -0.5, bytearray([255])],
-                                                        [{}, 0, bytearray([0])],
+                                                        [{}, 0, bytearray([0]), None],
                                                         [{}, 0.5, bytearray([1])],
                                                         [{}, 63.5, bytearray([127])],
                                                         [{}, 64, ValueError],
-                                                        [{}, None, ValueError],
+                                                        [{}, None, bytearray([0])],
                                                         [{'limits': (-15, 15)}, -16, ValueError],
                                                         [{'limits': (-15, 15)}, -15, bytearray([226])],
-                                                        [{'limits': (-15, 15)}, 0, bytearray([0])],
+                                                        [{'limits': (-15, 15)}, 0, bytearray([0]), None],
                                                         [{'limits': (-15, 15)}, 15, bytearray([30])],
                                                         [{'limits': (-15, 15)}, 16, ValueError]])
 
