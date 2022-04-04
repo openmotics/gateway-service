@@ -13,12 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.mappers.apartment import ApartmentMapper
-from gateway.mappers.delivery import DeliveryMapper
 from gateway.mappers.energy import EnergyModuleMapper
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.mappers.pulse_counter import PulseCounterMapper
-from gateway.mappers.rfid import RfidMapper
 from gateway.mappers.room import RoomMapper
 from gateway.mappers.schedule import ScheduleMapper
 from gateway.mappers.user import UserMapper

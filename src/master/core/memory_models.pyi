@@ -28,6 +28,11 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
         enable_fram_error_logging: bool
         enable_health_check: bool
 
+    class _DiscoveryComposition(CompositeMemoryModelDefinition):
+        automatic_discovery_enabled: bool
+        new_slave_firmware_used: bool
+        full_handshake: bool
+
     hardware_detection: int
     number_of_output_modules: int
     number_of_input_modules: int
@@ -39,7 +44,7 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     scan_time_rs485_bus: int
     number_of_can_control_modules: int
     scan_time_rs485_can_control_modules: int
-    automatic_module_discovery: bool
+    automatic_module_discovery: _DiscoveryComposition
     can_bus_termination: bool
     debug: _DebugComposition
     groupaction_all_outputs_off: int

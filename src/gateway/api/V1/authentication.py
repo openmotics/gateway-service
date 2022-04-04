@@ -39,9 +39,6 @@ class Authentication(RestAPIEndpoint):
         self.route_dispatcher.connect('authenticate_pin_code', '/authenticate/pin_code',
                                       controller=self, action='authenticate_pin_code',
                                       conditions={'method': ['POST']})
-        self.route_dispatcher.connect('authenticate_rfid_tag', '/authenticate/rfid_tag',
-                                      controller=self, action='authenticate_rfid_tag',
-                                      conditions={'method': ['POST']})
         self.route_dispatcher.connect('deauthenticate', '/deauthenticate',
                                       controller=self, action='deauthenticate',
                                       conditions={'method': ['POST']})
@@ -51,13 +48,6 @@ class Authentication(RestAPIEndpoint):
         if 'pin_code' not in request_body:
             raise WrongInputParametersException('Expected a code in the request body json')
         success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['pin_code'])
-        return self.handle_authentication_result(success, data)
-
-    @openmotics_api_v1(auth=False, expect_body_type='JSON')
-    def authenticate_rfid_tag(self, request_body):
-        if 'rfid_tag' not in request_body:
-            raise WrongInputParametersException('Expected an rfid_tag in the request body json')
-        success, data = self.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'])
         return self.handle_authentication_result(success, data)
 
     def handle_authentication_result(self, success, data):

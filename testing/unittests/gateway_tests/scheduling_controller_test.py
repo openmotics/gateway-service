@@ -82,8 +82,7 @@ class SchedulingControllerTest(unittest.TestCase):
                             uart_controller=None,
                             update_controller=None,
                             user_controller=None,
-                            ventilation_controller=None,
-                            rebus_controller=None)
+                            ventilation_controller=None)
         self.controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=self.controller)
         self.web_interface = WebInterface()

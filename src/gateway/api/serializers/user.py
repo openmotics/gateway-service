@@ -22,10 +22,8 @@ import logging
 import re
 
 import constants
-from gateway.apartment_controller import ApartmentController
-from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import UserDTO, ApartmentDTO
+from gateway.dto import UserDTO
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple, Union
@@ -43,13 +41,9 @@ class UserSerializer(object):
                 'last_name': dto_object.last_name,
                 'role': dto_object.role,
                 'language': dto_object.language,
-                'apartment': None,
                 'is_active': dto_object.is_active,
                 'accepted_terms': dto_object.accepted_terms,
                 'email': dto_object.email}  # type: Dict[str, Any]
-        if 'apartment' in dto_object.loaded_fields and isinstance(dto_object.apartment, ApartmentDTO):
-            apartment_data = ApartmentSerializer.serialize(dto_object.apartment)
-            data['apartment'] = apartment_data
         if show_pin_code:
             data['pin_code'] = dto_object.pin_code
         return SerializerToolbox.filter_fields(data, fields)
@@ -61,15 +55,6 @@ class UserSerializer(object):
         for field in ['id', 'username', 'first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms', 'is_active']:
             if field in api_data:
                 setattr(user_dto, field, api_data[field])
-        if 'apartment' in api_data and api_data['apartment'] is not None:
-            apartment_value = api_data['apartment']
-            if not isinstance(apartment_value, int):
-                raise ValueError('apartment_id should be an integer, received value of type: {}'.format(type(apartment_value)))
-            if ApartmentController.apartment_id_exists(apartment_value):
-                apartment_dto = ApartmentController.load_apartment(apartment_value)
-                user_dto.apartment = apartment_dto
-            else:
-                raise ValueError('apartment_id provided in user json does not exists')
         if 'password' in api_data:
             user_dto.set_password(api_data['password'])
         if 'email' in api_data:

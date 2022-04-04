@@ -19,7 +19,6 @@ import os
 import platform_utils
 import sys
 
-PYINSTALLER_PREFIX = os.environ.get('PYINSTALLER_PREFIX', None)
 OPENMOTICS_PREFIX = os.environ.get('OPENMOTICS_PREFIX', '/opt/openmotics')
 
 
@@ -154,19 +153,12 @@ def get_terms_dir():
 
 def get_plugin_dir():
     """ Get the directory where plugin data is stored. """
-    curr_os = platform_utils.System.get_operating_system()
-    if curr_os.get('ID') != platform_utils.System.OS.BUILDROOT:
-        python_root = os.path.abspath(os.path.join(__file__, '..'))
-        return os.path.join(python_root, 'plugins/')
-    else:
-        path = os.path.join(OPENMOTICS_PREFIX, 'plugins/')
-        return path
+    return os.path.join(OPENMOTICS_PREFIX, 'python/plugins/')
 
 
 def get_plugin_runtime_dir():
     """ Get the directory where plugin data is stored. """
-    python_root = os.path.abspath(os.path.join(__file__, '..'))
-    return os.path.join(python_root, 'plugin_runtime')
+    return os.path.join(OPENMOTICS_PREFIX, 'python/plugin_runtime/')
 
 
 def get_update_cmd(version, md5):
@@ -175,12 +167,7 @@ def get_update_cmd(version, md5):
     python_executable = sys.executable
     if python_executable is None or len(python_executable) == 0:
         python_executable = '/usr/bin/python'
-    system_os = platform_utils.System.get_operating_system().get('ID')
-    if system_os == platform_utils.System.OS.BUILDROOT:
-        extended_path = False
-    else:
-        extended_path = True
-    path = os.path.join(python_root, 'openmotics_update.py') if extended_path else 'openmotics_update.py'
+    path = os.path.join(python_root, 'openmotics_update.py')
     return [python_executable, path, str(version), str(md5)]
 
 
@@ -199,25 +186,6 @@ def get_update_lockfile():
     # type: () -> str
     """ Returns the lock file used by openmotics_update.py """
     return '/tmp/openmotics_update.lock'
-
-
-def get_runit_service_folder():
-    # type: () -> str
-    """ Returns the location of the runit services definitions """
-    if PYINSTALLER_PREFIX is not None:
-        return os.path.join(PYINSTALLER_PREFIX, 'om-services')
-    else:
-        raise ValueError('"PYINSTALLER_PREFIX" environment variable is not set, cannot retrieve the runit service folder')
-
-
-def get_renson_main_config_file():
-    # type: () -> str
-    return '/data/app_data/main.config'
-
-
-def get_esafe_touchscreen_calibration_file():
-    # type: () -> str
-    return '/etc/pointercal'
 
 
 def get_email_verification_regex():

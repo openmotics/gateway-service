@@ -24,7 +24,7 @@ import constants
 import time
 
 if False:  # MYPY
-    from typing import Union, Dict, List, Tuple
+    from typing import Union, Dict, List, Tuple, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,6 @@ class Hardware(object):
         BB = 'BB'
         BBB = 'BBB'
         BBGW = 'BBGW'
-        ESAFE = 'ESAFE'
 
     BoardTypes = [BoardType.BB, BoardType.BBB, BoardType.BBGW]
 
@@ -91,8 +90,6 @@ class Hardware(object):
                     return Hardware.BoardType.BBB
                 if board_type in ['TI_AM335x_BeagleBone_Green_Wireless']:
                     return Hardware.BoardType.BBGW
-                if board_type in ['TI_AM335x_esafe_Custom']:
-                    return Hardware.BoardType.ESAFE
         except IOError:
             pass
         try:
@@ -123,7 +120,7 @@ class Hardware(object):
     @staticmethod
     def get_main_interface():
         board_type = Hardware.get_board_type()
-        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB, Hardware.BoardType.ESAFE]:
+        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB]:
             return 'eth0'
         if board_type == Hardware.BoardType.BBGW:
             return 'wlan0'
@@ -162,14 +159,15 @@ class Hardware(object):
             gpio_file.write('1' if value else '0')
 
     @staticmethod
-    def cycle_gpio(gpio, cycle):  # type: (Tuple[int, bool], List[Union[bool, float]]) -> None
+    def cycle_gpio(gpio, cycle):  # type: (Tuple[int, bool], List[Union[bool, float, Callable[[], None]]]) -> None
         """
         Will cycle a given GPIO through a certain pattern `cycle`. This pattern
-        is a list of booleans and floats where every booilean will result in setting
-        the GPIO to this state, and every flow will wait for that amount of seconds.
-        Example:
-        > [False, 2.0, True]  # This will immediately turn the GPIO off, wait 2 seconds,
-        >                     # and turn it on again.
+        is a list of certain items:
+        * A boolean will set the GPIO in this state
+        * A float will wait that amount of seconds
+        * A callable will call this callback (no arguments)
+        > [False, 2.0, lambda: print('x'), 0.5, True]  # This will immediately turn the GPIO off, wait 2 seconds,
+        >                                              # execute this callback, wait 0.5 seconds and turn it on again.
         :param gpio: The GPIO pin
         :param cycle: The cycle to follow
         """
@@ -185,6 +183,8 @@ class Hardware(object):
                     gpio_file.write('1' if value else '0')
             elif isinstance(item, float):
                 time.sleep(item)
+            elif callable(item):
+                item()
             else:
                 raise ValueError('Unexpected {0} in cycle {1}'.format(item, cycle))
 
@@ -205,16 +205,10 @@ class System(object):
 
     SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
                         'vpn_service': 'openmotics-vpn.service'}
-    # runit action map to make sure the executable will be stopped,
-    # otherwise runit will return timeout, but not have killed the app
-    RUNIT_ACTION_MAP = {'status': 'status',
-                        'stop': 'force-stop',
-                        'restart': 'force-restart'}
 
     class OS(object):
         ANGSTROM = 'angstrom'
         DEBIAN = 'debian'
-        BUILDROOT = 'buildroot'
 
     @staticmethod
     def restart_service(service, wait=False):
@@ -229,7 +223,6 @@ class System(object):
         unit_name = System.SYSTEMD_UNIT_MAP.get(service, service)
         is_systemd = False
         is_supervisor = False
-        is_runit = False
         try:
             subprocess.check_output(['systemctl', 'is-enabled', unit_name])
             is_systemd = True
@@ -246,27 +239,12 @@ class System(object):
         except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
             is_supervisor = False
 
-        try:
-            runit_path = constants.get_runit_service_folder()
-            subprocess.check_output(['sv', 'status', os.path.join(runit_path, service)])
-            is_runit = True
-        except subprocess.CalledProcessError:
-            is_runit = False
-        except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
-            is_runit = False
-
         if is_systemd:
             return subprocess.Popen(['systemctl', action, '--no-pager', unit_name],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     close_fds=True)
         elif is_supervisor:
             return subprocess.Popen(['supervisorctl', action, service],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    close_fds=True)
-        elif is_runit:
-            runit_path = constants.get_runit_service_folder()
-            service_str = os.path.join(runit_path, service)
-            return subprocess.Popen(['sv', action, service_str],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     close_fds=True)
         else:
@@ -301,8 +279,6 @@ class System(object):
                 return lines.split('\n')[1].strip().split(' ')[1].split(':')[1]
             elif operating_system['ID'] == System.OS.DEBIAN:
                 return lines.split('\n')[1].strip().split(' ')[1]
-            elif operating_system['ID'] == System.OS.BUILDROOT:
-                return lines.split('\n')[1].strip().split(' ')[1].replace('addr:','')  # The buildroot OS prefixes addresses with 'addr'
             else:
                 return
         except Exception:
@@ -395,17 +371,15 @@ class Platform(object):
 
     class Type(object):
         DUMMY = 'DUMMY'
-        ESAFE_DUMMY = 'ESAFE_DUMMY'
         CLASSIC = 'CLASSIC'
         CORE_PLUS = 'CORE_PLUS'
         CORE = 'CORE'
-        ESAFE = 'ESAFE'
+        CORE_DUMMY = 'CORE_DUMMY'
 
-    DummyTypes = [Type.DUMMY, Type.ESAFE_DUMMY]
+    DummyTypes = [Type.DUMMY, Type.CORE_DUMMY]
     ClassicTypes = [Type.CLASSIC]
     CoreTypes = [Type.CORE, Type.CORE_PLUS]
-    EsafeTypes = [Type.ESAFE]
-    Types = DummyTypes + ClassicTypes + CoreTypes + EsafeTypes
+    Types = DummyTypes + ClassicTypes + CoreTypes
 
     @staticmethod
     def get_platform():
@@ -432,7 +406,7 @@ class Platform(object):
     @staticmethod
     def has_master_hardware():
         # type: () -> bool
-        if Platform.get_platform() in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
+        if Platform.get_platform() in [Platform.Type.DUMMY]:
             return False
         return True
 

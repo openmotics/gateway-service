@@ -65,7 +65,8 @@ class ModuleControllerTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def test_module_sync(self):
-        master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
+        master_modules = [ModuleDTO(id=0,
+                                    source=ModuleDTO.Source.MASTER,
                                     module_type=ModuleType.OUTPUT,
                                     address='079.000.000.001',
                                     hardware_type=HardwareType.PHYSICAL,
@@ -74,7 +75,8 @@ class ModuleControllerTest(unittest.TestCase):
                                     order=0,
                                     online=True,
                                     last_online_update=int(time.time()))]
-        energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+        energy_modules = [ModuleDTO(id=0,
+                                    source=ModuleDTO.Source.GATEWAY,
                                     module_type=ModuleType.ENERGY,
                                     address='2',
                                     hardware_type=HardwareType.PHYSICAL,
@@ -82,12 +84,14 @@ class ModuleControllerTest(unittest.TestCase):
                                     hardware_version=None)]
         self.master_controller.get_modules_information.return_value = master_modules
         self.energy_module_controller.get_modules_information.return_value = []  # Empty, should not remove EM
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         self.assertEqual(energy_modules + master_modules, self.controller.load_modules())
         self.assertEqual([], self.controller.load_modules(address='000.000.000.000'))
 
     def test_module_offline(self):
-        dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+        dto = ModuleDTO(id=0,
+                        source=ModuleDTO.Source.MASTER,
                         module_type=ModuleType.OUTPUT,
                         address='079.000.000.001',
                         hardware_type=HardwareType.PHYSICAL,
@@ -96,37 +100,43 @@ class ModuleControllerTest(unittest.TestCase):
                         order=0)
         self.master_controller.get_modules_information.return_value = [dto]
         self.energy_module_controller.get_modules_information.return_value = []
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertIsNone(received_dto.firmware_version)
         self.assertIsNone(received_dto.hardware_version)
         dto.online = True
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertEqual('3.1.0', received_dto.firmware_version)
         self.assertEqual('4', received_dto.hardware_version)
         dto.online = False
+        self.controller._sync_structures = True
         self.controller.run_sync_orm()
         received_dto = self.controller.load_modules(source=ModuleDTO.Source.MASTER)[0]
         self.assertEqual('3.1.0', received_dto.firmware_version)
         self.assertEqual('4', received_dto.hardware_version)
 
     def test_serialization(self):
-        master_module = ModuleDTO(source=ModuleDTO.Source.MASTER,
+        master_module = ModuleDTO(id=0,
+                                  source=ModuleDTO.Source.MASTER,
                                   module_type=ModuleType.OUTPUT,
                                   address='079.000.000.001',
                                   hardware_type=HardwareType.PHYSICAL,
                                   firmware_version='3.1.0',
                                   hardware_version='4',
                                   order=0)
-        master_module_internal = ModuleDTO(source=ModuleDTO.Source.MASTER,
+        master_module_internal = ModuleDTO(id=0,
+                                           source=ModuleDTO.Source.MASTER,
                                            module_type=ModuleType.OUTPUT,
                                            address='079.000.000.001',
                                            hardware_type=HardwareType.INTERNAL,
                                            firmware_version='3.1.0',
                                            hardware_version='4',
                                            order=0)
-        energy_module = ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+        energy_module = ModuleDTO(id=0,
+                                  source=ModuleDTO.Source.GATEWAY,
                                   module_type=ModuleType.ENERGY,
                                   address='2',
                                   hardware_type=HardwareType.PHYSICAL,

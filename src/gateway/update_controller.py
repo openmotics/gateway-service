@@ -120,8 +120,7 @@ class UpdateController(object):
                            Platform.Type.CLASSIC: ['gateway_service', 'gateway_frontend',
                                                    'master_classic',
                                                    'energy', 'p1_concentrator',
-                                                   'input', 'output', 'dimmer', 'can'],
-                           Platform.Type.ESAFE: ['gateway_service']}
+                                                   'input', 'output', 'dimmer', 'can']}
 
     if System.get_operating_system().get('ID') == System.OS.ANGSTROM:
         OPENVPN_CONFIG = '/etc/openvpn/vpn.conf'
@@ -197,11 +196,13 @@ class UpdateController(object):
             if firmware_type in ['gateway_service', 'gateway_frontend', 'master_classic', 'master_coreplus']:
                 current_version = self._fetch_version(firmware_type=firmware_type, logger=global_logger)
                 if current_version == target_version:
-                    state_number = 3
+                    state_number = 3  # OK
                 else:
-                    state_number = 1
+                    state_number = 1  # UPDATING
                     if success is not None:
-                        state_number = 2 if success else 0
+                        state_number = 2 if success else 0  # SKIPPED or ERROR
+                    elif not self._pending_updates:
+                        state_number = 2  # SKIPPED
                 state = min(state, state_number)
                 states.append({'firmware_type': firmware_type,
                                'state': state_map[state_number],
@@ -211,12 +212,14 @@ class UpdateController(object):
                 for module_type in UpdateController.FIRMWARE_INFO_MAP[firmware_type].module_types:
                     for module in modules.get(module_type, []):
                         if module.firmware_version == target_version:
-                            state_number = 3
+                            state_number = 3  # OK
                         else:
-                            state_number = 1
+                            state_number = 1  # UPDATING
                             update_success = module.update_success
                             if update_success is not None:
-                                state_number = 2 if update_success else 0
+                                state_number = 2 if update_success else 0  # SKIPPED or ERROR
+                            elif not self._pending_updates:
+                                state_number = 2  # SKIPPED
                         state = min(state, state_number)
                         states.append({'firmware_type': firmware_type,
                                        'state': state_map[state_number],
@@ -371,16 +374,15 @@ class UpdateController(object):
                 logger.info('Installing pip dependencies')
                 os.makedirs(os.path.join(new_version_folder, 'python-deps'))
                 operating_system = System.get_operating_system()['ID']
-                if operating_system != System.OS.BUILDROOT:
-                    temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
-                    UpdateController._execute(
-                        command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
-                            temp_dir, new_version_folder, operating_system
-                        ),
-                        logger=logger,
-                        shell=True
-                    )
-                    os.rmdir(temp_dir)
+                temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
+                UpdateController._execute(
+                    command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
+                        temp_dir, new_version_folder, operating_system
+                    ),
+                    logger=logger,
+                    shell=True
+                )
+                os.rmdir(temp_dir)
 
             UpdateController._touch(running_marker)  # Make sure the running marker exists
 
@@ -451,7 +453,22 @@ class UpdateController(object):
         # This code will execute after the new version is in place and before the
         # services are started. It runs the new code, has the new imports
         # available, ...
+
+        # Certificates
         UpdateController._move_openvpn_certificates(logger)
+
+        # Migrations of `openmotics.conf`
+        from six.moves.configparser import ConfigParser
+        openmotics_conf_path = constants.get_config_file()
+        openmotics_conf_path_new = '{0}.new'.format(openmotics_conf_path)
+        config = ConfigParser()
+        config.read(openmotics_conf_path)
+        if config.has_option('OpenMotics', 'version'):
+            config.remove_option('OpenMotics', 'version')
+        with open(openmotics_conf_path_new, 'w') as fp:
+            config.write(fp)
+        os.rename(openmotics_conf_path_new, openmotics_conf_path)
+
         logger.info('Preparation for first startup completed')
 
     def _execute_pending_updates(self):
@@ -1117,7 +1134,7 @@ class UpdateController(object):
         update_url = Config.get_entry('update_metadata_url', None)  # type: Optional[str]
         if update_url is None:
             parsed_url = urlparse(self._cloud_url)
-            path = '/api/v1/base/updates/metadata/{0}'.format(version)
+            path = '/api/v1.1/base/updates/metadata/{0}'.format(version)
         else:
             parsed_url = urlparse(update_url)
             path = parsed_url.path
@@ -1128,7 +1145,7 @@ class UpdateController(object):
         update_url = Config.get_entry('update_firmware_metadata_url', None)  # type: Optional[str]
         if update_url is None:
             parsed_url = urlparse(self._cloud_url)
-            path = '/api/v1/base/updates/metadata/firmwares/{0}/{1}'.format(firmware_type, version)
+            path = '/api/v1.1/base/updates/metadata/firmwares/{0}/{1}'.format(firmware_type, version)
         else:
             parsed_url = urlparse(update_url)
             path = parsed_url.path

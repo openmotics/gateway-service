@@ -250,12 +250,13 @@ class Config(BaseModel):
 
     @staticmethod
     def remove_entry(key):
-        # type: (str) -> None
+        # type: (str) -> int
         """ Removes a setting from the DB """
-        Config.delete().where(
+        amount = Config.delete().where(
             Config.setting == key.lower()
         ).execute()
         Config.CACHE.pop(key, None)
+        return amount
 
 
 class Plugin(BaseModel):
