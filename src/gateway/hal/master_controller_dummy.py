@@ -103,6 +103,10 @@ class MasterDummyController(MasterController):
                 'version': '%d.%d.%d' % (0, 0, 0),
                 'hw_version': 0}
 
+    def get_backup(self):
+        # type: () -> bytearray
+        return bytearray([255, 255, 255, 255, 255, 255, 255, 255])
+
     def set_datetime(self, dt):
         # type: (datetime) -> None
         pass

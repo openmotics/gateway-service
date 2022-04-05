@@ -1180,6 +1180,7 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def get_backup(self):
+        # type: () -> bytearray
         """
         Get a backup of the eeprom of the master.
 
@@ -1201,7 +1202,7 @@ class MasterClassicController(MasterController):
                 retry = bank
                 logger.warning('Got timeout reading bank {0}. Retrying...'.format(bank))
                 time.sleep(2)  # Doing heavy reads on eeprom can exhaust the master. Give it a bit room to breathe.
-        return ''.join(chr(c) for c in output)
+        return output
 
     def factory_reset(self, can=False):
         # type: (bool) -> None

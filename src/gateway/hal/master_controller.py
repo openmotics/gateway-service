@@ -418,7 +418,7 @@ class MasterController(object):
     def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
         raise NotImplementedError()
 
-    def get_backup(self):
+    def get_backup(self): # type: () -> bytearray
         raise NotImplementedError()
 
     def restore(self, data):
