@@ -502,6 +502,7 @@ class ThermostatControllerGateway(ThermostatController):
                 logger.debug('Updating thermostat %s', thermostat_dto)
                 thermostat = mapper.dto_to_orm(thermostat_dto)
                 db.add(thermostat)
+                db.commit()
                 update_valves, remove_valves = mapper.get_valve_links(thermostat_dto, mode)
                 for valve_to_thermostat in remove_valves:
                     logger.debug('Removing %s of thermostat %s', valve_to_thermostat.valve.name, thermostat.number)
