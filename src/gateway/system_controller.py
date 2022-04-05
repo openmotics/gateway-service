@@ -217,7 +217,7 @@ class SystemController(object):
             if retcode != 0:
                 raise Exception('The backup tar could not be created.')
 
-            with open('{0}/backup.tar'.format(tmp_dir), 'r') as backup_file:
+            with open('{0}/backup.tar'.format(tmp_dir), 'rb') as backup_file:
                 return backup_file.read()
 
         finally:
