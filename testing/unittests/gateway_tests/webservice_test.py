@@ -20,6 +20,7 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
+from cloud.events import EventSender
 from enums import HardwareType
 from gateway.api.serializers import SensorSerializer
 from gateway.dto import DimmerConfigurationDTO, EnergyModuleDTO, ModuleDTO, \
@@ -61,6 +62,7 @@ class WebInterfaceTest(unittest.TestCase):
         self.ventilation_controller = mock.Mock(VentilationController)
         self.module_controller = mock.Mock(ModuleController)
         self.energy_module_controller = mock.Mock(EnergyModuleController)
+        self.event_sender = mock.Mock(EventSender)
         SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
                             group_action_controller=mock.Mock(GroupActionController),
                             input_controller=mock.Mock(InputController),
@@ -78,6 +80,7 @@ class WebInterfaceTest(unittest.TestCase):
                             ventilation_controller=self.ventilation_controller,
                             module_controller=self.module_controller,
                             energy_module_controller=self.energy_module_controller,
+                            event_sender=self.event_sender,
                             uart_controller=mock.Mock(),
                             update_controller=mock.Mock())
         self.web = WebInterface()
