@@ -617,7 +617,7 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(source=str, topic=str, message=str, type=str))
-    def send_notification(self, source, topic, message, type='USER'):  # type: (str, str, str, str) -> None
+    def send_notification(self, source, topic, message, type='USER'):  # type: (str, str, str, str) -> Dict[str, Any]
         """
         Send a NOTIFICATION event to all subscribers.
 
@@ -636,12 +636,13 @@ class WebInterface(object):
             raise ValueError('Topic cannot be empty')
         if type not in ['USER', 'SYSTEM']:
             raise ValueError('Not a valid type: {}'.format(type))
-        gateway_event = GatewayEvent(GatewayEvent.Types.NOTIFICATION,
-                                     {'source': source,
-                                      'type': type,
-                                      'topic': topic,
-                                      'message': message})
+        gateway_event = GatewayEvent(event_type=GatewayEvent.Types.NOTIFICATION,
+                                     data={'source': source,
+                                           'type': type,
+                                           'topic': topic,
+                                           'message': message})
         self._event_sender.enqueue_event(gateway_event)
+        return gateway_event.serialize()
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def open_maintenance(self):
