@@ -18,7 +18,6 @@ Tests for the models
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import logging
 from ioc import SetTestMode
 from master.core.memory_models import *
@@ -150,7 +149,3 @@ class MemoryModelsTest(unittest.TestCase):
             print('Legend:')
             for code, specs in MemoryModelsTest.TEST_MATRIX.items():
                 print('  {0}: {1}'.format(code, specs[0].__name__))
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

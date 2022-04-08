@@ -19,7 +19,6 @@ from __future__ import absolute_import
 import unittest
 import logging
 import mock
-import xmlrunner
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool

@@ -18,7 +18,6 @@ Tests for the memory_file module
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import logging
 import mock
 import threading
@@ -170,7 +169,3 @@ class MemoryFileTest(unittest.TestCase):
         time.sleep(MemoryFile.ACTIVATION_HOLD_TIME + 0.1)
         self.assertFalse(memory_file._needs_activation.isSet())
         memory_file.stop()
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

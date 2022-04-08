@@ -18,7 +18,6 @@ import unittest
 
 import time
 import mock
-import xmlrunner
 
 from threading import Thread
 from ioc import SetTestMode
@@ -72,7 +71,3 @@ class CoreCommunicatorTest(unittest.TestCase):
         communicator.report_blockage(CommunicationBlocker.RESTART, active=False)
         communicator.do_command(CoreAPI.device_information_list_inputs(), {}, timeout=None)
         self.assertEqual(3, communicator._send_command.call_count)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

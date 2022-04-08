@@ -23,8 +23,6 @@ from __future__ import absolute_import
 import time
 import unittest
 
-import xmlrunner
-
 from ioc import SetTestMode, SetUpTestInjections
 from master.classic.master_communicator import MasterCommunicator
 from master.classic.passthrough import PassthroughService
@@ -71,7 +69,3 @@ class PassthroughServiceTest(unittest.TestCase):
         self.assertEqual(33, passthrough_mock.bytes_written)
 
         passthrough.stop()
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
