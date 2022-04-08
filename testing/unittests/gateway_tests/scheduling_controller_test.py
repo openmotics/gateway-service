@@ -81,6 +81,7 @@ class SchedulingControllerTest(unittest.TestCase):
                             thermostat_controller=None,
                             uart_controller=None,
                             update_controller=None,
+                            event_sender=None,
                             user_controller=None,
                             ventilation_controller=None)
         self.controller = SchedulingController()

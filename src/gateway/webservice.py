@@ -29,6 +29,7 @@ import requests
 import six
 import ujson as json
 from cherrypy.lib.static import serve_file
+from cloud.events import EventSender
 from decorator import decorator
 from sqlalchemy.orm.exc import NoResultFound
 from six.moves.urllib.parse import unquote_plus
@@ -50,7 +51,7 @@ from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
 from gateway.energy.energy_communicator import InAddressModeException
 from gateway.enums import ModuleType, ShutterEnums, UpdateEnums, UserEnums
-from gateway.events import BaseEvent
+from gateway.events import BaseEvent, GatewayEvent
 from gateway.exceptions import CommunicationFailure, \
     FeatureUnavailableException, InMaintenanceModeException, \
     ItemDoesNotExistException, ParseException, UnsupportedException, \
@@ -391,7 +392,7 @@ class WebInterface(object):
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
                  uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
-                 update_controller=INJECTED):
+                 update_controller=INJECTED, event_sender=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -412,6 +413,7 @@ class WebInterface(object):
         self._system_controller = system_controller  # type: SystemController
         self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
         self._update_controller = update_controller  # type: UpdateController
+        self._event_sender = event_sender # type: EventSender
 
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._message_client = message_client  # type: Optional[MessageClient]
@@ -613,6 +615,33 @@ class WebInterface(object):
         user_dto = UserDTO(username=username)
         self._user_controller.remove_user(user_dto)
         return {}
+
+    @openmotics_api(auth=True, check=types(source=str, topic=str, message=str, type=str))
+    def send_notification(self, source, topic, message, type='USER'):  # type: (str, str, str, str) -> None
+        """
+        Send a NOTIFICATION event to all subscribers.
+
+        :param source: the source of the notification
+        :type source: str
+        :param topic: the topic of the notification
+        :type topic: str
+        :param message: the message of the notification
+        :type message: str
+        :param type: the type of the notification (user, system, ...)
+        :type type: str
+        """
+        if source in ['', None]:
+            raise ValueError('Source cannot be empty')
+        if topic in ['', None]:
+            raise ValueError('Topic cannot be empty')
+        if type not in ['USER', 'SYSTEM']:
+            raise ValueError('Not a valid type: {}'.format(type))
+        gateway_event = GatewayEvent(GatewayEvent.Types.NOTIFICATION,
+                                     {'source': source,
+                                      'type': type,
+                                      'topic': topic,
+                                      'message': message})
+        self._event_sender.enqueue_event(gateway_event)
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def open_maintenance(self):
