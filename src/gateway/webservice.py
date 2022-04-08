@@ -331,7 +331,7 @@ def _openmotics_api(f, *args, **kwargs):
         data = {'success': False, 'msg': 'Internal communication failure'}
     except NoResultFound as ex:
         status = 200  # OK
-        logger.error(ex)
+        logger.exception(ex)
         data = {'success': False, 'msg': 'Object not found'}
     except UnsupportedException:
         logger.error('Some features for API call %s are unsupported on this device', f.__name__)
