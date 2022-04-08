@@ -492,3 +492,16 @@ class WebInterfaceTest(unittest.TestCase):
                                            'inverted0': True, 'inverted1': False, 'inverted2': False, 'inverted3': False, 'inverted4': False, 'inverted5': False, 'inverted6': False, 'inverted7': False, 'inverted8': False, 'inverted9': False, 'inverted10': False, 'inverted11': False,
                                            'sensor0': 4, 'sensor1': 2, 'sensor2': 2, 'sensor3': 3, 'sensor4': 2, 'sensor5': 2, 'sensor6': 2, 'sensor7': 2, 'sensor8': 2, 'sensor9': 2, 'sensor10': 2, 'sensor11': 2,
                                            'times0': '', 'times1': '', 'times2': '', 'times3': '', 'times4': '', 'times5': '', 'times6': '', 'times7': '', 'times8': '', 'times9': '', 'times10': '', 'times11': ''}]}, api_response)
+
+    def test_send_notification(self):
+        with mock.patch.object(self.event_sender, 'enqueue_event') as enqueue_event:
+            api_response = json.loads(self.web.send_notification('Test plugin', 'Test topic', 'Test message', type='USER'))
+            enqueue_event.assert_called()
+            self.assertEqual({'notification': {'_version': 1.0,
+                                               'data': {'message': 'Test message',
+                                                        'source': 'Test plugin',
+                                                        'topic': 'Test topic',
+                                                        'type': 'USER'},
+                                               'error': {'code': 0, 'description': 'no error'},
+                                               'type': 'NOTIFICATION'},
+                              'success': True}, api_response)

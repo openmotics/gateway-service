@@ -642,7 +642,7 @@ class WebInterface(object):
                                            'topic': topic,
                                            'message': message})
         self._event_sender.enqueue_event(gateway_event)
-        return gateway_event.serialize()
+        return {'notification': gateway_event.serialize()}
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def open_maintenance(self):
