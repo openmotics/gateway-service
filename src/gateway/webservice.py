@@ -724,6 +724,7 @@ class WebInterface(object):
             'modules_information',  # Clean module information
             'dynamic_updates',  # Dynamic updates
             'copy_thermostat_schedules',  # Allow to copy schedules and certain presets with a single API call
+            'pause_schedules',  # Allow schedules to be paused/resumed
             # TODO: remove
             'default_timer_disabled',
             '100_steps_dimmer',
@@ -2365,7 +2366,6 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
         schedule_dto = ScheduleDTO(id=None,
-                                   source=Schedule.Sources.GATEWAY,
                                    name=name,
                                    start=start,
                                    action=schedule_type,
@@ -2387,6 +2387,16 @@ class WebInterface(object):
                                                    'params': schedule.arguments['parameters']})}
                             for schedule in self._scheduling_controller.load_schedules()
                             if schedule.action == 'LOCAL_API']}
+
+    @openmotics_api(auth=True, check=types(schedule_id=int))
+    def pause_schedule(self, schedule_id):
+        schedule_dto = self._scheduling_controller.set_schedule_status(schedule_id, 'PAUSED')
+        return {'schedule': ScheduleSerializer.serialize(schedule_dto, fields=None)}
+
+    @openmotics_api(auth=True, check=types(schedule_id=int))
+    def resume_schedule(self, schedule_id):
+        schedule_dto = self._scheduling_controller.set_schedule_status(schedule_id, 'ACTIVE')
+        return {'schedule': ScheduleSerializer.serialize(schedule_dto, fields=None)}
 
     @openmotics_api(auth=True)
     def list_schedules(self):
