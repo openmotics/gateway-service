@@ -30,7 +30,7 @@ from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.exceptions import ItemDoesNotExistException, GatewayException, UnAuthorizedException
 from gateway.mappers.user import UserMapper
-from gateway.models import User
+from gateway.models import Database, User
 
 logger = logging.getLogger(__name__)
 
@@ -81,57 +81,59 @@ class AuthenticationController(object):
             timeout = self._token_timeout
 
         # Load the user that tries to login
-        user_orm = User.select().where(
-            (User.username == user_dto.username.lower()) &
-            (User.password == user_dto.hashed_password)
-        ).first()
+        with Database.get_session() as db:
+            user_orm = db.query(User).where((User.username == user_dto.username.lower()) &
+                                            (User.password == user_dto.hashed_password)).one_or_none()
 
-        # If the user does not exists
-        if user_orm is None:
-            return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-
-        # convert the user to a dto object
-        user_dto = UserMapper.orm_to_dto(user_orm)
-
-        # check if the users wants to impersonate some other user
-        impersonator = None  # type: Optional[UserDTO]
-        if impersonate is not None:
-            if user_dto.role != User.UserRoles.SUPER:
+            # If the user does not exists
+            if user_orm is None:
                 return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-            if self.user_controller is not None:
-                user_impersonate = self.user_controller.load_user_by_username(impersonate)
+
+            # convert the user to a dto object
+            mapper = UserMapper(db)
+            user_dto = mapper.orm_to_dto(user_orm)
+
+            # check if the users wants to impersonate some other user
+            impersonator = None  # type: Optional[UserDTO]
+            if impersonate is not None:
+                if user_dto.role != User.UserRoles.SUPER:
+                    return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+                if self.user_controller is not None:
+                    user_impersonate = self.user_controller.load_user_by_username(impersonate)
+                else:
+                    raise GatewayException('UserController is not present in the authentication controller')
+                if user_impersonate is None:
+                    return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+                user_to_login = user_impersonate
+                impersonator = user_dto
             else:
-                raise GatewayException('UserController is not present in the authentication controller')
-            if user_impersonate is None:
-                return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-            user_to_login = user_impersonate
-            impersonator = user_dto
-        else:
-            user_to_login = user_dto
-            impersonator = None
+                user_to_login = user_dto
+                impersonator = None
 
-        # Check if accepted terms
-        if user_orm.accepted_terms == AuthenticationController.TERMS_VERSION:
-            token = self.token_store.create_token(user_to_login, timeout=timeout, impersonator=impersonator, login_method=login_method)
-            return True, token
-        if accept_terms is True:
-            user_orm.accepted_terms = AuthenticationController.TERMS_VERSION
-            user_orm.save()
-            token = self.token_store.create_token(user_to_login, timeout=timeout, impersonator=impersonator, login_method=login_method)
-            return True, token
+            # Check if accepted terms
+            if user_orm.accepted_terms == AuthenticationController.TERMS_VERSION:
+                token = self.token_store.create_token(user_to_login, timeout=timeout, impersonator=impersonator, login_method=login_method)
+                return True, token
+            if accept_terms is True:
+                user_orm.accepted_terms = AuthenticationController.TERMS_VERSION
+                db.commit()
+                token = self.token_store.create_token(user_to_login, timeout=timeout, impersonator=impersonator, login_method=login_method)
+                return True, token
         return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
 
     def login_with_user_code(self, pin_code, accept_terms=False, timeout=None):
         # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a pin_code """
-        user_orm = User.select().where(
-            (User.pin_code == pin_code)
-        ).first()
+        with Database.get_session() as db:
+            user_orm = db.query(User).where(
+                (User.pin_code == pin_code)
+            ).one_or_none()
 
-        if user_orm is None:
-            return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+            if user_orm is None:
+                return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
 
-        user_dto = UserMapper.orm_to_dto(user_orm)
+            mapper = UserMapper(db)
+            user_dto = mapper.orm_to_dto(user_orm)
         return self.login(user_dto, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.PIN_CODE)
 
     def logout(self, token):
@@ -204,10 +206,10 @@ class TokenStore(object):
 
     def _get_full_user_dto(self, user_dto):
         _ = self
-        user_orm = User.select().where(
-            (User.username == user_dto.username.lower())
-        ).first()
-        full_user_dto = UserMapper.orm_to_dto(user_orm)
+        with Database.get_session() as db:
+            user_orm = db.query(User).where(User.username == user_dto.username.lower()).one()
+            mapper = UserMapper(db)
+            full_user_dto = mapper.orm_to_dto(user_orm)
         return full_user_dto
 
 

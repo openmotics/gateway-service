@@ -17,14 +17,14 @@ from __future__ import absolute_import
 import unittest
 
 import mock
-from peewee import SqliteDatabase
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from gateway.models import Pump, Output
-from gateway.thermostat.gateway.pump_driver import PumpDriver
+from gateway.models import Base, Database, Output, Pump
 from gateway.output_controller import OutputController
+from gateway.thermostat.gateway.pump_driver import PumpDriver
 from ioc import SetTestMode, SetUpTestInjections
-
-MODELS = [Pump, Output]
 
 
 class PumpDriverTest(unittest.TestCase):
@@ -33,26 +33,34 @@ class PumpDriverTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.test_db = SqliteDatabase(':memory:')
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
     def test_pump_driver(self):
-        output = Output.create(number=0)
-        pump = Pump.create(number=1,
-                           name='pump',
-                           output=output)
+        with self.session as db:
+            db.add(
+                Pump(name='pump',
+                     output=Output(number=0))
+            )
+            db.commit()
 
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
-        driver = PumpDriver(pump)
+
+        with self.session as db:
+            pump = db.query(Pump).filter_by(id=1).one()
+            driver = PumpDriver(pump)
+            self.assertEqual(pump.id, driver.id)
+
         self.assertIsNone(driver.state)
         self.assertFalse(driver.error)
-        self.assertEqual(pump.id, driver.id)
 
         driver.turn_on()
         self.assertTrue(driver.state)

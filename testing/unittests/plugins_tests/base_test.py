@@ -20,29 +20,33 @@ from __future__ import absolute_import
 
 import hashlib
 import inspect
+import logging
 import os
 import shutil
 import tempfile
 import time
-import ujson as json
 import unittest
-import logging
 from subprocess import call
 
-from mock import Mock
+import mock
+import ujson as json
 from peewee import SqliteDatabase
 from pytest import mark
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 import plugin_runtime
 from gateway.dto import OutputStatusDTO
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
-from gateway.models import Plugin
+from gateway.models import Base, Database, Plugin
 from gateway.output_controller import OutputController
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
-from plugin_runtime.base import PluginConfigChecker, PluginException, PluginWebResponse, PluginWebRequest
 from logs import Logs
+from plugin_runtime.base import PluginConfigChecker, PluginException, \
+    PluginWebRequest, PluginWebResponse
 
 MODELS = [Plugin]
 
@@ -59,17 +63,8 @@ class PluginControllerTest(unittest.TestCase):
         SetTestMode()
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
-        Logs.setup_logger(log_level_override=logging.DEBUG)
-
-    def setUp(self):
-        self.test_db = SqliteDatabase(':memory:')
-        self.test_db.bind(MODELS)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
-
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.plugin_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
 
     @classmethod
     def tearDownClass(cls):
@@ -80,6 +75,18 @@ class PluginControllerTest(unittest.TestCase):
                 shutil.rmtree(cls.PLUGIN_CONFIG_PATH)
         except Exception:
             pass
+
+    def setUp(self):
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
     @staticmethod
     def _create_plugin(name, code, base_path=None):
@@ -151,8 +158,9 @@ class P1(OMPluginBase):
             plugin_list = controller.get_plugins()
             self.assertEqual(1, len(plugin_list))
             self.assertEqual('P1', plugin_list[0].name)
-            plugin = Plugin.get(name='P1')
-            self.assertEqual('1.0.0', plugin.version)
+            with Database.get_session() as db:
+                plugin = db.query(Plugin).filter_by(name='P1').one()
+                self.assertEqual('1.0.0', plugin.version)
         finally:
             if controller is not None:
                 controller.stop()
@@ -300,7 +308,7 @@ class P1(OMPluginBase):
             time.sleep(1)
 """)
 
-            output_controller = Mock(OutputController)
+            output_controller = mock.Mock(OutputController)
             output_controller.get_output_statuses = lambda: [OutputStatusDTO(id=1, status=True, dimmer=5)]
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
             controller.start()
@@ -380,7 +388,7 @@ class UnsupportedPlugin(OMPluginBase):
     def output_with_unsupported_decorator(self, test_data):
         pass
 """)
-            output_controller = Mock(OutputController)
+            output_controller = mock.Mock(OutputController)
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
             # the plugin will fail to load, but only log this
             controller.start()
@@ -440,7 +448,7 @@ class ShutterPlugin(OMPluginBase):
     def shutter_v3(self, shutter_event):
         self._shutter_data_v3 = shutter_event
 """)
-            shutter_controller = Mock(ShutterController)
+            shutter_controller = mock.Mock(ShutterController)
             shutter_status = [ShutterEnums.State.STOPPED]
             detail_for_shutter = {'1': {'state': ShutterEnums.State.STOPPED,
                                       'actual_position': None,
@@ -504,15 +512,17 @@ class Test(OMPluginBase):
         self.assertEqual(result, 'Plugin successfully installed')
         controller.start_plugin('Test')
         self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
-        plugin = Plugin.get(name='Test')
-        self.assertEqual('0.0.1', plugin.version)
+        with Database.get_session() as db:
+            plugin = db.query(Plugin).filter_by(name='Test').one()
+            self.assertEqual('0.0.1', plugin.version)
 
         # Update to version 2
         result = controller.install_plugin(test_2_md5, test_2_data)
         self.assertEqual(result, 'Plugin successfully installed')
         self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
-        plugin = Plugin.get(name='Test')
-        self.assertEqual('0.0.2', plugin.version)
+        with Database.get_session() as db:
+            plugin = db.query(Plugin).filter_by(name='Test').one()
+            self.assertEqual('0.0.2', plugin.version)
 
     @mark.slow
     def test_plugin_metric_reference(self):

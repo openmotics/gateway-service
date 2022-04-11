@@ -17,7 +17,7 @@ The main module for the OpenMotics
 """
 from __future__ import absolute_import
 
-from platform_utils import System
+from platform_utils import Platform, System
 System.import_libs()
 
 import logging.handlers
@@ -25,18 +25,20 @@ import sys
 import time
 from signal import SIGTERM, signal
 
+from sqlalchemy import select
+
+import gateway
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
-from gateway.migrations import ConfigMigrator, EnergyModulesMigrator, \
-    FeatureMigrator, InputMigrator, RoomsMigrator, \
-    ScheduleMigrator, ThermostatsMigrator, UserMigrator
-from gateway.models import Feature
+from gateway.migrations.defaults import DefaultsMigrator
+from gateway.migrations.thermostats import ThermostatsMigrator
+from gateway.models import Database, Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
-from platform_utils import Platform
-import gateway
+
+
 
 
 if False:  # MYPY
@@ -155,6 +157,8 @@ class OpenmoticsService(object):
         """ Main function. """
         logger.info('Starting OM core service (%s) [%s]... ', gateway.__version__, Platform.get_platform())
 
+        DefaultsMigrator.migrate()
+
         # MasterController should be running
         master_controller.start()
 
@@ -166,18 +170,9 @@ class OpenmoticsService(object):
         sensor_controller.run_sync_orm()
         shutter_controller.run_sync_orm()
 
-        # Execute data migration(s)
-        FeatureMigrator.migrate()
-        RoomsMigrator.migrate()
-        InputMigrator.migrate()
-        ScheduleMigrator.migrate()
-        UserMigrator.migrate()
-        ConfigMigrator.migrate()
-        EnergyModulesMigrator.migrate()
-
-        thermostats_gateway_enabled = Feature.select(Feature.enabled) \
-            .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
-            .scalar()
+        with Database.get_session() as db:
+            stmt = select(Feature.enabled).filter_by(name=Feature.THERMOSTATS_GATEWAY)  # type: ignore
+            thermostats_gateway_enabled = db.execute(stmt).scalar()
         if thermostats_gateway_enabled:
             ThermostatsMigrator.migrate()
 

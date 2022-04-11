@@ -27,7 +27,7 @@ import six
 
 import constants
 from gateway.events import GatewayEvent
-from gateway.models import Config, Plugin
+from gateway.models import Config, Database, Plugin
 from ioc import INJECTED, Inject, Injectable, Singleton
 from plugins.runner import PluginRunner, RunnerWatchdog
 
@@ -219,10 +219,14 @@ class PluginController(object):
     def _update_orm(name, version):
         # type: (str, str) -> None
         try:
-            plugin, _ = Plugin.get_or_create(name=name, defaults={'version': version})
-            if plugin.version != version:
-                plugin.version = version
-                plugin.save()
+            with Database.get_session() as db:
+                plugin = db.query(Plugin).filter_by(name=name).one_or_none()  # type: Optional[Plugin]
+                if plugin is None:
+                    plugin = Plugin(name=name, version=version)
+                    db.add(plugin)
+                if plugin.version != version:
+                    plugin.version = version
+                db.commit()
         except Exception as ex:
             logger.error('Could not store Plugin version: {0}'.format(ex))
 
@@ -232,12 +236,13 @@ class PluginController(object):
         Get a list of all installed plugins.
         """
         plugins = []
-        for plugin_orm in list(Plugin.select()):
-            plugin = self._runners.get(plugin_orm.name)
-            if plugin:
-                plugins.append(plugin)
-            else:
-                logger.warning('missing runner for plugin {}'.format(plugin_orm.name))
+        with Database.get_session() as db:
+            for plugin_orm in db.query(Plugin).all():
+                plugin = self._runners.get(plugin_orm.name)
+                if plugin:
+                    plugins.append(plugin)
+                else:
+                    logger.warning('missing runner for plugin {}'.format(plugin_orm.name))
         return plugins
 
     def _get_plugin(self, name):
@@ -352,7 +357,6 @@ class PluginController(object):
 
         # Check if the plugin in installed
         if plugin is None:
-            Plugin.delete().where(Plugin.name == name).execute()
             raise Exception('Plugin \'{0}\' is not installed.'.format(name))
 
         # Execute the on_remove callbacks
@@ -378,7 +382,8 @@ class PluginController(object):
             os.remove(conf_file)
 
         # Finally remove database entry.
-        Plugin.delete().where(Plugin.name == name).execute()
+        with Database.get_session() as db:
+            db.query(Plugin).where(Plugin.name == name).delete()
 
         return {'msg': 'Plugin successfully removed'}
 

@@ -18,7 +18,9 @@ import unittest
 
 import fakesleep
 import mock
-from peewee import SqliteDatabase
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from bus.om_bus_client import MessageClient
 from gateway.dto import OutputDTO, OutputStatusDTO
@@ -26,19 +28,16 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import Output, Room
+from gateway.models import Database, Base, Output, Room
 from gateway.output_controller import OutputController, OutputStateCache
 from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
-
-MODELS = [Output, Room]
 
 
 class OutputControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
         fakesleep.monkey_patch()
 
     @classmethod
@@ -47,9 +46,17 @@ class OutputControllerTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
         self.master_controller = mock.Mock(MasterController)
         self.pubsub = PubSub()
         SetUpTestInjections(maintenance_controller=mock.Mock(MaintenanceController),
@@ -57,10 +64,6 @@ class OutputControllerTest(unittest.TestCase):
                             message_client=mock.Mock(MessageClient),
                             pubsub=self.pubsub)
         self.controller = OutputController()
-
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def test_orm_sync(self):
         events = []
@@ -75,7 +78,8 @@ class OutputControllerTest(unittest.TestCase):
             self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
-            assert Output.select().where(Output.number == output_dto.id).count() == 1
+            with self.session as db:
+                assert db.query(Output).where(Output.number == output_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'}) in events
             assert len(events) == 1
 
@@ -89,11 +93,13 @@ class OutputControllerTest(unittest.TestCase):
 
         outputs = {2: OutputDTO(id=2),
                    40: OutputDTO(id=40, module_type='D')}
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = [Output(id=0, number=2),
-                                              Output(id=1, number=40, room=Room(id=2, number=3))]
-        with mock.patch.object(Output, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_output',
+        with Database.get_session() as db:
+            room = Room(number=3)
+            db.add_all([room,
+                        Output(number=2),
+                        Output(number=40, room=room)])
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: outputs.get(output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
                                return_value=[OutputStatusDTO(id=2, status=True),
@@ -103,11 +109,7 @@ class OutputControllerTest(unittest.TestCase):
             assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
                     GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 0, 'locked': False}, 'location': {'room_id': 3}})] == events
 
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = [Output(id=0, number=2),
-                                              Output(id=1, number=40, room=Room(id=2, number=3))]
-        with mock.patch.object(Output, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_output',
+        with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: outputs.get(output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
                                return_value=[OutputStatusDTO(id=2, status=True, dimmer=0),
@@ -147,12 +149,13 @@ class OutputControllerTest(unittest.TestCase):
     def test_get_last_outputs(self):
         master_dtos = {1: OutputDTO(id=1, name='one'),
                        2: OutputDTO(id=2, name='two')}
-        orm_outputs = [Output(id=10, number=1),
-                       Output(id=11, number=2)]
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = orm_outputs
-        with mock.patch.object(Output, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_output',
+        with Database.get_session() as db:
+            db.add_all([
+                Output(number=1),
+                Output(number=2)
+            ])
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: master_dtos.get(output_id)):
             fakesleep.reset(0)
             self.controller.load_outputs()
@@ -185,11 +188,13 @@ class OutputControllerTest(unittest.TestCase):
             self.assertEqual([2], last_outputs)
 
     def test_get_output_status(self):
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = [Output(id=0, number=2),
-                                              Output(id=1, number=40, room=Room(id=2, number=3))]
-        with mock.patch.object(Output, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_output',
+        with Database.get_session() as db:
+            db.add_all([
+                Output(number=2),
+                Output(number=40, room=Room(number=3))
+            ])
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: OutputDTO(id=output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
                                return_value=[OutputStatusDTO(id=2, status=False),
@@ -199,11 +204,13 @@ class OutputControllerTest(unittest.TestCase):
             assert status == OutputStatusDTO(id=40, status=True)
 
     def test_get_output_statuses(self):
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = [Output(id=0, number=2),
-                                              Output(id=1, number=40, module_type='D', room=Room(id=2, number=3))]
-        with mock.patch.object(Output, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_output',
+        with Database.get_session() as db:
+            db.add_all([
+                Output(number=2),
+                Output(number=40, room=Room(number=3))
+            ])
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: OutputDTO(id=output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
                                return_value=[OutputStatusDTO(id=2, status=False, dimmer=0),
@@ -215,33 +222,53 @@ class OutputControllerTest(unittest.TestCase):
             assert OutputStatusDTO(id=40, status=True, dimmer=50) in status
 
     def test_load_output(self):
-        where_mock = mock.Mock()
-        where_mock.get.return_value = Output(id=1, number=42, room=Room(id=2, number=3))
-        join_from_mock = mock.Mock()
-        join_from_mock.where.return_value = where_mock
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = join_from_mock
-        with mock.patch.object(Output, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_output',
+        with Database.get_session() as db:
+            db.add(Output(number=42, room=Room(number=3)))
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
                                return_value=OutputDTO(id=42)) as load:
             output = self.controller.load_output(42)
             assert output == OutputDTO(id=42, room=3)
             load.assert_called_with(output_id=42)
 
     def test_load_outputs(self):
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = [Output(id=1, number=42, room=Room(id=2, number=3))]
-        with mock.patch.object(Output, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_output',
+        with Database.get_session() as db:
+            db.add(Output(number=42, room=Room(number=3)))
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
                                return_value=OutputDTO(id=42)) as load:
             outputs = self.controller.load_outputs()
             assert OutputDTO(id=42, room=3) in outputs
             load.assert_called_with(output_id=42)
 
+    def test_save_outputs(self):
+        with Database.get_session() as db:
+            db.add_all([
+                Room(number=3),
+                Output(number=42)
+            ])
+            db.commit()
+        with mock.patch.object(self.master_controller, 'load_output',
+                               side_effect=lambda output_id: OutputDTO(id=output_id)) as load, \
+             mock.patch.object(self.master_controller, 'save_outputs') as save:
+            self.controller.save_outputs([
+                OutputDTO(id=42, name='foo', room=3),
+            ])
+            save.assert_called()
+            assert save.call_args_list[0][0][0][0].id == 42
+            assert save.call_args_list[0][0][0][0].name == 'foo'
+            outputs = self.controller.load_outputs()
+            assert OutputDTO(id=42, room=3) in outputs
+
     def test_output_actions(self):
-        room = Room.create(number=10)
-        Output.create(number=2, room=room)
-        Output.create(number=3)
+        with self.session as db:
+            room = Room(number=10)
+            db.add_all([
+                room,
+                Output(number=1, room=room),
+                Output(number=3),
+            ])
+            db.commit()
 
         with mock.patch.object(self.master_controller, 'set_all_lights') as call:
             self.controller.set_all_lights(action='OFF')

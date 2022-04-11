@@ -15,30 +15,31 @@
 from __future__ import absolute_import
 
 import unittest
-
+import logging
 import fakesleep
 import mock
-from peewee import SqliteDatabase
 from gateway.dto import InputDTO
 from gateway.dto.input import InputStatusDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+from gateway.models import Database, Base, Input, Room
 from gateway.input_controller import InputController
-from gateway.models import Input, Room
 from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
-
-MODELS = [Input]
+from logs import Logs
 
 
 class InputControllerTest(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         super(InputControllerTest, cls).setUpClass()
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.input_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
         fakesleep.monkey_patch()
 
     @classmethod
@@ -47,9 +48,17 @@ class InputControllerTest(unittest.TestCase):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
         self.master_controller = mock.Mock(MasterController)
         self.pubsub = PubSub()  # triggernig manually
         self.master_controller = mock.Mock(MasterController)
@@ -57,10 +66,6 @@ class InputControllerTest(unittest.TestCase):
                             maintenance_controller=mock.Mock(),
                             pubsub=self.pubsub)
         self.controller = InputController()
-
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def test_orm_sync(self):
         events = []
@@ -75,19 +80,23 @@ class InputControllerTest(unittest.TestCase):
             self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
-            assert Input.select().where(Input.number == input_dto.id).count() == 1
+
+        with self.session as db:
+            assert db.query(Input).where(Input.number == input_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'input'}) in events
             assert len(events) == 1
 
     def test_full_loaded_inputs(self):
+        with self.session as db:
+            db.add_all([
+                Input(id=10, number=1, event_enabled=False),
+                Input(id=11, number=2, event_enabled=True)
+            ])
+            db.commit()
+
         master_dtos = {1: InputDTO(id=1, name='one'),
                        2: InputDTO(id=2, name='two')}
-        orm_inputs = [Input(id=10, number=1, event_enabled=False),
-                      Input(id=11, number=2, event_enabled=True)]
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = orm_inputs
-        with mock.patch.object(Input, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_input',
+        with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: master_dtos.get(input_id)):
             dtos = self.controller.load_inputs()
             self.assertEqual(2, len(dtos))
@@ -95,14 +104,16 @@ class InputControllerTest(unittest.TestCase):
             self.assertIn(InputDTO(id=2, name='two', event_enabled=True), dtos)
 
     def test_get_last_inputs(self):
+        with self.session as db:
+            db.add_all([
+                Input(id=10, number=1, event_enabled=False),
+                Input(id=11, number=2, event_enabled=True)
+            ])
+            db.commit()
+
         master_dtos = {1: InputDTO(id=1, name='one'),
                        2: InputDTO(id=2, name='two')}
-        orm_inputs = [Input(id=10, number=1, event_enabled=False),
-                      Input(id=11, number=2, event_enabled=True)]
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = orm_inputs
-        with mock.patch.object(Input, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_input',
+        with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: master_dtos.get(input_id)):
             fakesleep.reset(0)
             self.controller.load_inputs()
@@ -135,6 +146,13 @@ class InputControllerTest(unittest.TestCase):
             self.assertEqual([2], last_inputs)
 
     def test_input_sync_change(self):
+        with self.session as db:
+            db.add_all([
+                Input(id=0, number=2),
+                Input(id=1, number=40, room=Room(id=2, number=3))
+            ])
+            db.commit()
+
         events = []
 
         def on_change(gateway_event):
@@ -143,11 +161,7 @@ class InputControllerTest(unittest.TestCase):
 
         inputs = {2: InputDTO(id=2),
                   40: InputDTO(id=40, module_type='I')}
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = [Input(id=0, number=2),
-                                              Input(id=1, number=40, room=Room(id=2, number=3))]
-        with mock.patch.object(Input, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_input',
+        with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: inputs.get(input_id)), \
              mock.patch.object(self.master_controller, 'load_input_status',
                                return_value=[InputStatusDTO(id=2, status=True),
@@ -160,11 +174,7 @@ class InputControllerTest(unittest.TestCase):
                                   GatewayEvent('INPUT_CHANGE',
                                   {'id': 40, 'status': True, "location": {"room_id": 3}})], events)
 
-        select_mock = mock.Mock()
-        select_mock.join_from.return_value = [Input(id=0, number=2),
-                                              Input(id=1, number=40, room=Room(id=2, number=3))]
-        with mock.patch.object(Input, 'select', return_value=select_mock), \
-             mock.patch.object(self.master_controller, 'load_input',
+        with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: inputs.get(input_id)), \
              mock.patch.object(self.master_controller, 'load_input_status',
                                return_value=[InputStatusDTO(id=2, status=True),

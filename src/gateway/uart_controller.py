@@ -24,6 +24,7 @@ from functools import wraps
 from threading import Lock
 from minimalmodbus import Instrument
 from platform_utils import Hardware
+import six
 
 if False:  # MYPY
     from typing import Dict, Union
@@ -40,6 +41,36 @@ def require_mode(mode):
             return func(self_,  *args, **kwargs)
         return wrapped
     return wrapper
+
+
+def _unparse_range_string(possible_string, step=1):
+    """
+    :param possible_string: string corresponding to a certain interval of numbers
+    :param step: step that will be used in a range of numbers
+    :return: a list of all numbers the string corresponds to
+    """
+    try:
+        if isinstance(possible_string, six.string_types):
+            ints = []  # type: list
+            if ',' in possible_string:
+                commasplitted = possible_string.split(',')
+            elif ';' in possible_string:
+                commasplitted = possible_string.split(';')
+            else:
+                commasplitted = [possible_string]
+            for value in commasplitted:
+                if '-' in value:
+                    for i in range(int(value.split('-')[0]), int(value.split('-')[1]) + 1, step):
+                        ints.append(i)
+                else:
+                    ints.append(int(value))
+        elif isinstance(possible_string, six.integer_types):
+            ints = [possible_string]
+        else:
+            return TypeError
+        return ints
+    except Exception as ex:
+        logger.warning('Unable to unparse the string {0}: {1}'.format(possible_string, ex))
 
 
 class UARTController(object):
@@ -180,17 +211,21 @@ class UARTController(object):
                                  signed=signed)
 
     @require_mode(Mode.MODBUS)
-    def write_registers(self, slaveaddress, registeraddress, values):
-        # type: (int, int, list) -> None
+    def write_registers(self, args):
+        # type: (list) -> None
         with self._modbus_lock:
-            client = self._get_modbus_client(slaveaddress)
-            self._execute_modbus(client.write_registers,
-                                 registeraddress=registeraddress,
-                                 values=values)
+            for arg in args:
+                client = self._get_modbus_client(arg.get('slaveaddress'))
+                for config in arg.get('write_configs'):
+                    registeraddresses = _unparse_range_string(possible_string=config.get('registeraddress'), step=len(config.get('values')))
+                    for registeraddress in registeraddresses:
+                        self._execute_modbus(client.write_registers,
+                                             registeraddress=registeraddress,
+                                             values=config.get('values'))
 
     @require_mode(Mode.MODBUS)
     def read_register(self, slaveaddress, registeraddress, number_of_decimals=0, functioncode=3, signed=False):
-        # type: (int, int, int, int, bool) -> Union[float, int, list]
+        # type: (int, int, int, int, bool) -> Union[float, int]
         with self._modbus_lock:
             client = self._get_modbus_client(slaveaddress)
             return self._execute_modbus(action=client.read_register,
@@ -200,14 +235,22 @@ class UARTController(object):
                                         signed=signed)
 
     @require_mode(Mode.MODBUS)
-    def read_registers(self, slaveaddress, registeraddress, number_of_registers=1, functioncode=3):
-        # type: (int, int, int, int) -> Union[float, int, list]
+    def read_registers(self, args):
+        # type: (list) -> dict
+        output = {}
         with self._modbus_lock:
-            client = self._get_modbus_client(slaveaddress)
-            return self._execute_modbus(action=client.read_registers,
-                                        registeraddress=registeraddress,
-                                        number_of_registers=number_of_registers,
-                                        functioncode=functioncode)
+            for arg in args:
+                client = self._get_modbus_client(arg.get('slaveaddress'))
+                reg_output = {}
+                for config in arg.get('read_configs'):
+                    registeraddresses = _unparse_range_string(possible_string=config.get('registeraddress'), step=config.get('number_of_registers', 1))
+                    for registeraddress in registeraddresses:
+                        reg_output[registeraddress] = self._execute_modbus(action=client.read_registers,
+                                                                           registeraddress=registeraddress,
+                                                                           number_of_registers=config.get('number_of_registers', 1),
+                                                                           functioncode=config.get('functioncode', 3))
+            output[arg.get('slaveaddress')] = reg_output
+        return output
 
     def _execute_modbus(self, action, **kwargs):
         try:

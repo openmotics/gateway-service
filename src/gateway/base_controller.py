@@ -26,26 +26,26 @@ from gateway.events import GatewayEvent
 from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
-from gateway.models import BaseModel
+from gateway.models import Database, MasterNumber
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
     from typing import Any, Callable, List, Optional, Type
     from gateway.maintenance_controller import MaintenanceController
+    from gateway.models import Base
 
 logger = logging.getLogger(__name__)
 
 
 class SyncStructure(object):
-    def __init__(self, orm_model, name, skip=None):  # type: (Type[BaseModel], str, Optional[Callable[[Any], bool]]) -> None
-        self.orm_model = orm_model  # type: Type[BaseModel]
+    def __init__(self, orm_model, name, skip=None):  # type: (Type[Base], str, Optional[Callable[[Any], bool]]) -> None
+        self.orm_model = orm_model  # type: Type[Base]
         self.name = name  # type: str
         self.skip = skip  # type: Optional[Callable[[Any], bool]]
 
 
 class BaseController(object):
-
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
     SYNC_LOCK = Lock()
 
@@ -139,16 +139,20 @@ class BaseController(object):
 
     def _sync_orm_structure(self, structure):
         # type: (SyncStructure) -> None
-        orm_model = structure.orm_model
+        model_cls = structure.orm_model
         name = structure.name
         skip = structure.skip
 
-        ids = []
-        for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
-            if skip is not None and skip(dto):
-                continue
-            id_ = dto.id
-            ids.append(id_)
-            if not orm_model.select().where(orm_model.number == id_).exists():
-                orm_model.create(number=id_)
-        orm_model.delete().where(orm_model.number.not_in(ids)).execute()
+        assert issubclass(model_cls, MasterNumber)
+
+        numbers = []
+        with Database.get_session() as db:
+            for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
+                if skip is not None and skip(dto):
+                    continue
+                n = dto.id
+                numbers.append(n)
+                if not db.query(db.query(model_cls).filter(model_cls.number == n).exists()).scalar():
+                    db.add(model_cls(number=n))
+            db.query(model_cls).where(model_cls.number.notin_(numbers)).delete()
+            db.commit()

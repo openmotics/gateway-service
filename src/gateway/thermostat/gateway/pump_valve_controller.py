@@ -15,10 +15,11 @@
 
 import logging
 from threading import Lock
-from ioc import Inject
-from gateway.models import Valve, Pump
-from gateway.thermostat.gateway.valve_driver import ValveDriver
+
+from gateway.models import Database, Pump, Valve
 from gateway.thermostat.gateway.pump_driver import PumpDriver
+from gateway.thermostat.gateway.valve_driver import ValveDriver
+from ioc import Inject
 
 if False:  # MYPY
     from typing import List, Dict, Set
@@ -35,10 +36,10 @@ class PumpValveController(object):
         self._config_change_lock = Lock()
 
     def refresh_from_db(self):  # type: () -> None
-        with self._config_change_lock:
+        with self._config_change_lock, Database.get_session() as db:
             # Collect valve drivers
             current_ids = []
-            for item in Valve.select():
+            for item in db.query(Valve):
                 if item.id in self._valve_drivers:
                     self._valve_drivers[item.id].update(item)
                 else:
@@ -50,7 +51,7 @@ class PumpValveController(object):
             # Collect pump drivers
             current_ids = []
             pump_drivers_per_valve = {}  # type: Dict[int, Set[PumpDriver]]
-            for item in Pump.select():
+            for item in db.query(Pump):
                 if item.id in self._pump_drivers:
                     pump_driver = self._pump_drivers[item.id]
                     pump_driver.update(item)
@@ -137,7 +138,8 @@ class PumpValveController(object):
     def get_valve_driver(self, valve_id):  # type: (int) -> ValveDriver
         valve_driver = self._valve_drivers.get(valve_id)
         if valve_driver is None:
-            valve = Valve.get(id=valve_id)
-            valve_driver = ValveDriver(valve)
+            with Database.get_session() as db:
+                valve = db.get(Valve, valve_id)
+                valve_driver = ValveDriver(valve)
             self._valve_drivers[valve.id] = valve_driver
         return valve_driver

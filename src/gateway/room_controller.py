@@ -18,7 +18,6 @@ Room BLL
 from __future__ import absolute_import
 
 import logging
-from peewee import JOIN
 from gateway.dto import RoomDTO
 from gateway.mappers import RoomMapper
 from gateway.models import Database, Room
@@ -33,31 +32,32 @@ logger = logging.getLogger(__name__)
 @Injectable.named('room_controller')
 @Singleton
 class RoomController(object):
-
     def __init__(self):
         pass
 
     def load_room(self, room_id):  # type: (int) -> RoomDTO
-        _ = self
-        room = Room.select(Room) \
-                   .where(Room.number == room_id) \
-                   .get()  # type: Room  # TODO: Load dict
-        room_dto = RoomMapper.orm_to_dto(room)
+        with Database.get_session() as db:
+            room = db.query(Room).where(Room.number == room_id).one()
+            room_dto = RoomMapper(db).orm_to_dto(room)
         return room_dto
 
     def load_rooms(self):  # type: () -> List[RoomDTO]
-        _ = self
         room_dtos = []
-        for room in Room.select():  # TODO: Load dicts
-            room_dtos.append(RoomMapper.orm_to_dto(room))
+        with Database.get_session() as db:
+            rooms = db.query(Room).all()
+            for room in  rooms:
+                room_dtos.append(RoomMapper(db).orm_to_dto(room))
         return room_dtos
 
     def save_rooms(self, rooms):  # type: (List[RoomDTO]) -> None
-        _ = self
-        with Database.get_db().atomic():
+        with Database.get_session() as db:
             for room_dto in rooms:
+                rooms_to_add = []
+                rooms_to_delete = []
                 if room_dto.in_use:
-                    room = RoomMapper.dto_to_orm(room_dto)
-                    room.save()
+                    rooms_to_add.append(RoomMapper(db).dto_to_orm(room_dto))
                 else:
-                    Room.delete().where(Room.number == room_dto.id).execute()
+                    rooms_to_delete.append(room_dto.id)
+            db.add_all(rooms_to_add)
+            db.query(Room).where(Room.number.in_(rooms_to_delete)).delete()
+            db.commit()

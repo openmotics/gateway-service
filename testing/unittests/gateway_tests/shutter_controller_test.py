@@ -22,17 +22,21 @@ import time
 import unittest
 import mock
 import xmlrunner
+import fakesleep
+import logging
 from gateway.events import GatewayEvent
 from mock import Mock
-from peewee import SqliteDatabase
-import fakesleep
 from gateway.dto import ShutterDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.master_controller_classic import MasterClassicController
-from gateway.models import Room, Shutter
+from gateway.models import Room, Shutter, Base, Database
 from gateway.pubsub import PubSub
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+from logs import Logs
 
 MODELS = [Shutter, Room]
 
@@ -62,25 +66,28 @@ class ShutterControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        Logs.set_loglevel(logging.DEBUG, namespace='gateway.shutter_controller')
+        # Logs.set_loglevel(logging.DEBUG, namespace='sqlalchemy.engine')
         fakesleep.monkey_patch()
-        cls.test_db = SqliteDatabase(':memory:')
 
     @classmethod
     def tearDownClass(cls):
         fakesleep.monkey_restore()
 
     def setUp(self):
-        self.maxDiff = None
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.connect()
-        self.test_db.create_tables(MODELS)
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
 
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
-
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
 
     def test_update_config(self):
         master_controller = Mock()
@@ -523,29 +530,52 @@ class ShutterControllerTest(unittest.TestCase):
                             maintenance_controller=Mock())
         controller = ShutterController()
 
+        # do not try to sync inside the shutter controller, we will update config manually for the tests
+        orm_mock = mock.patch.object(controller, '_sync_orm', return_value=True)
+        orm_mock.start()
+
         # Basic configuration
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
         self.assertEqual(len(controller._shutters), 4)
 
         events = []
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, lambda event: events.append(event))
+        try:
+            controller.start()
+            self.pubsub._publish_all_events()
+            self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED',
+                                                                                  'position': None,
+                                                                                  'desired_position': None,
+                                                                                  'last_change': 0.0},
+                                                              'location': {'room_id': None}}),
+                              GatewayEvent('SHUTTER_CHANGE', {'id': 1, 'status': {'state': 'STOPPED',
+                                                                                  'position': None,
+                                                                                  'desired_position': None,
+                                                                                  'last_change': 0.0},
+                                                              'location': {'room_id': None}}),
+                              GatewayEvent('SHUTTER_CHANGE', {'id': 2, 'status': {'state': 'STOPPED',
+                                                                                  'position': None,
+                                                                                  'desired_position': None,
+                                                                                  'last_change': 0.0},
+                                                              'location': {'room_id': None}}),
+                              GatewayEvent('SHUTTER_CHANGE', {'id': 3, 'status': {'state': 'STOPPED',
+                                                                                  'position': None,
+                                                                                  'desired_position': None,
+                                                                                  'last_change': 0.0},
+                                                              'location': {'room_id': None}})], events)
 
-        def on_change(gateway_event):
-            events.append(gateway_event)
-
-        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
-        controller.start()
-        self.pubsub._publish_all_events()
-        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 1, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 2, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
-                          GatewayEvent('SHUTTER_CHANGE', {'id': 3, 'status': {'state': 'STOPPED', 'position': None, 'desired_position': None, 'last_change': 0.0}, 'location': {'room_id': None}})], events)
-
-        events = []
-        fakesleep.reset(100)
-        controller.report_shutter_position(0, 89, 'UP')
-        self.pubsub._publish_all_events()
-        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP', 'position': 89, 'desired_position': None, 'last_change': 100.0}, 'location': {'room_id': None}})], events)
-        controller.stop()
+            events = []
+            fakesleep.reset(100)
+            controller.report_shutter_position(0, 89, 'UP')
+            self.pubsub._publish_all_events()
+            self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP',
+                                                                                  'position': 89,
+                                                                                  'desired_position': None,
+                                                                                  'last_change': 100.0},
+                                                              'location': {'room_id': None}})], events)
+        finally:
+            controller.stop()
+        orm_mock.stop()
 
     def test_exception_during_sync(self):
         _ = self
@@ -573,8 +603,10 @@ class ShutterControllerTest(unittest.TestCase):
                             maintenance_controller=Mock())
         controller = ShutterController()
 
-        Shutter.create(id=42, number=1)  # unused
-        Shutter.create(id=43, number=2)  # removed
+        db = Database.get_session()
+        db.add_all([Shutter(id=42, number=1),   # unused
+                    Shutter(id=43, number=2)])  # removed
+        db.commit()
 
         master_shutters = [ShutterDTO(id=0, name='foo'),
                            ShutterDTO(id=1, name='bar'),
@@ -599,8 +631,10 @@ class ShutterControllerTest(unittest.TestCase):
                             maintenance_controller=Mock())
         controller = ShutterController()
 
-        Shutter.create(id=42, number=1)  # unused
-        Shutter.create(id=43, number=2)  # removed
+        db = Database.get_session()
+        db.add_all([Shutter(id=42, number=1),   # unused
+                    Shutter(id=43, number=2)])  # removed
+        db.commit()
 
         shutters = [ShutterDTO(id=0, name='foo'),
                     ShutterDTO(id=1, name='bar'),

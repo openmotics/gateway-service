@@ -18,12 +18,15 @@ Tests for events.
 from __future__ import absolute_import
 
 import unittest
+import mock
 from mock import Mock, patch
-
 from gateway.events import GatewayEvent
-from gateway.models import Config, Input
+from gateway.models import Config, Input, Base, Database
 from ioc import SetTestMode, SetUpTestInjections
-
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import StaticPool
+from logs import Logs
 from cloud.events import EventSender
 
 
@@ -34,6 +37,17 @@ class EventsTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        engine = create_engine(
+            'sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+        self.session = session_factory()
+        session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
+        session_mock.start()
+        self.addCleanup(session_mock.stop)
+
         cloud_api_client = Mock()
         self.sent_events = {}
         cloud_api_client.send_events = lambda events: self.sent_events.update({'events': events})
@@ -44,18 +58,18 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(len(event_sender._queue), 0)
         self.assertFalse(event_sender._batch_send_events())
 
-        select_mock = Mock()
-        select_mock.dicts.return_value = [{'number': 1, 'event_enabled': True},
-                                          {'number': 2, 'event_enabled': False}]
+        with Database.get_session() as db:
+            db.add_all([Input(number=1, event_enabled=True),
+                        Input(number=2, event_enabled=False)])
+            db.commit()
 
-        with patch.object(Input, 'select', return_value=select_mock):
-            with patch.object(Config, 'get_entry', return_value=True):
-                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
-                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
-                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
-                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 2}))
-            with patch.object(Config, 'get_entry', return_value=False):
-                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 3}))
+        with patch.object(Config, 'get_entry', return_value=True):
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 2}))
+        with patch.object(Config, 'get_entry', return_value=False):
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 3}))
 
         self.assertEqual(3, len(event_sender._queue))
         self.assertTrue(event_sender._batch_send_events())
