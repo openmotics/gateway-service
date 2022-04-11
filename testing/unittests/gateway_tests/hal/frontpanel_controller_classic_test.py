@@ -16,7 +16,6 @@
 """
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 from mock import Mock
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from gateway.enums import LedStates, SerialPorts, Leds
@@ -94,7 +93,3 @@ class FrontpanelControllerClassicTest(unittest.TestCase):
                             uart_controller=Mock(),
                             energy_module_controller=Mock())
         return FrontpanelClassicController()
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

@@ -101,7 +101,7 @@ class SchedulingControllerTest(unittest.TestCase):
         self.controller.stop()
 
     def test_save_load(self):
-        dto = ScheduleDTO(id=None, source='gateway', name='schedule', start=0, action='GROUP_ACTION', arguments=0)
+        dto = ScheduleDTO(id=None, name='schedule', start=0, action='GROUP_ACTION', arguments=0)
         self.controller.save_schedules([dto])
         loaded_dto = self.controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
@@ -180,7 +180,6 @@ class SchedulingControllerTest(unittest.TestCase):
         self.group_action_controller.do_basic_action.return_value = {}
 
         schedule_dto = ScheduleDTO(id=None,
-                                   source='gateway',
                                    name='schedule',
                                    start=time.time() + 0.5,
                                    action='GROUP_ACTION',
@@ -214,7 +213,6 @@ class SchedulingControllerTest(unittest.TestCase):
 
     def test_basic_action(self):
         schedule_dto = ScheduleDTO(id=None,
-                                   source='gateway',
                                    name='schedule',
                                    start=time.time() + 0.5,
                                    action='BASIC_ACTION',
@@ -259,7 +257,6 @@ class SchedulingControllerTest(unittest.TestCase):
 
     def test_local_api(self):
         schedule_dto = ScheduleDTO(id=None,
-                                   source='gateway',
                                    name='schedule', start=time.time() + 0.5, action='LOCAL_API',
                                    arguments={'name': 'do_basic_action',
                                               'parameters': {'action_type': 3,
@@ -307,5 +304,5 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertIsNone(schedule.last_executed)
 
     def _add_schedule(self, **kwargs):
-        dto = ScheduleDTO(id=None, source='gateway', **kwargs)
+        dto = ScheduleDTO(id=None, **kwargs)
         self.controller.save_schedules([dto])

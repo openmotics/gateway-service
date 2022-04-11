@@ -18,7 +18,6 @@ Tests for plugins.interfaces.
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 from plugin_runtime.base import OMPluginBase, PluginException, om_expose
 from plugin_runtime.interfaces import check_interfaces
 
@@ -215,7 +214,3 @@ class CheckInterfacesTest(unittest.TestCase):
                 pass
 
         check_interfaces(P1)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

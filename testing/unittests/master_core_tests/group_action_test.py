@@ -18,7 +18,6 @@ Tests for GroupAction related actions
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import logging
 from ioc import SetTestMode
 from logs import Logs
@@ -372,7 +371,3 @@ class GroupActionTest(unittest.TestCase):
         self.assertEqual({2: [12],
                           10: [15],
                           15: [26]}, space_map, 'Memory is not changed')
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
