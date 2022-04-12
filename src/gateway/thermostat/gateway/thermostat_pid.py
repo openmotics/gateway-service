@@ -60,7 +60,6 @@ class ThermostatPid(object):
         self._current_steering_power = None  # type: Optional[int]
         self._current_enabled = None  # type: Optional[bool]
         self._current_setpoint = None  # type: Optional[float]
-        self.update_thermostat()
 
     @property
     def enabled(self):  # type: () -> bool
