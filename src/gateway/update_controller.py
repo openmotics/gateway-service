@@ -273,7 +273,7 @@ class UpdateController(object):
                         for module in modules.get(module_type, []):
                             if module.firmware_version != version:
                                 module.update_success = None  # Allow the update to be re-tried
-                                module.save()
+                db.commit()
                 global_logger.info('Request for update firmware {0} to {1}'.format(firmware_type, version))
             Config.set_entry('firmware_target_versions', target_versions)
             self._pending_updates = True
