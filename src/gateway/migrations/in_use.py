@@ -78,8 +78,6 @@ class InUseMigrator(BaseMigrator):
                 shutter_group_orm = db.query(ShutterGroup).filter(ShutterGroup.number == shutter_group_dto.id).one_or_none()  # type: Optional[ShutterGroup]
                 if shutter_group_orm is not None:
                     shutter_group_orm.in_use = shutter_group_orm.number in used_shutter_groups
-                    if not shutter_group_orm.in_use:
-                        shutter_group_orm.name = ''
             # Group Actions
             for group_action_dto in master_controller.load_group_actions():
                 group_action_orm = db.query(GroupAction).filter(GroupAction.number == group_action_dto.id).one_or_none()  # type: Optional[GroupAction]
