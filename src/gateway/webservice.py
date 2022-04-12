@@ -756,7 +756,7 @@ class WebInterface(object):
             'copy_thermostat_schedules',  # Allow to copy schedules and certain presets with a single API call
             'pause_schedules',  # Allow schedules to be paused/resumed
             'long_names',  # Supports long (255 char) names
-            'in_use_flag',  # Supports the in_use flag
+            'in_use_property',  # Supports the in_use property
             # TODO: remove
             'default_timer_disabled',
             '100_steps_dimmer',
