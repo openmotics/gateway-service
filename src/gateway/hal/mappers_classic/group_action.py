@@ -17,6 +17,7 @@
 GroupAction Mapper
 """
 from __future__ import absolute_import
+from toolbox import Toolbox
 from gateway.dto import GroupActionDTO
 from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import GroupActionConfiguration
@@ -38,9 +39,8 @@ class GroupActionMapper(object):
     @staticmethod
     def dto_to_orm(group_action_dto):  # type: (GroupActionDTO) -> EepromModel
         data = {'id': group_action_dto.id}  # type: Dict[str, Any]
-        for dto_field, data_field in {'name': 'name'}.items():
-            if dto_field in group_action_dto.loaded_fields:
-                data[data_field] = getattr(group_action_dto, dto_field)
+        if 'name' in group_action_dto.loaded_fields:
+            data['name'] = Toolbox.shorten_name(group_action_dto.name, maxlength=16)
         if 'actions' in group_action_dto.loaded_fields:
             data['actions'] = ','.join([str(action) for action in group_action_dto.actions])
         return GroupActionConfiguration.deserialize(data)

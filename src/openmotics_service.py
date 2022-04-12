@@ -33,6 +33,7 @@ from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
 from gateway.migrations.defaults import DefaultsMigrator
 from gateway.migrations.thermostats import ThermostatsMigrator
+from gateway.migrations.names import NamesMigrator
 from gateway.models import Database, Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
@@ -169,12 +170,15 @@ class OpenmoticsService(object):
         pulse_counter_controller.run_sync_orm()
         sensor_controller.run_sync_orm()
         shutter_controller.run_sync_orm()
+        group_action_controller.run_sync_orm()
 
+        # Data migrations
         with Database.get_session() as db:
             stmt = select(Feature.enabled).filter_by(name=Feature.THERMOSTATS_GATEWAY)  # type: ignore
             thermostats_gateway_enabled = db.execute(stmt).scalar()
         if thermostats_gateway_enabled:
             ThermostatsMigrator.migrate()
+        NamesMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

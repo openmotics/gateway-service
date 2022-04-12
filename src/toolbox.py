@@ -175,7 +175,7 @@ class Toolbox(object):
         return list(inspect.signature(func).parameters.keys())
 
     @staticmethod
-    def shorten_name(name, maxlength=16):
+    def shorten_name(name, maxlength):  # type: (str, int) -> str
         if len(name) <= maxlength:
             return name
         return '{0}~{1}'.format(name[:maxlength - 2], name[-1:])

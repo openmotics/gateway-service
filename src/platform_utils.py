@@ -394,7 +394,6 @@ class Platform(object):
                 return platform
         return Platform.Type.CLASSIC
 
-
     @staticmethod
     def get_registration_key():
         # type: () -> str

@@ -17,6 +17,7 @@
 Input Mapper
 """
 from __future__ import absolute_import
+from toolbox import Toolbox
 from gateway.dto.input import InputDTO
 from gateway.hal.mappers_core.group_action import GroupActionMapper
 from master.core.basic_action import BasicAction
@@ -53,7 +54,7 @@ class InputMapper(object):
     def dto_to_orm(input_dto):  # type: (InputDTO) -> InputConfiguration
         new_data = {'id': input_dto.id}  # type: Dict[str, Any]
         if 'name' in input_dto.loaded_fields:
-            new_data['name'] = input_dto.name
+            new_data['name'] = Toolbox.shorten_name(input_dto.name, maxlength=16)
         if 'action' in input_dto.loaded_fields:
             direct_config = input_dto.action is None or input_dto.action == 255 or input_dto.action < 240
             basic_actions_config = input_dto.action in [241, 242] or (input_dto.action == 240 and

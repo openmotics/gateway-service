@@ -258,7 +258,7 @@ class OutputControllerTest(unittest.TestCase):
             assert save.call_args_list[0][0][0][0].id == 42
             assert save.call_args_list[0][0][0][0].name == 'foo'
             outputs = self.controller.load_outputs()
-            assert OutputDTO(id=42, room=3) in outputs
+            assert OutputDTO(id=42, name='foo', room=3) in outputs
 
     def test_output_actions(self):
         with self.session as db:

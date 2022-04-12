@@ -43,10 +43,10 @@ class InputMapper(object):
     @staticmethod
     def dto_to_orm(input_dto):  # type: (InputDTO) -> EepromModel
         data = {'id': input_dto.id}  # type: Dict[str, Any]
-        for dto_field, data_field in {'module_type': 'module_type',
-                                      'name': 'name'}.items():
-            if dto_field in input_dto.loaded_fields:
-                data[data_field] = getattr(input_dto, dto_field)
+        if 'name' in input_dto.loaded_fields:
+            data['name'] = Toolbox.shorten_name(input_dto.name, maxlength=8)
+        if 'module_type' in input_dto.loaded_fields:
+            data['module_type'] = input_dto.module_type
         for dto_field, (data_field, default) in {'action': ('action', InputMapper.BYTE_MAX)}.items():
             if dto_field in input_dto.loaded_fields:
                 data[data_field] = Toolbox.denonify(getattr(input_dto, dto_field), default)

@@ -130,13 +130,28 @@ class OutputController(BaseController):
         # TODO also support plugins
         return list(self._cache.get_state().values())
 
+    @staticmethod
+    def _output_orm_to_dto(output_orm, output_dto):
+        output_dto.name = output_orm.name
+        output_dto.room = output_orm.room.number if output_orm.room is not None else None
+
+    @staticmethod
+    def _output_dto_to_orm(output_dto, output_orm, db):
+        if 'room' in output_dto.loaded_fields:
+            if output_dto.room in (None, 255):
+                output_orm.room = None
+            else:
+                output_orm.room = db.query(Room).filter_by(number=output_dto.room).one()
+        if 'name' in output_dto.loaded_fields:
+            output_orm.name = output_dto.name
+
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         with Database.get_session() as db:
             output = db.query(Output) \
                        .filter_by(number=output_id) \
                        .one()  # type: Output
             output_dto = self._master_controller.load_output(output_id=output_id)
-            output_dto.room = output.room.number if output.room is not None else None
+            OutputController._output_orm_to_dto(output_orm=output, output_dto=output_dto)
             return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
@@ -144,7 +159,7 @@ class OutputController(BaseController):
         with Database.get_session() as db:
             for output in db.query(Output):  # type: Output
                 output_dto = self._master_controller.load_output(output_id=output.number)
-                output_dto.room = output.room.number if output.room is not None else None
+                OutputController._output_orm_to_dto(output_orm=output, output_dto=output_dto)
                 output_dtos.append(output_dto)
             self._cache.update_outputs(output_dtos)
         return output_dtos
@@ -158,11 +173,8 @@ class OutputController(BaseController):
                     .one_or_none()  # type: Optional[Output]
                 if output is None:
                     raise ValueError('Output {0} does not exist'.format(output_dto.id))
-                if 'room' in output_dto.loaded_fields:
-                    if output_dto.room in (None, 255):
-                        output.room = None
-                    else:
-                        output.room = db.query(Room).filter_by(number=output_dto.room).one()
+                else:
+                    OutputController._output_dto_to_orm(output_dto=output_dto, output_orm=output, db=db)
                 outputs_to_save.append(output_dto)
             db.commit()
         self._master_controller.save_outputs(outputs_to_save)
