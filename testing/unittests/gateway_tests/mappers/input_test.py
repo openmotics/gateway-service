@@ -19,7 +19,7 @@ from ioc import SetTestMode
 from gateway.dto import InputDTO
 from gateway.hal.mappers_core import InputMapper
 from master.core.basic_action import BasicAction
-from master.core.memory_models import InputConfiguration, InputModuleConfiguration
+from master.core.memory_models import InputConfiguration, InputModuleConfiguration, GlobalConfiguration
 from mocked_core_helper import MockedCore
 
 
@@ -31,6 +31,11 @@ class InputCoreMapperTest(unittest.TestCase):
     def setUp(self):
         self.mocked_core = MockedCore()
         self.memory = self.mocked_core.memory
+
+        # Provide set of configured modules for testing purposes
+        global_configuration = GlobalConfiguration()
+        global_configuration.number_of_input_modules = 50
+        global_configuration.save()
 
         # Remove read-only flags from device_type for testing purposes below
         if hasattr(InputModuleConfiguration, '_device_type'):

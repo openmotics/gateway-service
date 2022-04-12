@@ -22,7 +22,6 @@ import plugin_runtime
 import shutil
 import tempfile
 import unittest
-import xmlrunner
 import mock
 from plugins.runner import PluginRunner, RunnerWatchdog
 
@@ -113,7 +112,3 @@ class PluginRunnerTest(unittest.TestCase):
                         _mock.assert_called_once()
                     else:
                         self.assertEqual(scenario['calls'][i], _mock.call_count)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

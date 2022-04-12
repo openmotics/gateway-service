@@ -18,7 +18,6 @@ Tests for the UART controller.
 from __future__ import absolute_import
 
 import unittest
-import xmlrunner
 from mock import Mock
 from gateway.uart_controller import UARTController
 
@@ -43,7 +42,3 @@ class RoomControllerTest(unittest.TestCase):
                                                         registeraddress=0,
                                                         signed=False,
                                                         value=2.0)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

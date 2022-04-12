@@ -37,6 +37,11 @@ class CANFeedbackTest(unittest.TestCase):
     def setUp(self):
         self.mocked_core = MockedCore()
 
+        # Provide set of configured modules for testing purposes
+        global_configuration = GlobalConfiguration()
+        global_configuration.number_of_output_modules = 50
+        global_configuration.save()
+
     def test_individual_feedback_leds(self):
         output = OutputConfiguration.deserialize({'id': 0})
         # Setup basic LED feedback

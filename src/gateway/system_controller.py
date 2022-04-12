@@ -170,7 +170,7 @@ class SystemController(object):
         os.mkdir(tmp_sqlite_dir)
 
         try:
-            with open('{0}/master.eep'.format(tmp_sqlite_dir), 'w') as eeprom_file:
+            with open('{0}/master.eep'.format(tmp_sqlite_dir), 'wb') as eeprom_file:
                 eeprom_file.write(self._module_controller.get_master_backup())
 
             for filename, source in {'config.db': constants.get_config_database_file(),
@@ -217,7 +217,7 @@ class SystemController(object):
             if retcode != 0:
                 raise Exception('The backup tar could not be created.')
 
-            with open('{0}/backup.tar'.format(tmp_dir), 'r') as backup_file:
+            with open('{0}/backup.tar'.format(tmp_dir), 'rb') as backup_file:
                 return backup_file.read()
 
         finally:

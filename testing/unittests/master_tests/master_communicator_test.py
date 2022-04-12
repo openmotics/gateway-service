@@ -22,7 +22,6 @@ import threading
 import time
 import unittest
 
-import xmlrunner
 from pytest import mark
 
 from gateway.exceptions import InMaintenanceModeException
@@ -367,7 +366,3 @@ class MasterCommunicatorTest(unittest.TestCase):
         pty.master_reply(action.create_output(2, fields2))
         with self.assertRaises(CrcCheckFailedException):
             comm.do_command(action)
-
-
-if __name__ == '__main__':
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

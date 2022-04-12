@@ -18,7 +18,6 @@ Tests for uCAN communicator module.
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import logging
 from mock import Mock
 from master.core.core_communicator import CoreCommunicator
@@ -198,7 +197,3 @@ class UCANCommunicatorTest(unittest.TestCase):
                                                       'sid': 5,
                                                       'payload': payload_reply_2 + bytearray([UCANCommandSpec.calculate_crc(payload_reply_2)])})
         self.assertDictEqual(consumer.get(1), {'foo': [20, 21, 22, 23]})
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

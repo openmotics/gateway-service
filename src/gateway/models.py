@@ -184,6 +184,7 @@ class GroupAction(Base, MasterNumber):
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    show_in_app = Column(Boolean, nullable=False, default=True)
 
 
 class Module(Base):
@@ -230,11 +231,9 @@ class EnergyCT(Base):
 
 class Schedule(Base):
     __tablename__ = 'schedule'
-    __table_args__ = (UniqueConstraint('source', 'external_id'), {'sqlite_autoincrement': True})
+    __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    source = Column(String(255), nullable=False)  # Options: 'gateway' or 'thermostats'
-    external_id = Column(String(255), nullable=True)
     name = Column(String(255), nullable=False)
     start = Column(Float, nullable=False)
     repeat = Column(String(255), nullable=True)

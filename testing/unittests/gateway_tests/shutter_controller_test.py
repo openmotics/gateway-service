@@ -21,7 +21,6 @@ import copy
 import time
 import unittest
 import mock
-import xmlrunner
 import fakesleep
 import logging
 from gateway.events import GatewayEvent
@@ -647,7 +646,3 @@ class ShutterControllerTest(unittest.TestCase):
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'shutter'}) in events
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'shuttergroup'}) in events
         assert len(events) == 2
-
-
-if __name__ == '__main__':
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

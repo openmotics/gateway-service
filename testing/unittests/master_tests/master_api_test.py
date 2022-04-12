@@ -20,7 +20,6 @@ Tests for master_api module.
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 from master.classic.master_api import Svt
 
 
@@ -50,7 +49,3 @@ class SvtTest(unittest.TestCase):
         for value in range(0, 255):
             byte_value = bytearray([value])
             self.assertEqual(byte_value, Svt.from_byte(byte_value).get_byte())
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

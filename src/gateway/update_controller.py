@@ -413,7 +413,7 @@ class UpdateController(object):
             System.run_service_action('start', 'vpn_service').wait()
 
             # Health-check
-            logger.info('Checking health')
+            logger.info('Starting health check')
             update_successful = UpdateController._check_gateway_service_health(logger=logger)
 
             # Rollback to old version
@@ -1028,11 +1028,13 @@ class UpdateController(object):
         http_port = Platform.http_port()
         while since > time.time() - timeout:
             try:
+                logger.info('Checking gw service health...')
                 response = requests.get('http://127.0.0.1:{}/health_check'.format(http_port), timeout=2)
                 data = response.json()
                 if data['success']:
                     pending = [k for k, v in data['health'].items() if not v['state']]
                     if not pending:
+                        logger.info('Health-check completed successfully')
                         return True
             except Exception:
                 pass

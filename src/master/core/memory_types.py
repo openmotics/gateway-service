@@ -404,19 +404,23 @@ class MemoryStringField(MemoryField):
 
 
 class MemoryByteField(MemoryField):
-    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None, default=None):
         super(MemoryByteField, self).__init__(memory_type=memory_type,
                                               address_spec=address_spec,
                                               read_only=read_only,
                                               checksum=checksum,
                                               length=1)
+        self._default = default
 
     def encode(self, value, field_name):  # type: (int, str) -> bytearray
         self._check_limits(value, field_name)
         return bytearray([value])
 
     def decode(self, data):  # type: (bytearray) -> int
-        return data[0]
+        value = data[0]
+        if self._default is not None and value == 255:
+            return self._default
+        return value
 
 
 class MemoryBooleanField(MemoryField):
@@ -683,7 +687,7 @@ class IdField(object):
             if limits[0] > limits[1]:
                 limit_info = 'No records available.'
             elif limits[0] == limits[1]:
-                limit_info = 'Only one records available: {0}'.format(limits[0])
+                limit_info = 'Only one record available: {0}'.format(limits[0])
             else:
                 limit_info = 'Available records: {0} <= id <= {1}'.format(limits[0], limits[1])
             raise NoResultFound('Could not find {0}({1}). {2}'.format(class_name, '' if id is None else id, limit_info))
