@@ -755,6 +755,7 @@ class WebInterface(object):
             'dynamic_updates',  # Dynamic updates
             'copy_thermostat_schedules',  # Allow to copy schedules and certain presets with a single API call
             'pause_schedules',  # Allow schedules to be paused/resumed
+            'show_in_app_flag',  # Supports the `show_in_app` flag
             'long_names',  # Supports long (255 char) names
             # TODO: remove
             'default_timer_disabled',
