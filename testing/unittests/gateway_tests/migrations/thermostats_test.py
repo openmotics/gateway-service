@@ -20,6 +20,7 @@ import mock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from platform_utils import Platform
 from gateway.models import Base, Database, ThermostatGroup, Sensor, Output, \
     Thermostat, Valve, ValveToThermostatAssociation, NoResultFound, \
     Preset, DaySchedule, Pump
@@ -45,12 +46,14 @@ class ThermostatMigratorTest(unittest.TestCase):
         session_mock.start()
         self.addCleanup(session_mock.stop)
 
+    @mock.patch.object(Platform, 'get_platform', return_value=Platform.Type.CLASSIC)
     @mock.patch.object(ThermostatsMigrator, '_read_global_configuration')
     @mock.patch.object(ThermostatsMigrator, '_read_heating_configuration')
     @mock.patch.object(ThermostatsMigrator, '_read_cooling_configuration')
     @mock.patch.object(ThermostatsMigrator, '_read_pump_group_configuration')
     @mock.patch.object(ThermostatsMigrator, '_disable_master_thermostats')
-    def test_migration(self, dmt, rpgc, rcc, rhc, rgc):
+    def test_migration(self, dmt, rpgc, rcc, rhc, rgc, gp):
+        _ = gp
         gc_data = {'outside_sensor': 1,
                    'threshold_temp': 37,
                    'pump_delay': 15}

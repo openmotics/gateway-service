@@ -91,6 +91,7 @@ class Input(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     event_enabled = Column(Boolean, default=False, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    name = Column(String(255), default='', nullable=False)
 
     room = relationship('Room', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
@@ -101,6 +102,7 @@ class Output(Base, MasterNumber):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    name = Column(String(255), default='', nullable=False)
 
     room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
     pump = relationship('Pump', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Pump]]
@@ -154,6 +156,8 @@ class Shutter(Base, MasterNumber):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    name = Column(String(255), default='', nullable=False)
+
     room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
@@ -185,6 +189,7 @@ class GroupAction(Base, MasterNumber):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     show_in_app = Column(Boolean, nullable=False, default=True)
+    name = Column(String(255), default='', nullable=False)
 
 
 class Module(Base):

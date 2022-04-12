@@ -17,6 +17,7 @@
 GroupAction Mapper
 """
 from __future__ import absolute_import
+from toolbox import Toolbox
 from gateway.dto import GroupActionDTO
 from master.core.group_action import GroupAction
 from master.core.basic_action import BasicAction
@@ -39,9 +40,8 @@ class GroupActionMapper(object):
     @staticmethod
     def dto_to_orm(group_action_dto):  # type: (GroupActionDTO) -> GroupAction
         data = {'id': group_action_dto.id}  # type: Dict[str, Any]
-        for dto_field, data_field in {'name': 'name'}.items():
-            if dto_field in group_action_dto.loaded_fields:
-                data[data_field] = getattr(group_action_dto, dto_field)
+        if 'name' in group_action_dto.loaded_fields:
+            data['name'] = Toolbox.shorten_name(group_action_dto.name, maxlength=16)
         if 'actions' in group_action_dto.loaded_fields:
             data['actions'] = GroupActionMapper.classic_actions_to_core_actions(group_action_dto.actions)
         return GroupAction(**data)

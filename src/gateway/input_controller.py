@@ -107,29 +107,46 @@ class InputController(BaseController):
         if master_event.type == MasterEvent.Types.INPUT_CHANGE:
             self._handle_input_status(master_event.data['state'])
 
+    @staticmethod
+    def _input_orm_to_dto(input_orm, input_dto):
+        input_dto.name = input_orm.name
+        input_dto.room = input_orm.room.number if input_orm.room is not None else None
+        input_dto.event_enabled = input_orm.event_enabled
+
+    @staticmethod
+    def _input_dto_to_orm(input_dto, input_orm, db):
+        if 'event_enabled' in input_dto.loaded_fields:
+            input_orm.event_enabled = input_dto.event_enabled
+        if 'room' in input_dto.loaded_fields:
+            if input_dto.room is None:
+                input_orm.room = None
+            elif 0 <= input_dto.room <= 100:
+                # TODO: Validation should happen on API layer
+                input_orm.room = db.query(Room).where(Room.number == input_dto.room).one()
+        if 'name' in input_dto.loaded_fields:
+            input_orm.name = input_dto.name
+
     def load_input(self, input_id):  # type: (int) -> InputDTO
         with Database.get_session() as db:
-            input_ = db.query(Input)\
+            input_orm = db.query(Input)\
                 .join(Input.room, isouter=True) \
                 .where(Input.number == input_id) \
                 .one()  # type: Input
             input_dto = self._master_controller.load_input(input_id=input_id)
-            input_dto.room = input_.room.number if input_.room is not None else None
-            input_dto.event_enabled = input_.event_enabled
+            InputController._input_orm_to_dto(input_orm=input_orm, input_dto=input_dto)
         return input_dto
 
     def load_inputs(self):  # type: () -> List[InputDTO]
         inputs_dtos = []
         with Database.get_session() as db:
             inputs = db.query(Input).join(Input.room, isouter=True).all()
-            for input_ in inputs:
+            for input_orm in inputs:
                 try:
-                    input_dto = self._master_controller.load_input(input_id=input_.number)
+                    input_dto = self._master_controller.load_input(input_id=input_orm.number)
                 except TypeError as ex:
-                    logger.error('Could not load input {0}: {1}'.format(input_.number, ex))
+                    logger.error('Could not load input {0}: {1}'.format(input_orm.number, ex))
                     continue
-                input_dto.room = input_.room.number if input_.room is not None else None
-                input_dto.event_enabled = input_.event_enabled
+                InputController._input_orm_to_dto(input_orm=input_orm, input_dto=input_dto)
                 inputs_dtos.append(input_dto)
         self._cache.update_inputs(inputs_dtos)
         return inputs_dtos
@@ -138,20 +155,14 @@ class InputController(BaseController):
         inputs_to_save = []
         with Database.get_session() as db:
             for input_dto in inputs:
-                input_ = db.query(Input) \
+                input_orm = db.query(Input) \
                     .where(Input.number == input_dto.id) \
                     .join(Input.room, isouter=True) \
                     .one_or_none()  # type: Input
-                if input_ is None:
+                if input_orm is None:
                     logger.info('Ignored saving non-existing Input {0}'.format(input_dto.id))
-                elif 'event_enabled' in input_dto.loaded_fields:
-                    input_.event_enabled = input_dto.event_enabled
-                    if 'room' in input_dto.loaded_fields:
-                        if input_dto.room is None:
-                            input_.room = None
-                        elif 0 <= input_dto.room <= 100:
-                            # TODO: Validation should happen on API layer
-                            input_.room = db.query(Room).where(Room.number == input_dto.room).one()
+                else:
+                    InputController._input_dto_to_orm(input_dto=input_dto, input_orm=input_orm, db=db)
                 inputs_to_save.append(input_dto)
             db.commit()
         self._master_controller.save_inputs(inputs_to_save)
