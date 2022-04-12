@@ -137,13 +137,14 @@ class OutputController(BaseController):
 
     @staticmethod
     def _output_dto_to_orm(output_dto, output_orm, db):
+        for field in ['name', 'in_use']:
+            if field in output_dto.loaded_fields:
+                setattr(output_orm, field, getattr(output_dto, field))
         if 'room' in output_dto.loaded_fields:
             if output_dto.room in (None, 255):
                 output_orm.room = None
             else:
                 output_orm.room = db.query(Room).filter_by(number=output_dto.room).one()
-        if 'name' in output_dto.loaded_fields:
-            output_orm.name = output_dto.name
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         with Database.get_session() as db:

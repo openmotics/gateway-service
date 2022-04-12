@@ -26,7 +26,7 @@ if False:  # MYPY
 
 
 class InputDTO(BaseDTO):
-    def __init__(self, id, name='', module_type='I', action=None, basic_actions=None, invert=False, can=False, room=None, event_enabled=False, state=None, module=None):
+    def __init__(self, id, name='', module_type='I', action=None, basic_actions=None, invert=False, can=False, room=None, event_enabled=False, state=None, module=None, in_use=True):
         # The argument `basic_actions` is None since you should not set a reference type as default value
         self.id = id  # type: int
         self.name = name  # type: str
@@ -37,6 +37,7 @@ class InputDTO(BaseDTO):
         self.invert = invert  # type: bool
         self.can = can  # type: bool
         self.event_enabled = event_enabled  # type: bool
+        self.in_use = in_use  # type: bool
         self.module = module  # type: Optional[ModuleDTO]
         self.state = state  # type: Optional[InputStatusDTO]
         if self.state:
@@ -53,7 +54,8 @@ class InputDTO(BaseDTO):
                 self.basic_actions == other.basic_actions and
                 self.invert == other.invert and
                 self.can == other.can and
-                self.event_enabled == other.event_enabled)
+                self.event_enabled == other.event_enabled and
+                self.in_use == other.in_use)
 
 
 class InputStatusDTO(BaseDTO):

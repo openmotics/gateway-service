@@ -66,7 +66,8 @@ class SensorSerializer(object):
                 'name': sensor_dto.name,
                 'offset': Toolbox.denonify(sensor_dto.offset, 0),
                 'room': Toolbox.denonify(sensor_dto.room, SensorSerializer.BYTE_MAX),
-                'virtual': sensor_dto.virtual}
+                'virtual': sensor_dto.virtual,
+                'in_use': sensor_dto.in_use}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -88,7 +89,8 @@ class SensorSerializer(object):
                      'name': ('name', None),
                      'offset': ('offset', 0),
                      'room': ('room', SensorSerializer.BYTE_MAX),
-                     'virtual': ('virtual', None)}
+                     'virtual': ('virtual', None),
+                     'in_use': ('in_use', None)}
         )
         field = 'physical_quantity'
         if field in sensor_dto.loaded_fields:

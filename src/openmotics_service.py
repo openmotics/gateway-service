@@ -34,6 +34,7 @@ from gateway.initialize import initialize
 from gateway.migrations.defaults import DefaultsMigrator
 from gateway.migrations.thermostats import ThermostatsMigrator
 from gateway.migrations.names import NamesMigrator
+from gateway.migrations.in_use import InUseMigrator
 from gateway.models import Database, Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
@@ -179,6 +180,7 @@ class OpenmoticsService(object):
         if thermostats_gateway_enabled:
             ThermostatsMigrator.migrate()
         NamesMigrator.migrate()
+        InUseMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()
