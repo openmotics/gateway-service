@@ -38,7 +38,7 @@ class NamesMigrator(BaseMigrator):
                                     (Shutter, 'shutters'),
                                     (GroupAction, 'group_actions')]:
                 for dto in getattr(master_controller, 'load_{0}'.format(name))():
-                    orm_object = db.query(model_cls).filter(model_cls.number == dto.id).one_or_none()
+                    orm_object = db.query(model_cls).filter(model_cls.number == dto.id).one_or_none()  # type: ignore
                     if orm_object is not None and orm_object.name == '':
                         orm_object.name = dto.name
             db.commit()

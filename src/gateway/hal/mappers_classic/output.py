@@ -24,7 +24,7 @@ from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import OutputConfiguration, DimmerConfiguration
 
 if False:  # MYPY
-    from typing import List
+    from typing import Dict, Any
 
 
 class OutputMapper(object):
@@ -51,7 +51,7 @@ class OutputMapper(object):
 
     @staticmethod
     def dto_to_orm(output_dto):  # type: (OutputDTO) -> EepromModel
-        data = {'id': output_dto.id}
+        data = {'id': output_dto.id}  # type: Dict[str, Any]
         for dto_field, data_field in {'module_type': 'module_type',
                                       'output_type': 'type'}.items():
             if dto_field in output_dto.loaded_fields:
