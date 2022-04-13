@@ -16,11 +16,15 @@
 GroupAction BLL
 """
 from __future__ import absolute_import
+
 import logging
-from ioc import Injectable, Inject, INJECTED, Singleton
+
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import GroupActionDTO
-from gateway.models import GroupAction, Database
+from gateway.events import GatewayEvent
+from gateway.models import Database, GroupAction
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
     from typing import List, Tuple
@@ -37,6 +41,11 @@ class GroupActionController(BaseController):
     @Inject
     def __init__(self, master_controller=INJECTED):
         super(GroupActionController, self).__init__(master_controller)
+
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'group_action'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         self._master_controller.do_basic_action(action_type, action_number)
@@ -87,6 +96,9 @@ class GroupActionController(BaseController):
                     continue
                 GroupActionController._group_action_dto_to_orm(group_action_dto=group_action_dto,
                                                                group_action_orm=group_action)
+            publish = bool(db.dirty)
             db.commit()
             group_actions_to_save.append(group_action_dto)
         self._master_controller.save_group_actions(group_actions_to_save)
+        if publish:
+            self._publish_config()

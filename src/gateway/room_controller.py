@@ -61,3 +61,4 @@ class RoomController(object):
             db.add_all(rooms_to_add)
             db.query(Room).where(Room.number.in_(rooms_to_delete)).delete()
             db.commit()
+        # explicitly doesn't publish config event since rooms are update by the cloud
