@@ -90,8 +90,6 @@ class ThermostatControllerMaster(ThermostatController):
         # type: (MasterEvent) -> None
         if master_event.type in [MasterEvent.Types.EEPROM_CHANGE]:
             self.invalidate_cache(THERMOSTATS)
-            gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})
-            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     def _thermostat_changed(self, thermostat_id, status):
         # type: (int, Dict[str,Any]) -> None
@@ -134,6 +132,8 @@ class ThermostatControllerMaster(ThermostatController):
         """
         if object_type is None or object_type == THERMOSTATS:
             self._thermostats_last_updated = 0
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     ################################
     # New API
