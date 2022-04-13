@@ -188,6 +188,7 @@ class WebInterfaceTest(unittest.TestCase):
                   'name': 'foo',
                   'room': 255,
                   'offset': 0,
+                  'in_use': True,
                   'virtual': False}
         sensor_dto = SensorSerializer.deserialize(config)
         expected_response = [SensorSerializer.serialize(sensor_dto, fields=None)]
