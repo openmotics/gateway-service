@@ -101,7 +101,9 @@ class PumpValveControllerTest(unittest.TestCase):
             ])
             db.commit()
             thermostat = db.query(Thermostat).filter_by(number=0).one()
-            return ThermostatPid(thermostat, pump_valve_controller=self._pump_valve_controller)
+            pid = ThermostatPid(thermostat, pump_valve_controller=self._pump_valve_controller)
+            pid.update_thermostat()
+            return pid
 
     def test_basic(self):
         thermostat_pid = self._get_thermostat_pid()
