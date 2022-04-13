@@ -15,7 +15,6 @@
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import mock
 import logging
 from datetime import datetime
@@ -281,7 +280,3 @@ class EnergyModuleControllerTest(unittest.TestCase):
             result = self.controller.get_total_energy()
             self.assertEqual({'10': [TotalEnergyDTO(night=i + 1, day=i)
                                      for i in range(1, 9)]}, result)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

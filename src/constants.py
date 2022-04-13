@@ -153,12 +153,14 @@ def get_terms_dir():
 
 def get_plugin_dir():
     """ Get the directory where plugin data is stored. """
-    return os.path.join(OPENMOTICS_PREFIX, 'python/plugins/')
+    python_root = os.path.abspath(os.path.join(__file__, '..'))
+    return os.path.join(python_root, 'plugins/')
 
 
 def get_plugin_runtime_dir():
     """ Get the directory where plugin data is stored. """
-    return os.path.join(OPENMOTICS_PREFIX, 'python/plugin_runtime/')
+    python_root = os.path.abspath(os.path.join(__file__, '..'))
+    return os.path.join(python_root, 'plugin_runtime/')
 
 
 def get_update_cmd(version, md5):

@@ -89,13 +89,13 @@ class InputControllerTest(unittest.TestCase):
     def test_full_loaded_inputs(self):
         with self.session as db:
             db.add_all([
-                Input(id=10, number=1, event_enabled=False),
-                Input(id=11, number=2, event_enabled=True)
+                Input(id=10, number=1, name='one', event_enabled=False),
+                Input(id=11, number=2, name='two', event_enabled=True)
             ])
             db.commit()
 
-        master_dtos = {1: InputDTO(id=1, name='one'),
-                       2: InputDTO(id=2, name='two')}
+        master_dtos = {1: InputDTO(id=1, name='one x'),
+                       2: InputDTO(id=2, name='two x')}
         with mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: master_dtos.get(input_id)):
             dtos = self.controller.load_inputs()

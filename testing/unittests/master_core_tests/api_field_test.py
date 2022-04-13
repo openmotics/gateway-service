@@ -18,7 +18,6 @@ Tests for the fields module
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import logging
 from master.core.fields import *
 from master.core.serial_number import SerialNumber
@@ -184,7 +183,3 @@ class APIFieldsTest(unittest.TestCase):
             self.assertEqual(expected_bytes, result_bytes)
             result_value = field.decode(result_bytes)
             self.assertEqual(expected_value, result_value)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

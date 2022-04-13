@@ -18,7 +18,6 @@ Tests for the eeprom extensions module.
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import os
 from ioc import SetTestMode, SetUpTestInjections
 from master.classic.eeprom_extension import EepromExtension
@@ -62,7 +61,3 @@ class EepromExtensionTest(unittest.TestCase):
         self.assertEqual('value_1', ext.read_data('model_name', 1, 'some_field'))
         self.assertEqual('value_2', ext.read_data('model_name', 2, 'some_field'))
         self.assertIsNone(ext.read_data('model_name', 3, 'some_field'))
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

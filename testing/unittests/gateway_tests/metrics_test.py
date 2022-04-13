@@ -22,7 +22,6 @@ import requests
 import copy
 import ujson as json
 import fakesleep
-import xmlrunner
 import time
 from threading import Lock
 from mock import Mock
@@ -504,7 +503,3 @@ class MetricsTest(unittest.TestCase):
         for item in buffer_items:
             buffered_metrics.append({'counter': json.loads(item[0])['counter'], 'timestamp': item[1]})
         return buffered_metrics
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

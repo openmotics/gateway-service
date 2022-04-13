@@ -124,6 +124,7 @@ class SchedulingController(object):
         for schedule_dto in schedule_dtos:
             if self._schedules.get(schedule_dto.id) != schedule_dto:
                 self._submit_schedule(schedule_dto)
+                self._schedules[schedule_dto.id] = schedule_dto
             stale_schedules.pop(schedule_dto.id, None)
             self._update_status(schedule_dto)
         for schedule_dto in stale_schedules.values():
@@ -149,7 +150,6 @@ class SchedulingController(object):
                 kwargs.update({'trigger': 'cron', 'end_date': end_date,
                                'minute': minute, 'hour': hour, 'day': day, 'month': month, 'day_of_week': day_of_week})
             self._scheduler.add_job(self._execute_schedule, **kwargs)
-            self._schedules[schedule_dto.id] = schedule_dto
 
     def _abort(self, base_dto):
         # type: (BaseScheduleDTO) -> None
@@ -158,6 +158,22 @@ class SchedulingController(object):
             self._scheduler.remove_job(base_dto.job_id)
         except JobLookupError:
             pass
+
+    def set_schedule_status(self, schedule_id, status):
+        # type: (int, str) -> ScheduleDTO
+        schedule_dto = self._schedules.get(schedule_id)
+        if schedule_dto is None:
+            raise NoResultFound('Schedule {0} does not exist'.format(schedule_id))
+        with Database.get_session() as db:
+            mapper = ScheduleMapper(db)
+            schedule = mapper.dto_to_orm(schedule_dto)
+            if schedule.status != 'COMPLETED':
+                schedule.status = status
+                schedule_dto = mapper.orm_to_dto(schedule)
+                self._schedules[schedule_id] = schedule_dto
+            db.commit()
+        self.refresh_schedules()
+        return schedule_dto
 
     def load_schedule(self, schedule_id):
         # type: (int) -> ScheduleDTO

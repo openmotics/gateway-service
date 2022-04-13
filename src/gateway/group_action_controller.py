@@ -44,17 +44,36 @@ class GroupActionController(BaseController):
     def do_group_action(self, group_action_id):  # type: (int) -> None
         self._master_controller.do_group_action(group_action_id)
 
+    @staticmethod
+    def _group_action_orm_to_dto(group_action_orm, group_action_dto):
+        group_action_dto.name = group_action_orm.name
+        if group_action_dto.internal:
+            group_action_dto.show_in_app = False  # Never show internal GAs
+        else:
+            group_action_dto.show_in_app = group_action_orm.show_in_app
+
+    @staticmethod
+    def _group_action_dto_to_orm(group_action_dto, group_action_orm):
+        if 'show_in_app' in group_action_dto.loaded_fields:
+            group_action_orm.show_in_app = group_action_dto.show_in_app
+        if 'name' in group_action_dto.loaded_fields:
+            group_action_orm.name = group_action_dto.name
+
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         with Database.get_session() as db:
             group_action = db.query(GroupAction).where(GroupAction.number == group_action_id).one()
             group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)
+            GroupActionController._group_action_orm_to_dto(group_action_orm=group_action,
+                                                           group_action_dto=group_action_dto)
             return group_action_dto
 
     def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         group_action_dtos = []
         with Database.get_session() as db:
-            for group_action in db.query(GroupAction).all():
+            for group_action in db.query(GroupAction).all():  # type: GroupAction
                 group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)
+                GroupActionController._group_action_orm_to_dto(group_action_orm=group_action,
+                                                               group_action_dto=group_action_dto)
                 group_action_dtos.append(group_action_dto)
         return group_action_dtos
 
@@ -62,9 +81,12 @@ class GroupActionController(BaseController):
         group_actions_to_save = []
         with Database.get_session() as db:
             for group_action_dto in group_actions:
-                group_action = db.query(GroupAction).where(GroupAction.number == group_action_dto.id).one_or_none()
+                group_action = db.query(GroupAction).where(GroupAction.number == group_action_dto.id).one_or_none()  # type: GroupAction
                 if group_action is None:
                     logger.info('Ignored saving non-existing GroupAction {0}'.format(group_action_dto.id))
                     continue
+                GroupActionController._group_action_dto_to_orm(group_action_dto=group_action_dto,
+                                                               group_action_orm=group_action)
+            db.commit()
             group_actions_to_save.append(group_action_dto)
         self._master_controller.save_group_actions(group_actions_to_save)

@@ -19,14 +19,8 @@ import subprocess
 import sys
 import unittest
 
-import xmlrunner
-
 
 class MasterToolTests(unittest.TestCase):
     def test_help(self):
         subprocess.check_call([sys.executable, '../../src/master_tool.py', '--help'],
                               cwd=os.path.dirname(__file__))
-
-
-if __name__ == '__main__':
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
