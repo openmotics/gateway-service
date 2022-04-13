@@ -114,6 +114,11 @@ class EnergyModuleController(BaseController):
                     except CommunicationTimedOutException:
                         logger.warning('Could not set day/night for EnergyModule {0}: Timed out'.format(energy_module.number))
 
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+
     @staticmethod
     def _is_day_time(times, date):  # type: (Optional[str], datetime) -> bool
         if not times:
@@ -291,7 +296,10 @@ class EnergyModuleController(BaseController):
 
                 helper = self._get_helper(energy_module.version)
                 helper.configure_cts(energy_module=energy_module)
+            publish = bool(db.dirty)
             db.commit()
+        if publish:
+            self._publish_config()
 
     def get_realtime_p1(self):  # type: () -> List[Dict[str, Any]]
         if not self._enabled:

@@ -16,15 +16,20 @@
 PulseCounter BLL
 """
 from __future__ import absolute_import
+
 import logging
 import time
+
 from sqlalchemy import func
-from ioc import Injectable, Inject, INJECTED, Singleton
-from serial_utils import CommunicationFailure
+
 from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
-from gateway.models import Database, PulseCounter, Room, NoResultFound
+from gateway.events import GatewayEvent
 from gateway.mappers import PulseCounterMapper
+from gateway.models import Database, NoResultFound, PulseCounter, Room
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject, Injectable, Singleton
+from serial_utils import CommunicationFailure
 
 if False:  # MYPY
     from typing import List, Dict, Optional
@@ -35,7 +40,6 @@ logger = logging.getLogger(__name__)
 @Injectable.named('pulse_counter_controller')
 @Singleton
 class PulseCounterController(BaseController):
-
     @Inject
     def __init__(self, master_controller=INJECTED):
         super(PulseCounterController, self).__init__(master_controller)
@@ -79,6 +83,11 @@ class PulseCounterController(BaseController):
 
         self._sync_running = False
         return True
+
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'pulse_counter'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
         with Database.get_session() as db:
@@ -135,8 +144,11 @@ class PulseCounterController(BaseController):
                         pulse_counter.room = None
                     elif 0 <= pulse_counter_dto.room <= 100:
                         pulse_counter.room = db.query(Room).where(Room.number == pulse_counter_dto.room).one()
+            publish = bool(db.dirty)
             db.commit()
         self._master_controller.save_pulse_counters(pulse_counters_to_save)
+        if publish:
+            self._publish_config()
 
     def set_amount_of_pulse_counters(self, amount):  # type: (int) -> int
         # This does not make a lot of sense in an ORM driven implementation, but is for legacy purposes.
@@ -166,6 +178,7 @@ class PulseCounterController(BaseController):
                                                            persistent=False))
             db.add_all(new_pulse_counters)
             db.commit()
+        self._publish_config()
         return amount
 
     def get_amount_of_pulse_counters(self):  # type: () -> int
