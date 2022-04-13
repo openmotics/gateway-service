@@ -54,9 +54,8 @@ class VentilationSerializer(object):
             ventilation_id = api_data['id']
         source_dto = None  # type: Optional[VentilationSourceDTO]
         if 'source' in api_data:
-            source_dto = VentilationSourceDTO(None,
-                                              name=api_data['source']['name'],
-                                              type=api_data['source']['type'])
+            source_dto = VentilationSourceDTO(api_data['source']['type'],
+                                              name=api_data['source']['name'])
         ventilation_dto = VentilationDTO(id=ventilation_id, source=source_dto)
         if 'external_id' in api_data:
             ventilation_dto.external_id = Toolbox.nonify(api_data['external_id'], '')
