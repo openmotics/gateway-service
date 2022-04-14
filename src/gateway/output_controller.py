@@ -198,8 +198,9 @@ class OutputController(BaseController):
         self._master_controller.save_dimmer_configuration(dimmer_configuration_dto)
 
     def set_all_lights(self, action):  # type: (Literal['ON', 'OFF', 'TOGGLE']) -> None
-        # TODO: Also include other sources (e.g. plugins) once implemented
-        self._master_controller.set_all_lights(action=action)
+        light_output_ids = [output.id for output in self.load_outputs()
+                            if output.in_use and output.output_type >= 128]
+        self._master_controller.set_all_lights(action=action, output_ids=light_output_ids)
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         # type: (int, bool, Optional[int], Optional[int]) -> None
