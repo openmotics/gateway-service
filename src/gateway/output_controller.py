@@ -134,6 +134,7 @@ class OutputController(BaseController):
     def _output_orm_to_dto(output_orm, output_dto):
         output_dto.name = output_orm.name
         output_dto.room = output_orm.room.number if output_orm.room is not None else None
+        output_dto.in_use = output_orm.in_use
 
     @staticmethod
     def _output_dto_to_orm(output_dto, output_orm, db):
