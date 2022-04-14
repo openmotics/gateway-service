@@ -24,7 +24,7 @@ if False:  # MYPY
 
 
 class SensorDTO(BaseDTO):
-    def __init__(self, id, external_id=None, source=None, physical_quantity=None, unit=None, name='', room=None, offset=None, virtual=False):
+    def __init__(self, id, external_id=None, source=None, physical_quantity=None, unit=None, name='', room=None, offset=None, virtual=False, in_use=True):
         self.id = id  # type: int
         self.external_id = external_id  # type: str
         self.source = source  # type: SensorSourceDTO
@@ -33,6 +33,7 @@ class SensorDTO(BaseDTO):
         self.name = name  # type: str
         self.offset = offset  # type: Optional[float]
         self.room = room  # type: Optional[int]
+        self.in_use = in_use  # type: bool
         self.virtual = virtual  # type: bool
 
 

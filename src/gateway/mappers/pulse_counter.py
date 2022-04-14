@@ -18,10 +18,7 @@ PulseCounter Mapper
 """
 from __future__ import absolute_import
 from gateway.dto import PulseCounterDTO
-from gateway.models import PulseCounter
-
-if False:  # MYPY
-    from typing import List
+from gateway.models import PulseCounter, Room
 
 
 class PulseCounterMapper(object):
@@ -33,6 +30,7 @@ class PulseCounterMapper(object):
         return PulseCounterDTO(id=orm_object.number,
                                name=orm_object.name,
                                persistent=orm_object.persistent,
+                               in_use=orm_object.in_use,
                                room=None if orm_object.room is None else orm_object.room.number)
 
     def dto_to_orm(self, pulse_counter_dto):  # type: (PulseCounterDTO) -> PulseCounter
@@ -41,10 +39,18 @@ class PulseCounterMapper(object):
             pulse_counter = PulseCounter(number=pulse_counter_dto.id,
                                          name='',
                                          source='gateway',
+                                         in_use=True,
                                          persistent=False)
             self._db.add(pulse_counter)
         if 'name' in pulse_counter_dto.loaded_fields:
             pulse_counter.name = pulse_counter_dto.name
         if 'persistent' in pulse_counter_dto.loaded_fields:
             pulse_counter.persistent = pulse_counter_dto.persistent
+        if 'in_use' in pulse_counter_dto.loaded_fields:
+            pulse_counter.in_use = pulse_counter_dto.in_use
+        if 'room' in pulse_counter_dto.loaded_fields:
+            if pulse_counter_dto.room is None:
+                pulse_counter.room = None
+            elif 0 <= pulse_counter_dto.room <= 100:
+                pulse_counter.room = self._db.query(Room).where(Room.number == pulse_counter_dto.room).one()
         return pulse_counter

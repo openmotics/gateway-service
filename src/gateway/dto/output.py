@@ -34,6 +34,7 @@ class OutputDTO(BaseDTO):
                  can_led_4=None,  # type: Optional[FeedbackLedDTO]
                  room=None,
                  lock_bit_id=None,
+                 in_use=True,
                  state=None,
                  module=None):
         self.id = id  # type: int
@@ -43,6 +44,7 @@ class OutputDTO(BaseDTO):
         self.output_type = output_type  # type: int
         self.room = room  # type: Optional[int]
         self.lock_bit_id = lock_bit_id  # type: Optional[int]
+        self.in_use = in_use  # type: bool
         self.module = module  # type: Optional[ModuleDTO]
         self.state = state
         if self.state:
@@ -65,7 +67,8 @@ class OutputDTO(BaseDTO):
                 self.can_led_1 == other.can_led_1 and
                 self.can_led_2 == other.can_led_2 and
                 self.can_led_3 == other.can_led_3 and
-                self.can_led_4 == other.can_led_4)
+                self.can_led_4 == other.can_led_4 and
+                self.in_use == other.in_use)
 
 
 class OutputStatusDTO(BaseDTO):

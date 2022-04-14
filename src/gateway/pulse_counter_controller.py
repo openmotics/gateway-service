@@ -84,6 +84,23 @@ class PulseCounterController(BaseController):
         self._sync_running = False
         return True
 
+    @staticmethod
+    def _pulse_counter_orm_to_dto(pulse_counter_orm, pulse_counter_dto):
+        pulse_counter_dto.name = pulse_counter_orm.name
+        pulse_counter_dto.room = pulse_counter_orm.room.number if pulse_counter_orm.room is not None else None
+        pulse_counter_dto.in_use = pulse_counter_orm.in_use
+
+    @staticmethod
+    def _pulse_counter_dto_to_orm(pulse_counter_dto, pulse_counter_orm, db):
+        for field in ['in_use', 'name']:
+            if field in pulse_counter_dto.loaded_fields:
+                setattr(pulse_counter_orm, field, getattr(pulse_counter_dto, field))
+        if 'room' in pulse_counter_dto.loaded_fields:
+            if pulse_counter_dto.room is None:
+                pulse_counter_orm.room = None
+            elif 0 <= pulse_counter_dto.room <= 100:
+                pulse_counter_orm.room = db.query(Room).where(Room.number == pulse_counter_dto.room).one()
+
     def _publish_config(self):
         # type: () -> None
         gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'pulse_counter'})
@@ -97,7 +114,8 @@ class PulseCounterController(BaseController):
                               .one()
             if pulse_counter.source == 'master':
                 pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter_id)
-                pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
+                PulseCounterController._pulse_counter_orm_to_dto(pulse_counter_orm=pulse_counter,
+                                                                 pulse_counter_dto=pulse_counter_dto)
             else:
                 pulse_counter_dto = mapper.orm_to_dto(pulse_counter)
         return pulse_counter_dto
@@ -114,8 +132,8 @@ class PulseCounterController(BaseController):
                     if pulse_counter_dto is None:
                         logger.warning('The ORM contains outdated PulseCounters')
                         continue
-                    pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
-                    pulse_counter_dto.name = pulse_counter.name  # Use longer ORM name
+                    PulseCounterController._pulse_counter_orm_to_dto(pulse_counter_orm=pulse_counter,
+                                                                     pulse_counter_dto=pulse_counter_dto)
                 else:
                     pulse_counter_dto = mapper.orm_to_dto(pulse_counter)
                 pulse_counter_dtos.append(pulse_counter_dto)
@@ -132,18 +150,14 @@ class PulseCounterController(BaseController):
                 if pulse_counter.source == 'master':
                     # Only master pulse counters will be passed to the MasterController batch save
                     pulse_counters_to_save.append(pulse_counter_dto)
-                    if 'name' in pulse_counter_dto.loaded_fields:
-                        pulse_counter.name = pulse_counter_dto.name
+                    PulseCounterController._pulse_counter_dto_to_orm(pulse_counter_dto=pulse_counter_dto,
+                                                                     pulse_counter_orm=pulse_counter,
+                                                                     db=db)
                 elif pulse_counter.source == 'gateway':
-                    pulse_counter = mapper.dto_to_orm(pulse_counter_dto)
+                    mapper.dto_to_orm(pulse_counter_dto)
                 else:
                     logger.warning('Trying to save a PulseCounter with unknown source {0}'.format(pulse_counter.source))
                     continue
-                if 'room' in pulse_counter_dto.loaded_fields:
-                    if pulse_counter_dto.room is None:
-                        pulse_counter.room = None
-                    elif 0 <= pulse_counter_dto.room <= 100:
-                        pulse_counter.room = db.query(Room).where(Room.number == pulse_counter_dto.room).one()
             publish = bool(db.dirty)
             db.commit()
         self._master_controller.save_pulse_counters(pulse_counters_to_save)

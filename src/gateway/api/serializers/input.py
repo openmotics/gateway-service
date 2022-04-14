@@ -40,7 +40,8 @@ class InputSerializer(object):
                 'invert': 0 if input_dto.invert else 255,
                 'room': Toolbox.denonify(input_dto.room, InputSerializer.BYTE_MAX),
                 'can': 'C' if input_dto.can else ' ',
-                'event_enabled': input_dto.event_enabled}
+                'event_enabled': input_dto.event_enabled,
+                'in_use': input_dto.in_use}
         if input_dto.module is not None:
             data.update({'module': {'hardware_type': input_dto.module.hardware_type,
                                     'hardware_module': input_dto.module.module_type,
@@ -60,6 +61,7 @@ class InputSerializer(object):
                      'invert': ('invert', lambda i: i != 255),
                      'can': ('can', lambda s: s == 'C'),
                      'event_enabled': ('event_enabled', None),
+                     'in_use': ('in_use', None),
                      'room': ('room', InputSerializer.BYTE_MAX)}
         )
         return input_dto

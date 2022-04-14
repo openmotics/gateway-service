@@ -23,11 +23,12 @@ if False:  # MYPY
 
 
 class GroupActionDTO(BaseDTO):
-    def __init__(self, id, name='', actions=None, internal=False, show_in_app=True):
-        # type: (int, str, Optional[List[int]], bool, bool) -> None
+    def __init__(self, id, name='', actions=None, internal=False, show_in_app=True, in_use=True):
+        # type: (int, str, Optional[List[int]], bool, bool, bool) -> None
         # The argument `actions` is None since you should not set a reference type as default value
         self.id = id
         self.name = name
         self.actions = [] if actions is None else actions  # type: List[int]
         self.internal = internal
         self.show_in_app = show_in_app
+        self.in_use = in_use

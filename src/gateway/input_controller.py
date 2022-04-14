@@ -117,19 +117,19 @@ class InputController(BaseController):
         input_dto.name = input_orm.name
         input_dto.room = input_orm.room.number if input_orm.room is not None else None
         input_dto.event_enabled = input_orm.event_enabled
+        input_dto.in_use = input_orm.in_use
 
     @staticmethod
     def _input_dto_to_orm(input_dto, input_orm, db):
-        if 'event_enabled' in input_dto.loaded_fields:
-            input_orm.event_enabled = input_dto.event_enabled
+        for field in ['event_enabled', 'name', 'in_use']:
+            if field in input_dto.loaded_fields:
+                setattr(input_orm, field, getattr(input_dto, field))
         if 'room' in input_dto.loaded_fields:
             if input_dto.room is None:
                 input_orm.room = None
             elif 0 <= input_dto.room <= 100:
                 # TODO: Validation should happen on API layer
                 input_orm.room = db.query(Room).where(Room.number == input_dto.room).one()
-        if 'name' in input_dto.loaded_fields:
-            input_orm.name = input_dto.name
 
     def load_input(self, input_id):  # type: (int) -> InputDTO
         with Database.get_session() as db:

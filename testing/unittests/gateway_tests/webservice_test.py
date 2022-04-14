@@ -165,6 +165,7 @@ class WebInterfaceTest(unittest.TestCase):
                                external_id='0',
                                physical_quantity='temperature',
                                unit='celcius',
+                               in_use=True,
                                name='foo')
         with mock.patch.object(self.sensor_controller, 'load_sensors',
                                return_value=[sensor_dto]):
@@ -178,6 +179,7 @@ class WebInterfaceTest(unittest.TestCase):
                 'name': 'foo',
                 'room': 255,
                 'offset': 0,
+                'in_use': True,
                 'virtual': False,
             }], json.loads(response)['config'])
 
@@ -186,6 +188,7 @@ class WebInterfaceTest(unittest.TestCase):
                   'name': 'foo',
                   'room': 255,
                   'offset': 0,
+                  'in_use': True,
                   'virtual': False}
         sensor_dto = SensorSerializer.deserialize(config)
         expected_response = [SensorSerializer.serialize(sensor_dto, fields=None)]

@@ -39,7 +39,8 @@ class ShutterSerializer(object):
                 'group_1': Toolbox.denonify(shutter_dto.group_1, ShutterSerializer.BYTE_MAX),
                 'group_2': Toolbox.denonify(shutter_dto.group_2, ShutterSerializer.BYTE_MAX),
                 'room': Toolbox.denonify(shutter_dto.room, ShutterSerializer.BYTE_MAX),
-                'steps': Toolbox.denonify(shutter_dto.steps, ShutterSerializer.WORD_MAX)}
+                'steps': Toolbox.denonify(shutter_dto.steps, ShutterSerializer.WORD_MAX),
+                'in_use': shutter_dto.in_use}
         if shutter_dto.module is not None:
             data.update({'module': {'hardware_type': shutter_dto.module.hardware_type,
                                     'hardware_module': shutter_dto.module.module_type,
@@ -53,6 +54,7 @@ class ShutterSerializer(object):
             dto=shutter_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
+                     'in_use': ('in_use', None),
                      'timer_up': ('timer_up', ShutterSerializer.BYTE_MAX),
                      'timer_down': ('timer_down', ShutterSerializer.BYTE_MAX),
                      'up_down_config': ('up_down_config', ShutterSerializer.BYTE_MAX),

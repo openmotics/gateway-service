@@ -47,6 +47,7 @@ class OutputSerializer(object):
                 'can_led_3_function': output_dto.can_led_3.function,
                 'can_led_4_id': Toolbox.denonify(output_dto.can_led_4.id, OutputSerializer.BYTE_MAX),
                 'can_led_4_function': output_dto.can_led_4.function,
+                'in_use': output_dto.in_use,
                 'room': Toolbox.denonify(output_dto.room, OutputSerializer.BYTE_MAX)}
         if output_dto.module is not None:
             data.update({'module': {'hardware_type': output_dto.module.hardware_type,
@@ -63,6 +64,7 @@ class OutputSerializer(object):
             mapping={'module_type': ('module_type', None),
                      'name': ('name', None),
                      'type': ('output_type', None),
+                     'in_use': ('in_use', None),
                      'lock_bit_id': ('lock_bit_id', OutputSerializer.BYTE_MAX),
                      'timer': ('timer', OutputSerializer.WORD_MAX),
                      'room': ('room', OutputSerializer.BYTE_MAX)}

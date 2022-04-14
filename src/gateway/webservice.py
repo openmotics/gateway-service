@@ -757,6 +757,7 @@ class WebInterface(object):
             'pause_schedules',  # Allow schedules to be paused/resumed
             'show_in_app_property',  # Supports the `show_in_app` property
             'long_names',  # Supports long (255 char) names
+            'in_use_property',  # Supports the in_use property
             # TODO: remove
             'default_timer_disabled',
             '100_steps_dimmer',

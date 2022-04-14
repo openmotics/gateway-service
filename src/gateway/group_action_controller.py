@@ -56,6 +56,7 @@ class GroupActionController(BaseController):
     @staticmethod
     def _group_action_orm_to_dto(group_action_orm, group_action_dto):
         group_action_dto.name = group_action_orm.name
+        group_action_dto.in_use = group_action_orm.in_use
         if group_action_dto.internal:
             group_action_dto.show_in_app = False  # Never show internal GAs
         else:
@@ -63,10 +64,9 @@ class GroupActionController(BaseController):
 
     @staticmethod
     def _group_action_dto_to_orm(group_action_dto, group_action_orm):
-        if 'show_in_app' in group_action_dto.loaded_fields:
-            group_action_orm.show_in_app = group_action_dto.show_in_app
-        if 'name' in group_action_dto.loaded_fields:
-            group_action_orm.name = group_action_dto.name
+        for field in ['name', 'show_in_app', 'in_use']:
+            if field in group_action_dto.loaded_fields:
+                setattr(group_action_orm, field, getattr(group_action_dto, field))
 
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         with Database.get_session() as db:

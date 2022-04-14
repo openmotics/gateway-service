@@ -48,6 +48,7 @@ class SensorMapper(object):
                          physical_quantity=sensor.physical_quantity,
                          unit=sensor.unit,
                          name=sensor.name,
+                         in_use=sensor.in_use,
                          room=room)
 
     def dto_to_orm(self, sensor_dto):  # type: (SensorDTO) -> Sensor
@@ -92,6 +93,7 @@ class SensorMapper(object):
                             physical_quantity=sensor_dto.physical_quantity,
                             unit=sensor_dto.unit,
                             name=sensor_dto.name,
+                            in_use=sensor_dto.in_use or True,
                             room=room)
         else:
             if 'physical_quantity' in sensor_dto.loaded_fields:
@@ -104,6 +106,8 @@ class SensorMapper(object):
                 if sensor_dto.room is not None and 0 <= sensor_dto.room <= 100:
                     room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
                 sensor.room = room
+            if 'in_use' in sensor_dto.loaded_fields:
+                sensor.in_use = sensor_dto.in_use
         return sensor
 
     def dto_to_master_dto(self, sensor_dto):  # type: (SensorDTO) -> Optional[MasterSensorDTO]

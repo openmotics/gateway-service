@@ -23,8 +23,9 @@ if False:  # MYPY
 
 
 class ShutterGroupDTO(BaseDTO):
-    def __init__(self, id, timer_up=None, timer_down=None, room=None):
+    def __init__(self, id, timer_up=None, timer_down=None, room=None, in_use=True):
         self.id = id  # type: int
         self.timer_up = timer_up  # type: Optional[int]
         self.timer_down = timer_down  # type: Optional[int]
         self.room = room  # type: Optional[int]
+        self.in_use = in_use  # type: bool

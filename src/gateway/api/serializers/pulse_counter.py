@@ -34,7 +34,8 @@ class PulseCounterSerializer(object):
                 'name': pulse_counter_dto.name,
                 'input': Toolbox.denonify(pulse_counter_dto.input_id, PulseCounterSerializer.BYTE_MAX),
                 'persistent': pulse_counter_dto.persistent,
-                'room': Toolbox.denonify(pulse_counter_dto.room, PulseCounterSerializer.BYTE_MAX)}
+                'room': Toolbox.denonify(pulse_counter_dto.room, PulseCounterSerializer.BYTE_MAX),
+                'in_use': pulse_counter_dto.in_use}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -45,6 +46,7 @@ class PulseCounterSerializer(object):
             api_data=api_data,
             mapping={'name': ('name', None),
                      'persistent': ('persistent', None),
+                     'in_use': ('in_use', None),
                      'input': ('input_id', PulseCounterSerializer.BYTE_MAX),
                      'room': ('room', PulseCounterSerializer.BYTE_MAX)}
         )

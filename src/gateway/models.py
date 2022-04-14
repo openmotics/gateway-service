@@ -92,6 +92,7 @@ class Input(Base, MasterNumber):
     event_enabled = Column(Boolean, default=False, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
     name = Column(String(255), default='', nullable=False)
+    in_use = Column(Boolean, nullable=False, default=True)
 
     room = relationship('Room', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
@@ -103,6 +104,7 @@ class Output(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
     name = Column(String(255), default='', nullable=False)
+    in_use = Column(Boolean, nullable=False, default=True)
 
     room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
     pump = relationship('Pump', back_populates='output', uselist=False)  # type: RelationshipProperty[Optional[Pump]]
@@ -121,6 +123,7 @@ class Sensor(Base):
     name = Column(String(255), nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
+    in_use = Column(Boolean, nullable=False, default=True)
 
     room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
     plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
@@ -157,6 +160,7 @@ class Shutter(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
     name = Column(String(255), default='', nullable=False)
+    in_use = Column(Boolean, nullable=False, default=True)
 
     room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
@@ -167,6 +171,8 @@ class ShutterGroup(Base, MasterNumber):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    in_use = Column(Boolean, nullable=False, default=True)
+
     room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
@@ -179,6 +185,7 @@ class PulseCounter(Base, MasterNumber):
     source = Column(String(255), nullable=False)  # Options: 'master' or 'gateway'
     persistent = Column(Boolean, nullable=False)
     room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    in_use = Column(Boolean, nullable=False, default=True)
 
     room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
@@ -190,6 +197,7 @@ class GroupAction(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     show_in_app = Column(Boolean, nullable=False, default=True)
     name = Column(String(255), default='', nullable=False)
+    in_use = Column(Boolean, nullable=False, default=True)
 
 
 class Module(Base):
@@ -216,6 +224,7 @@ class EnergyModule(Base, MasterNumber):
     version = Column(Integer, nullable=False)
     name = Column(String(255), default='', nullable=False)
     module_id = Column(Integer, ForeignKey('module.id', ondelete="CASCADE"), unique=True, nullable=False)
+
     module = relationship('Module', foreign_keys=[module_id])
     cts = relationship("EnergyCT",  lazy='joined', innerjoin=False, back_populates="energy_module")  # type: RelationshipProperty[List[EnergyCT]]
 
