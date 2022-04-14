@@ -51,9 +51,9 @@ class RoomController(object):
 
     def save_rooms(self, rooms):  # type: (List[RoomDTO]) -> None
         with Database.get_session() as db:
+            rooms_to_add = []
+            rooms_to_delete = []
             for room_dto in rooms:
-                rooms_to_add = []
-                rooms_to_delete = []
                 if room_dto.in_use:
                     rooms_to_add.append(RoomMapper(db).dto_to_orm(room_dto))
                 else:
@@ -61,3 +61,4 @@ class RoomController(object):
             db.add_all(rooms_to_add)
             db.query(Room).where(Room.number.in_(rooms_to_delete)).delete()
             db.commit()
+        # explicitly doesn't publish config event since rooms are update by the cloud

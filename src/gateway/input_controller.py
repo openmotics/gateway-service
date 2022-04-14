@@ -93,6 +93,11 @@ class InputController(BaseController):
         if changed and input_dto is not None:
             self._publish_input_change(input_dto)
 
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'input'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+
     def _publish_input_change(self, input_dto):
         # type: (InputDTO) -> None
         event_data = {'id': input_dto.id,
@@ -164,8 +169,11 @@ class InputController(BaseController):
                 else:
                     InputController._input_dto_to_orm(input_dto=input_dto, input_orm=input_orm, db=db)
                 inputs_to_save.append(input_dto)
+            publish = bool(db.dirty)
             db.commit()
         self._master_controller.save_inputs(inputs_to_save)
+        if publish:
+            self._publish_config()
 
     def get_input_status(self, input_id):
         # type: (int) -> Optional[InputStatusDTO]

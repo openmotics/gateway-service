@@ -106,6 +106,11 @@ class OutputController(BaseController):
             # This is an expected situation
             raise DaemonThreadWait
 
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+
     def _publish_output_change(self, output_dto):
         # type: (OutputDTO) -> None
         event_status = {'on': output_dto.state.status, 'locked': output_dto.state.locked}
@@ -178,8 +183,11 @@ class OutputController(BaseController):
                 else:
                     OutputController._output_dto_to_orm(output_dto=output_dto, output_orm=output, db=db)
                 outputs_to_save.append(output_dto)
+            publish = bool(db.dirty)
             db.commit()
         self._master_controller.save_outputs(outputs_to_save)
+        if publish:
+            self._publish_config()
 
     def load_dimmer_configuration(self):
         # type: () -> DimmerConfigurationDTO
