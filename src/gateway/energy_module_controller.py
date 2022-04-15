@@ -159,7 +159,7 @@ class EnergyModuleController(BaseController):
             return 0
         return self._energy_communicator.get_seconds_since_last_success()
 
-    def scan_bus(self):  # type: () -> Generator[Tuple[str, int, str, Optional[str]], None, None]
+    def scan_bus(self):  # type: () -> Generator[Tuple[bool, str, int, Optional[str], Optional[str]], None, None]
         if not self._enabled:
             logger.info('Scan aborted, controller is disabled')
             return
