@@ -78,13 +78,5 @@ class InUseMigrator(BaseMigrator):
                 shutter_group_orm = db.query(ShutterGroup).filter(ShutterGroup.number == shutter_group_dto.id).one_or_none()  # type: Optional[ShutterGroup]
                 if shutter_group_orm is not None:
                     shutter_group_orm.in_use = shutter_group_orm.number in used_shutter_groups
-            # Group Actions
-            for group_action_dto in master_controller.load_group_actions():
-                group_action_orm = db.query(GroupAction).filter(GroupAction.number == group_action_dto.id).one_or_none()  # type: Optional[GroupAction]
-                if group_action_orm is not None:
-                    group_action_orm.in_use = (group_action_orm.name.strip() not in ['', 'NOT_IN_USE'] and
-                                               len(group_action_dto.actions) > 0)
-                    if not group_action_orm.in_use:
-                        group_action_orm.name = ''
             # Sensors: Not needed, as all currently sensors in the ORM should be in use
             db.commit()

@@ -197,7 +197,6 @@ class GroupAction(Base, MasterNumber):
     id = Column(Integer, primary_key=True, autoincrement=True)
     show_in_app = Column(Boolean, nullable=False, default=True)
     name = Column(String(255), default='', nullable=False)
-    in_use = Column(Boolean, nullable=False, default=True)
 
 
 class Module(Base):
