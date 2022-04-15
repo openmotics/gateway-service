@@ -17,7 +17,7 @@ depends_on = None
 
 
 def upgrade():
-    for table in ['groupaction', 'input', 'output', 'pulsecounter', 'sensor', 'shutter', 'shuttergroup']:
+    for table in ['input', 'output', 'pulsecounter', 'sensor', 'shutter', 'shuttergroup']:
         with op.batch_alter_table(table, schema=None) as batch_op:
             batch_op.add_column(sa.Column('in_use', sa.Boolean(), nullable=True))
         op.execute('UPDATE "{0}" SET in_use = 1'.format(table))
@@ -26,6 +26,6 @@ def upgrade():
 
 
 def downgrade():
-    for table in ['groupaction', 'input', 'output', 'pulsecounter', 'sensor', 'shutter', 'shuttergroup']:
+    for table in ['input', 'output', 'pulsecounter', 'sensor', 'shutter', 'shuttergroup']:
         with op.batch_alter_table(table, schema=None) as batch_op:
             batch_op.drop_column('in_use')
