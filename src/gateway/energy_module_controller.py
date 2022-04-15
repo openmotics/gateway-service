@@ -51,6 +51,9 @@ logger = logging.getLogger('openmotics')
 @Singleton
 class EnergyModuleController(BaseController):
 
+    VALID_ADDRESS_RANGE = [0, 254]
+    DEFAULT_ADDRESS = 1
+
     @Inject
     def __init__(self, master_controller=INJECTED, energy_communicator=INJECTED, energy_module_updater=INJECTED, pubsub=INJECTED):
         # type: (MasterController, EnergyCommunicator, EnergyModuleUpdater, PubSub) -> None
@@ -158,17 +161,16 @@ class EnergyModuleController(BaseController):
 
     def scan_bus(self):  # type: () -> Generator[Tuple[str, int, str, Optional[str]], None, None]
         if not self._enabled:
+            logger.info('Scan aborted, controller is disabled')
             return
-        for address in range(256):
-            if address < 250:
-                continue
+        for address in range(255):
             for module_type, version in {'E/P': EnergyEnums.Version.ENERGY_MODULE,
                                          'C': EnergyEnums.Version.P1_CONCENTRATOR}.items():
                 try:
                     firmware_version, hardware_version = self._energy_module_updater.get_module_firmware_version(address, version)
-                    yield module_type, address, firmware_version, hardware_version
+                    yield True, module_type, address, firmware_version, hardware_version
                 except CommunicationTimedOutException:
-                    pass  # Expected
+                    yield False, module_type, address, None, None
                 except Exception as ex:
                     logger.error('Error scanning address {0} {1}: {2}'.format(module_type, address, ex))
 
