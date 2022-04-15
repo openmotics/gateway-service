@@ -15,6 +15,3 @@
 """
 V1 api init file
 """
-
-from gateway.api.V1.authentication import Authentication
-from gateway.api.V1.users import Users
