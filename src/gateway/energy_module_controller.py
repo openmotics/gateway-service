@@ -98,6 +98,7 @@ class EnergyModuleController(BaseController):
         date = datetime.now()
         with Database.get_session() as db:
             energy_modules = db.query(EnergyModule)\
+                .join(Module, isouter=True)\
                 .where(Module.module_type != ModuleType.P1_CONCENTRATOR)\
                 .all()
             for energy_module in energy_modules:
