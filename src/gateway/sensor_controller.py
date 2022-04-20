@@ -86,6 +86,8 @@ class SensorController(BaseController):
                                                     value=master_event.data['value']))
             else:
                 logger.warning('Received value for unknown %s sensor %s', key, master_event)
+                self._sync_structures = True
+                self._send_config_event = True
                 self.request_sync_orm()
 
     def _sync_orm_structure(self, structure):  # type: (SyncStructure) -> None

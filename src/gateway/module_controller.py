@@ -152,6 +152,8 @@ class ModuleController(BaseController):
             self._master_controller.replace_module(old_address, new_address)
             if not self.run_sync_orm():
                 # The sync might already be running, so we'll make sure it does a full run (again)
+                self._sync_structures = True
+                self._send_config_event = True
                 self.request_sync_orm()
             new_module = db.query(Module)\
                 .where(Module.source == new_module.source, Module.address == new_module.address)\

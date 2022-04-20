@@ -77,15 +77,16 @@ class SensorControllerTest(unittest.TestCase):
                           MasterSensorDTO(id=1, name='bar'),
                           MasterSensorDTO(id=2, name='baz')]
         with mock.patch.object(self.master_controller, 'load_sensors', return_value=master_sensors), \
-             mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None]), \
-             mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None]), \
+             mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None, None, None]), \
+             mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, None]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0, None]):
-            self.controller._sync_structures = True
             self.controller.run_sync_orm()
+            self.assertFalse(self.controller._sync_structures)
             self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 21.0}) in events
         assert len(events) == 2
+        events.pop()
         events.pop()
 
         master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'TEMPERATURE', 'value': 22.5})
@@ -93,7 +94,7 @@ class SensorControllerTest(unittest.TestCase):
         self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 22.5}) in events
-        assert len(events) == 2
+        assert len(events) == 1
         events.pop()
 
         master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'TEMPERATURE', 'value': None})
@@ -101,7 +102,26 @@ class SensorControllerTest(unittest.TestCase):
         self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': None}) in events
-        assert len(events) == 2
+        assert len(events) == 1
+        events.pop()
+
+        master_sensors = [MasterSensorDTO(id=0, name='foo'),
+                          MasterSensorDTO(id=1, name='bar'),
+                          MasterSensorDTO(id=2, name='baz')]
+        with mock.patch.object(self.master_controller, 'load_sensors', return_value=master_sensors), \
+             mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None, None, None]), \
+             mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, 55.5, None]), \
+             mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0, None]):
+            master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'HUMIDITY', 'value': 55.5})
+            self.pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+            self.pubsub._publish_all_events(blocking=False)
+            self.assertTrue(self.controller._sync_structures)
+            self.controller.run_sync_orm()
+            self.pubsub._publish_all_events(blocking=False)
+
+        assert GatewayEvent('SENSOR_CHANGE', {'id': 43, 'value': 55.5}) in events
+        assert len(events) == 4
+        events.pop()
 
     def test_sync(self):
         with self.session as db:
