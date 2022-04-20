@@ -923,18 +923,35 @@ class MasterCoreController(MasterController):
         sensor_configuration = SensorConfiguration(sensor_id)
         if sensor_configuration.module.device_type != 't':
             raise ValueError('Sensor ID {0} does not map to a virtual Sensor'.format(sensor_id))
-        self._do_basic_action(BasicAction(action_type=3,
-                                          action=sensor_id,
-                                          device_nr=Temperature.temperature_to_system_value(temperature)))
-        self._do_basic_action(BasicAction(action_type=4,
-                                          action=sensor_id,
-                                          device_nr=Humidity.humidity_to_system_value(humidity)))
-        lux = MasterCoreController._legacy_brightness_to_lux(brightness)
-        self._do_basic_action(BasicAction(action_type=5,
-                                          action=sensor_id,
-                                          device_nr=lux if lux is not None else (2 ** 16 - 1),
-                                          extra_parameter=3))  # Store full word-size lux value
+        updated_sensor_types = []  # type: List[str]
+        states = self._sensor_states.get(sensor_id, {})
+        current_temperature = states.get(MasterEvent.SensorType.TEMPERATURE)
+        if temperature != current_temperature:
+            self._do_basic_action(BasicAction(action_type=3,
+                                              action=sensor_id,
+                                              device_nr=Temperature.temperature_to_system_value(temperature)))
+            updated_sensor_types.append(MasterEvent.SensorType.TEMPERATURE)
+        current_humidity = states.get(MasterEvent.SensorType.HUMIDITY)
+        if humidity != current_humidity:
+            self._do_basic_action(BasicAction(action_type=4,
+                                              action=sensor_id,
+                                              device_nr=Humidity.humidity_to_system_value(humidity)))
+            updated_sensor_types.append(MasterEvent.SensorType.HUMIDITY)
+        current_brightness = states.get(MasterEvent.SensorType.BRIGHTNESS)
+        if brightness != current_brightness:
+            lux = MasterCoreController._legacy_brightness_to_lux(brightness)
+            self._do_basic_action(BasicAction(action_type=5,
+                                              action=sensor_id,
+                                              device_nr=lux if lux is not None else (2 ** 16 - 1),
+                                              extra_parameter=3))  # Store full word-size lux value
+            updated_sensor_types.append(MasterEvent.SensorType.BRIGHTNESS)
         self._refresh_sensor_states()
+        for sensor_type in updated_sensor_types:
+            sensor_value = self._sensor_states[sensor_id][sensor_type]
+            master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data={'sensor': sensor_id,
+                                                                             'type': sensor_type,
+                                                                             'value': sensor_value})
+            self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
 
     @staticmethod
     def _lux_to_legacy_brightness(lux):  # type: (Optional[int]) -> Optional[int]
