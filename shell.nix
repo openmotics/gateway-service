@@ -8,4 +8,9 @@ stdenv.mkDerivation {
 
   dontAddPythonPath = "1";
   SOURCE_DATE_EPOCH = "315532800";
+  
+  shellHook = lib.optionalString stdenv.isLinux ''
+    # fixes libstdc++ issues and libgl.so issues
+    export LD_LIBRARY_PATH="${stdenv.cc.cc.lib}/lib"
+  '';
 }
