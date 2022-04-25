@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import requests
 
+from gateway.dto.sensor import SensorDTO
 from gateway.dto.ventilation import VentilationDTO
 
 if False:  # MYPY
@@ -23,6 +24,17 @@ class BaseApi(object):
         response = requests.request(method, '{0}/{1}'.format(self._base_url, path.strip('/')), **kwargs)
         response.raise_for_status()
         return response.json()
+
+
+class SensorApi(BaseApi):
+    def register(self, external_id, physical_quantity, config=None):
+        data = {'source': 'plugin',
+                'plugin': self._plugin_name,
+                'external_id': external_id,
+                'physical_quantity': physical_quantity,
+                'config': config or {}}
+        data = self._api('POST', '/plugin/sensor/register', json=data)
+        return SensorDTO(data['id'], external_id=external_id)
 
 
 class VentilationApi(BaseApi):

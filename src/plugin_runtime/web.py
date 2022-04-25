@@ -4,7 +4,7 @@ import re
 
 import requests
 
-from plugin_runtime.api import VentilationApi
+from plugin_runtime.api import SensorApi, VentilationApi
 
 try:
     import ujson as json
@@ -48,6 +48,7 @@ class WebInterfaceDispatcher(object):
         self._available_calls = _load_webinterface()
         self._base_url = 'http://{0}:{1}'.format(hostname, port)
         self._plugin_name = None
+        self.sensor = SensorApi(self._base_url, self._plugin_name)
         self.ventilation = VentilationApi(self._base_url, self._plugin_name)
 
     @property

@@ -152,8 +152,8 @@ class SensorControllerTest(unittest.TestCase):
     def test_sync_migrate_existing(self):
         with self.session as db:
             db.add_all([
-                Room(id=1, number=2, name='Livingroom'),
-                Sensor(source='master', external_id='1', name='', room_id=1)
+                Sensor(source='master', external_id='1', name='',
+                       room=Room(number=2, name='Livingroom'))
             ])
             db.commit()
 
@@ -288,7 +288,7 @@ class SensorControllerTest(unittest.TestCase):
             assert [0] == [x.id for x in master_sensor_dtos]
             assert ['foo'] == [x.name for x in master_sensor_dtos]
 
-    def test_save_sensors_create(self):
+    def test_register_sensor(self):
         with self.session as db:
             db.add(Plugin(id=10, name='dummy', version='0.0.1'))
             db.commit()
@@ -299,36 +299,43 @@ class SensorControllerTest(unittest.TestCase):
             events.append(gateway_event)
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
 
-        sensor_dto = SensorDTO(id=None,
-                               source=SensorSourceDTO('plugin', name='dummy'),
-                               external_id='foo',
-                               physical_quantity='temperature',
-                               unit='celcius',
-                               name='foo')
+        source_dto = SensorSourceDTO('plugin', name='dummy')
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
-            saved_sensors = self.controller.save_sensors([sensor_dto])
-            self.pubsub._publish_all_events(blocking=False)
+            sensor_dto = self.controller.register_sensor(source_dto, 'foo', 'temperature', {'unit': 'celcius', 'name': 'example'})
+            sensor_id = sensor_dto.id
+            assert sensor_id > 500
             save.assert_not_called()
-            assert all([saved_sensor.id for saved_sensor in saved_sensors])
+            assert sensor_id is not None
+            self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1
 
         with self.session as db:
             plugin = db.query(Plugin).filter_by(name='dummy').one()
-            sensor = db.query(Sensor).filter_by(physical_quantity='temperature').one()
-            assert sensor.id > 500
+            sensor = db.query(Sensor).filter_by(id=sensor_id).one()
             assert sensor.source == 'plugin'
             assert sensor.plugin == plugin
             assert sensor.external_id == 'foo'
+            assert sensor.physical_quantity == 'temperature'
             assert sensor.unit == 'celcius'
-            assert sensor.name == 'foo'
+            assert sensor.name == 'example'
+
+        with mock.patch.object(self.master_controller, 'save_sensors') as save:
+            sensor_dto = self.controller.register_sensor(source_dto, 'foo', 'temperature', {'unit': 'celcius', 'name': ''})
+            assert sensor_dto.id == sensor_id
+            assert sensor_dto.name == 'example'
+            assert sensor_dto.physical_quantity == 'temperature'
+            assert sensor_dto.unit == 'celcius'
+
+        with self.session as db:
+            assert db.query(Sensor).count() == 1
 
     def test_save_sensors_update(self):
         with self.session as db:
             db.add_all([
-                Plugin(id=10, name='dummy', version='0.0.1'),
-                Sensor(id=512, plugin_id=10, source='plugin', external_id='foo', physical_quantity='temperature', name='')
+                Sensor(id=512, source='plugin', external_id='foo', physical_quantity='temperature', name='',
+                       plugin=Plugin(name='dummy', version='0.0.1'))
             ])
             db.commit()
 
@@ -338,7 +345,7 @@ class SensorControllerTest(unittest.TestCase):
             events.append(gateway_event)
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
 
-        sensor_dto = SensorDTO(id=None,
+        sensor_dto = SensorDTO(id=512,
                                source=SensorSourceDTO('plugin', name='dummy'),
                                external_id='foo',
                                physical_quantity='temperature',
@@ -364,13 +371,18 @@ class SensorControllerTest(unittest.TestCase):
             assert sensor.name == 'foo'
 
     def test_save_sensors_master_virtual(self):
+        with self.session as db:
+            db.add_all([
+                Sensor(id=1, source='master', external_id='31', physical_quantity='temperature', name='')
+            ])
+            db.commit()
         events = []
 
         def handle_event(gateway_event):
             events.append(gateway_event)
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
 
-        sensor_dto = SensorDTO(id=None,
+        sensor_dto = SensorDTO(id=1,
                                source=SensorSourceDTO('master'),
                                external_id='31',
                                physical_quantity='temperature',

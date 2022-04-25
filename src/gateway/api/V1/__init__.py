@@ -19,3 +19,4 @@ V1 api init file
 from gateway.api.V1.rooms import Rooms
 from gateway.api.V1.schema import Schema
 from gateway.api.V1.ventilation_units import VentilationUnits, PluginVentilation
+from gateway.api.V1.sensors import Sensors, PluginSensor
