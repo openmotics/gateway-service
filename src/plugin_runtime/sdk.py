@@ -10,7 +10,7 @@ if False:  # MYPY
 
 
 
-class BaseApi(object):
+class BaseSDK(object):
     def __init__(self, base_url, plugin_name):
         self._base_url = base_url
         self._plugin_name = plugin_name
@@ -26,7 +26,7 @@ class BaseApi(object):
         return response.json()
 
 
-class NotificationApi(BaseApi):
+class NotificationSDK(BaseSDK):
     def send(self, topic, message, type='USER'):
         data = {'source': 'plugin',
                 'plugin': self._plugin_name,
@@ -36,7 +36,7 @@ class NotificationApi(BaseApi):
         self._api('POST', '/plugin/notification', json=data)
 
 
-class SensorApi(BaseApi):
+class SensorSDK(BaseSDK):
     def register(self, external_id, physical_quantity, config=None):
         data = {'source': 'plugin',
                 'plugin': self._plugin_name,
@@ -47,8 +47,8 @@ class SensorApi(BaseApi):
         return SensorDTO(data['id'], external_id=external_id)
 
 
-class VentilationApi(BaseApi):
-    def register_unit(self, external_id, config=None):
+class VentilationSDK(BaseSDK):
+    def register(self, external_id, config=None):
         data = {'source': 'plugin',
                 'plugin': self._plugin_name,
                 'external_id': external_id,

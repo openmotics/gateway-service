@@ -27,12 +27,13 @@ class VentilationConfigSerializer(object):
                 'name': ventilation_dto.name,
                 'room': ventilation_dto.room,
                 'amount_of_levels': ventilation_dto.amount_of_levels,
-                'source': ventilation_dto.source.type,
-                'device': {'vendor': ventilation_dto.device_vendor,
-                           'type': ventilation_dto.device_type,
-                           'serial': ventilation_dto.device_serial}}
-        if ventilation_dto.source.type == 'plugin':
+                'source': ventilation_dto.source.type if ventilation_dto.source else None}
+        if ventilation_dto.source and ventilation_dto.source.type == 'plugin':
             data['external_id'] = ventilation_dto.external_id
+        if ventilation_dto.device_vendor:
+            data['device'] = {'vendor': ventilation_dto.device_vendor,
+                              'type': ventilation_dto.device_type,
+                              'serial': ventilation_dto.device_serial}
         return data
 
 

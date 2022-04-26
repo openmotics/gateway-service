@@ -79,7 +79,6 @@ class VentilationUnits(RestAPIEndpoint):
         request_body.update({'id': ventilation_id})
         # validate(request_body, SCHEMA['ventilation_unit'])
         unit = VentilationConfigSerializer.deserialize(request_body)
-        unit.id = ventilation_id
         unit = self.ventilation_controller.save_ventilation(unit)
         return ApiResponse(body=VentilationConfigSerializer.serialize(unit))
 
