@@ -19,7 +19,8 @@ SCHEMA = {
                 "readOnly": True
             },
             "name": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 255
             }
         },
         "definitions": {
@@ -35,7 +36,8 @@ SCHEMA = {
                 "readOnly": True
             },
             "name": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 255
             },
             "room": {
                 "$ref": "#/definitions/room_id"
