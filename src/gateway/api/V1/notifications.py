@@ -23,14 +23,11 @@ import uuid
 import cherrypy
 
 from gateway.api.V1.schema import SCHEMA
-from gateway.api.V1.serializers.sensor import SensorApiSerializer
 from gateway.api.V1.webservice import ApiResponse, RestAPIEndpoint, expose, \
     openmotics_api_v1
-from gateway.dto.sensor import SensorDTO, SensorSourceDTO
-from gateway.exceptions import ItemDoesNotExistException
-from gateway.models import Database, Ventilation
-from gateway.sensor_controller import SensorController
 from ioc import INJECTED, Inject
+from gateway.events import GatewayEvent
+from cloud.events import EventSender
 
 logger = logging.getLogger(__name__)
 
@@ -39,52 +36,44 @@ if False:  # MyPy
     from gateway.dto import UserDTO
     from gateway.authentication_controller import AuthenticationToken
 
+
 @expose
-class Sensors(RestAPIEndpoint):
-    API_ENDPOINT = '/api/sensors'
+class Notifications(RestAPIEndpoint):
+    API_ENDPOINT = '/api/notifications'
 
     @Inject
-    def __init__(self, sensor_controller=INJECTED):
-        # type: (SensorController) -> None
-        super(Sensors, self).__init__()
-        self.sensor_controller = sensor_controller
+    def __init__(self, event_sender=INJECTED):
+        # type: (EventSender) -> None
+        super(Notifications, self).__init__()
+        self.event_sender = event_sender
         self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
         self.route_dispatcher.connect('list', '',
                                       controller=self, action='list',
-                                      conditions={'method': ['GET']})
-        self.route_dispatcher.connect('sync', '/sync',
-                                      controller=self, action='sync',
                                       conditions={'method': ['GET']})
 
     @openmotics_api_v1(auth=True)
     def list(self):
         return ApiResponse(body=[])
 
-    @openmotics_api_v1(auth=True)
-    def sync(self):
-        sensors = self.sensor_controller.load_sensors()
-        data = [SensorApiSerializer.serialize(sensor) for sensor in sensors]
-        return ApiResponse(body=data)
-
 
 @expose
-class PluginSensor(RestAPIEndpoint):
-    API_ENDPOINT = '/plugin/sensor'
+class PluginNotification(RestAPIEndpoint):
+    API_ENDPOINT = '/plugin/notification'
 
     @Inject
-    def __init__(self, sensor_controller=INJECTED):
-        # type: (SensorController) -> None
-        super(PluginSensor, self).__init__()
-        self.sensor_controller = sensor_controller
+    def __init__(self, event_sender=INJECTED):
+        # type: (EventSender) -> None
+        super(PluginNotification, self).__init__()
+        self.event_sender = event_sender
         self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
-        self.route_dispatcher.connect('register', '/register',
-                                      controller=self, action='register',
+        self.route_dispatcher.connect('create', '',
+                                      controller=self, action='create',
                                       conditions={'method': ['POST', 'OPTIONS']})
 
     @openmotics_api_v1(auth=True, expect_body_type='JSON')
-    def register(self, request_body):
+    def create(self, request_body):
         """
-        {"source": "plugin", "plugin": "DummyPlugin", "external_id": "AAAAAA", "physical_quantity": "temperature", "config": {}}
+        {"source": "plugin", "plugin": "DummyPlugin", "topic": "warning", "message": "Something happened", "type": "USER"}
         """
         schema = {
             "type": "object",
@@ -98,13 +87,13 @@ class PluginSensor(RestAPIEndpoint):
                 "source": {
                     "oneOf": [
                         {
-                            "required": ["source", "plugin", "external_id", "physical_quantity"],
+                            "required": ["source", "plugin", "topic", "message"],
                             "properties": {
                                 "source": {"const": "plugin"},
                                 "plugin": {"type": "string"},
-                                "external_id": {"type": "string"},
-                                "physical_quantity": {"type": "string"},
-                                "config": {"type": "object"}
+                                "topic": {"type": "string"},
+                                "message": {"type": "string"},
+                                "type": {"type": "string"}
                             }
                         }
                     ]
@@ -112,10 +101,14 @@ class PluginSensor(RestAPIEndpoint):
             }
         }
         # validate(request_body, schema)
-        source = SensorSourceDTO(request_body['source'])
-        if source.type == 'plugin':
-            source.name = request_body['plugin']
-        external_id, physical_quantity = request_body['external_id'], request_body['physical_quantity']
-        config = request_body.get('config', {})
-        sensor = self.sensor_controller.register_sensor(source, external_id, physical_quantity, config)
-        return ApiResponse(body=SensorApiSerializer.serialize(sensor))
+        source, topic, message = request_body['source'], request_body['topic'], request_body['message']
+        type = request_body.get('type', 'USER')
+        plugin = request_body.get('plugin')
+        gateway_event = GatewayEvent(event_type=GatewayEvent.Types.NOTIFICATION,
+                                     data={'source': source,
+                                           'plugin': plugin,
+                                           'type': type,
+                                           'topic': topic,
+                                           'message': message})
+        self.event_sender.enqueue_event(gateway_event)
+        return ApiResponse(body={})  # TODO

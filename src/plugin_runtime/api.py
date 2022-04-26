@@ -26,6 +26,16 @@ class BaseApi(object):
         return response.json()
 
 
+class NotificationApi(BaseApi):
+    def send(self, topic, message, type='USER'):
+        data = {'source': 'plugin',
+                'plugin': self._plugin_name,
+                'type': type,
+                'topic': topic,
+                'message': message}
+        self._api('POST', '/plugin/notification', json=data)
+
+
 class SensorApi(BaseApi):
     def register(self, external_id, physical_quantity, config=None):
         data = {'source': 'plugin',
