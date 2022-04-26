@@ -16,12 +16,16 @@
 Cloud API Client
 """
 from __future__ import absolute_import
+
 import logging
+
 import requests
 import ujson as json
-from ioc import Injectable, Inject, INJECTED
 from requests import ConnectionError
 from requests.adapters import HTTPAdapter
+
+from gateway.models import Config
+from ioc import INJECTED, Inject, Injectable
 from platform_utils import System
 
 logger = logging.getLogger(__name__)
@@ -71,7 +75,7 @@ class CloudAPIClient(object):
             raise NotImplementedError('Sending events is not supported on this api version')
 
         # make request
-        events_endpoint = self._get_endpoint('portal/events/')
+        events_endpoint = self._get_endpoint(Config.get_entry('cloud_endpoint_events', '') or 'portal/events/')
         query_params = {'uuid': self._gateway_uuid}
         try:
             response = self._session.post(events_endpoint,
@@ -87,3 +91,15 @@ class CloudAPIClient(object):
             raise APIException('Error while sending events to {}. Reason: {}'.format(self._hostname, ce))
         except Exception as e:
             raise APIException('Unknown error while executing API request on {}. Reason: {}'.format(self._hostname, e))
+
+    def send_metrics(self, metrics):
+        metrics_endpoint = self._get_endpoint(Config.get_entry('cloud_endpoint_metrics', '') or 'portal/metrics/')
+        logger.debug('Uploading %d metrics to cloud...', len(metrics))
+        request = self._session.post(metrics_endpoint,
+                                     data={'metrics': json.dumps(metrics)},
+                                     timeout=30.0,
+                                     verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
+        return_data = json.loads(request.text)
+        if return_data.get('success', False) is False:
+            raise RuntimeError('{0}'.format(return_data.get('error')))
+        logger.debug('Uploaded metrics successfully')

@@ -17,27 +17,27 @@ The metrics module collects and re-distributes metric data
 """
 
 from __future__ import absolute_import
+
 import logging
 import re
 import time
 from collections import deque
 
-import requests
-import ujson as json
+import six
 
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
-import six
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List
-    from plugins.base import PluginController
-    from gateway.metrics_collector import MetricsCollector
-    from gateway.metrics_caching import MetricsCacheController
+    from cloud.cloud_api_client import CloudAPIClient
     from gateway.config_controller import ConfigurationController
+    from gateway.metrics_caching import MetricsCacheController
+    from gateway.metrics_collector import MetricsCollector
+    from plugins.base import PluginController
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,9 @@ class MetricsController(object):
     """
 
     @Inject
-    def __init__(self, plugin_controller=INJECTED, metrics_collector=INJECTED, metrics_cache_controller=INJECTED, gateway_uuid=INJECTED):
-        # type: (PluginController, MetricsCollector, MetricsCacheController, str) -> None
+    def __init__(self, cloud_api_client=INJECTED, plugin_controller=INJECTED, metrics_collector=INJECTED, metrics_cache_controller=INJECTED):
+        # type: (CloudAPIClient, PluginController, MetricsCollector, MetricsCacheController) -> None
+        self._cloud_api_client = cloud_api_client
         self._plugin_controller = plugin_controller
         self._metrics_collector = metrics_collector
         self._metrics_cache_controller = metrics_cache_controller
@@ -82,7 +83,6 @@ class MetricsController(object):
         self._cloud_last_send = time.time()
         self._cloud_last_try = time.time()
         self._cloud_retry_interval = None  # type: Optional[int]
-        self._gateway_uuid = gateway_uuid
         self._throttled_down = False
         self.cloud_stats = {'queue': 0,
                             'buffer': self._cloud_buffer_length,
@@ -321,14 +321,6 @@ class MetricsController(object):
         cloud_min_interval = Config.get_entry('cloud_metrics_min_interval', None)  # type: Optional[int]
         if cloud_min_interval is not None:
             self._cloud_retry_interval = cloud_min_interval
-        endpoint = Config.get_entry('cloud_endpoint', None)  # type: Optional[str]
-        if endpoint is None:
-            return
-        metrics_endpoint = '{0}/{1}?uuid={2}'.format(
-            endpoint if endpoint.startswith('http') else 'https://{0}'.format(endpoint),
-            Config.get_entry('cloud_endpoint_metrics', ''),
-            self._gateway_uuid
-        )
 
         counters_to_buffer = self._buffer_counters.get(metric_source, {}).get(metric_type, {})
         definition = self.definitions.get(metric_source, {}).get(metric_type)
@@ -376,16 +368,7 @@ class MetricsController(object):
             self._cloud_last_try = now
             try:
                 # Try to send the metrics
-                amount_metrics = len(self._cloud_buffer) + len(self._cloud_queue)
-                logger.debug('Uploading %d metrics to cloud...', amount_metrics)
-                request = requests.post(metrics_endpoint,
-                                        data={'metrics': json.dumps(self._cloud_buffer + self._cloud_queue)},
-                                        timeout=30.0,
-                                        verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
-                return_data = json.loads(request.text)
-                if return_data.get('success', False) is False:
-                    raise RuntimeError('{0}'.format(return_data.get('error')))
-                logger.debug('Uploaded metrics successfully')
+                self._cloud_api_client.send_metrics(self._cloud_buffer + self._cloud_queue)
                 # If successful; clear buffers
                 if self._metrics_cache_controller.clear_buffer(metric['timestamp']) > 0:
                     self._load_cloud_buffer()
