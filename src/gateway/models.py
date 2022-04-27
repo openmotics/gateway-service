@@ -340,12 +340,14 @@ class Ventilation(Base):
     plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
     external_id = Column(String(255), nullable=False)  # eg. serial number
     name = Column(String(255), nullable=False)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
     amount_of_levels = Column(Integer, nullable=False)
-    device_vendor = Column(String(255), nullable=False)
-    device_type = Column(String(255), nullable=False)
-    device_serial = Column(String(255), nullable=False)
+    device_vendor = Column(String(255), nullable=True)
+    device_type = Column(String(255), nullable=True)
+    device_serial = Column(String(255), nullable=True)
 
     plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
 
 
 class ThermostatGroup(Base, MasterNumber):

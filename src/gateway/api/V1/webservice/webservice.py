@@ -228,7 +228,16 @@ def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
         request.handler = None  # TODO: Use generic cherrypy event handler + @log_access
 
 
+def cors_handler_v1():
+    if cherrypy.request.method == 'OPTIONS':
+        cherrypy.request.handler = None
+    cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+    cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+    cherrypy.response.headers['Access-Control-Allow-Methods'] = 'POST, GET, PUT, DELETE'
+
+
 # Assign the v1 authentication handler
+cherrypy.tools.cors_v1 = cherrypy.Tool('before_handler', cors_handler_v1)
 cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication_handler_v1)
 cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler_v1)
 
@@ -241,6 +250,8 @@ def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=True
     def decorator_openmotics_api_v1(func):
         # First layer decorator: Error handling
         func = _openmotics_api_v1(func)
+
+        func = cherrypy.tools.cors_v1()(func)
 
         # Second layer decorator: Authentication
         func = cherrypy.tools.authenticated_v1(pass_token=pass_token,

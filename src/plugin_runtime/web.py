@@ -1,6 +1,10 @@
 from __future__ import absolute_import
+
 import re
+
 import requests
+
+from plugin_runtime.sdk import NotificationSDK, SensorSDK, VentilationSDK
 
 try:
     import ujson as json
@@ -39,12 +43,24 @@ class WebInterfaceDispatcher(object):
     # TODO: Use SDK in the future
 
     def __init__(self, logger, hostname='localhost', port=80):
-        self.__logger = logger
-        self.__hostname = hostname
-        self.__port = port
-        self.__warned = False
-        self.__available_calls = _load_webinterface()
-        self.plugin_name = None
+        self._logger = logger
+        self._warned = False
+        self._available_calls = _load_webinterface()
+        self._base_url = 'http://{0}:{1}'.format(hostname, port)
+        self._plugin_name = None
+        self.notification = NotificationSDK(self._base_url, self._plugin_name)
+        self.sensor = SensorSDK(self._base_url, self._plugin_name)
+        self.ventilation = VentilationSDK(self._base_url, self._plugin_name)
+
+    @property
+    def plugin_name(self):
+        return self._plugin_name
+
+    @plugin_name.setter
+    def plugin_name(self, name):
+        # TODO: cleanup
+        self._plugin_name = name
+        self.ventilation._plugin_name = name
 
     def __getattr__(self, attribute):
         if attribute in self.__available_calls:
@@ -82,10 +98,10 @@ class WebInterfaceDispatcher(object):
                     kwargs[arg] = 'None'
             # 4. Perform the http call
             try:
-                response = requests.get('http://{0}:{1}/{2}'.format(self.__hostname, self.__port, name),
+                response = requests.get('{0}/{1}'.format(self._base_url, name),
                                         params=kwargs,
                                         timeout=30.0,
-                                        headers={'User-Agent': 'Plugin {0}'.format(self.plugin_name)})
+                                        headers={'User-Agent': 'Plugin {0}'.format(self._plugin_name)})
                 return response.text
             except Exception:
                 return json.dumps({'success': False,

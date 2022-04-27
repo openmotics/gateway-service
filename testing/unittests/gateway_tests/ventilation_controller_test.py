@@ -166,35 +166,30 @@ class VentilationControllerTest(unittest.TestCase):
                                                  device_type='model-0',
                                                  device_serial='device-000001')
 
-    def test_create_ventilation(self):
+    def test_regsiter_ventilation(self):
         with self.session as db:
             db.add(Plugin(id=2, name='dummy', version='0.0.1'))
             db.commit()
 
-        ventilation_dto = VentilationDTO(None,
-                                         external_id='device-000001',
-                                         source=VentilationSourceDTO(id=2,
-                                                                     name='dummy',
-                                                                     type='plugin'),
-                                         name='foo',
-                                         amount_of_levels=4,
-                                         device_vendor='example',
-                                         device_type='model-0',
-                                         device_serial='device-000001')
-        self.controller.save_ventilation(ventilation_dto)
+        source_dto = VentilationSourceDTO('plugin', name='dummy')
+        self.controller.register_ventilation(source_dto, 'device-000001', {
+            'amount_of_levels': 4,
+            'device_vendor': 'example',
+            'device_type': 'model-0',
+            'device_serial': 'device-000001'
+        })
 
         with self.session as db:
             query = db.query(Ventilation).filter_by(external_id='device-000001')
             assert query.count() == 1, query.all()
             ventilation = query.one()
-            assert ventilation.name == 'foo'
-            assert ventilation.amount_of_levels == 4
             assert ventilation.plugin.name == 'dummy'
+            assert ventilation.amount_of_levels == 4
+            assert ventilation.device_type == 'model-0'
 
-    def test_update_by_id(self):
+    def test_update_config(self):
         with self.session as db:
             db.add_all([
-                Plugin(id=2, name='dummy', version='0.0.1'),
                 Ventilation(id=42,
                             external_id='device-000001',
                             name='foo',
@@ -203,7 +198,7 @@ class VentilationControllerTest(unittest.TestCase):
                             device_vendor='',
                             device_serial='',
                             source='plugin',
-                            plugin_id=2)
+                            plugin=Plugin(id=2, name='dummy', version='0.0.1')),
             ])
             db.commit()
         ventilation_dto = VentilationDTO(id=42,
@@ -221,43 +216,6 @@ class VentilationControllerTest(unittest.TestCase):
             query = db.query(Ventilation).filter_by(external_id='device-000001')
             assert query.count() == 1, query.all()
             ventilation = query.one()
-            assert ventilation.name == 'foo'
-            assert ventilation.amount_of_levels == 4
-            assert ventilation.device_vendor == 'example'
-            assert ventilation.device_type == 'model-0'
-            assert ventilation.device_serial == 'device-000001'
-
-    def test_update_ventilation_by_external_id(self):
-        with self.session as db:
-            db.add_all([
-                Plugin(id=2, name='dummy', version='0.0.1'),
-                Ventilation(id=42,
-                            external_id='device-000001',
-                            name='foo',
-                            amount_of_levels=1,
-                            device_type='',
-                            device_vendor='',
-                            device_serial='',
-                            source='plugin',
-                            plugin_id=2)
-            ])
-            db.commit()
-        ventilation_dto = VentilationDTO(None,
-                                         external_id='device-000001',
-                                         source=VentilationSourceDTO(id=2,
-                                                                     name='dummy',
-                                                                     type='plugin'),
-                                         name='foo',
-                                         amount_of_levels=4,
-                                         device_vendor='example',
-                                         device_type='model-0',
-                                         device_serial='device-000001')
-        self.controller.save_ventilation(ventilation_dto)
-        with self.session as db:
-            query = db.query(Ventilation).filter_by(external_id='device-000001')
-            assert query.count() == 1, query.all()
-            ventilation = query.one()
-            assert ventilation.id == 42
             assert ventilation.name == 'foo'
             assert ventilation.amount_of_levels == 4
             assert ventilation.device_vendor == 'example'
@@ -266,7 +224,17 @@ class VentilationControllerTest(unittest.TestCase):
 
     def test_ventilation_config_events(self):
         with self.session as db:
-            db.add(Plugin(id=2, name='dummy', version='0.0.1'))
+            db.add_all([
+                Ventilation(id=42,
+                            source='plugin',
+                            plugin=Plugin(name='dummy', version='0.0.1'),
+                            external_id='device-000001',
+                            name='foo',
+                            amount_of_levels=1,
+                            device_type='example',
+                            device_vendor='model-0',
+                            device_serial='device-000001')
+            ])
             db.commit()
 
         events = []
@@ -274,21 +242,13 @@ class VentilationControllerTest(unittest.TestCase):
             events.append(event)
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, callback)
 
-        ventilation_dto = VentilationDTO(id=42,
-                                         external_id='device-000001',
-                                         source=VentilationSourceDTO(id=2,
-                                                                     name='dummy',
-                                                                     type='plugin'),
-                                         name='foo',
-                                         amount_of_levels=4,
-                                         device_vendor='example',
-                                         device_type='model-0',
-                                         device_serial='device-000001')
+        ventilation_dto = VentilationDTO(id=42)
         self.controller.save_ventilation(ventilation_dto)
         self.pubsub._publish_all_events(blocking=False)
         assert len(events) == 0, events  # No change
 
         ventilation_dto.name = 'bar'
+        ventilation_dto.amount_of_levels = 4
         self.controller.save_ventilation(ventilation_dto)
         self.pubsub._publish_all_events(blocking=False)
         assert len(events) == 1, events

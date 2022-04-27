@@ -15,3 +15,10 @@
 """
 V1 api init file
 """
+
+from gateway.api.V1.notifications import Notifications, PluginNotification
+from gateway.api.V1.rooms import Rooms
+from gateway.api.V1.schema import Schema
+from gateway.api.V1.sensors import PluginSensor, Sensors
+from gateway.api.V1.ventilation_units import PluginVentilation, \
+    VentilationUnits
