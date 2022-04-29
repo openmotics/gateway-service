@@ -60,6 +60,8 @@ class WebInterfaceDispatcher(object):
     def plugin_name(self, name):
         # TODO: cleanup
         self._plugin_name = name
+        self.notification._plugin_name = name
+        self.sensor._plugin_name = name
         self.ventilation._plugin_name = name
 
     def __getattr__(self, attribute):

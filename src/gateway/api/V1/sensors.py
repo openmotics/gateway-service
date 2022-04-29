@@ -112,10 +112,14 @@ class PluginSensor(RestAPIEndpoint):
             }
         }
         # validate(request_body, schema)
-        source = SensorSourceDTO(request_body['source'])
-        if source.type == 'plugin':
-            source.name = request_body['plugin']
-        external_id, physical_quantity = request_body['external_id'], request_body['physical_quantity']
-        config = request_body.get('config', {})
-        sensor = self.sensor_controller.register_sensor(source, external_id, physical_quantity, config)
-        return ApiResponse(body=SensorApiSerializer.serialize(sensor))
+        try:
+            source = SensorSourceDTO(request_body['source'])
+            if source.type == 'plugin':
+                source.name = request_body['plugin']
+            external_id, physical_quantity = request_body['external_id'], request_body['physical_quantity']
+            config = request_body.get('config', {})
+            sensor = self.sensor_controller.register_sensor(source, external_id, physical_quantity, config)
+            return ApiResponse(body=SensorApiSerializer.serialize(sensor))
+        except Exception:
+            logger.error('Failed to register %s', request_body)
+            raise

@@ -133,10 +133,14 @@ class PluginVentilation(RestAPIEndpoint):
             }
         }
         # validate(request_body, schema)
-        source = VentilationSourceDTO(request_body['source'])
-        if source.type == 'plugin':
-            source.name = request_body['plugin']
-        external_id = request_body['external_id']
-        config = request_body.get('config', {})
-        unit = self.ventilation_controller.register_ventilation(source, external_id, config)
-        return ApiResponse(body=VentilationApiSerializer.serialize(unit))
+        try:
+            source = VentilationSourceDTO(request_body['source'])
+            if source.type == 'plugin':
+                source.name = request_body['plugin']
+            external_id = request_body['external_id']
+            config = request_body.get('config', {})
+            unit = self.ventilation_controller.register_ventilation(source, external_id, config)
+            return ApiResponse(body=VentilationApiSerializer.serialize(unit))
+        except Exception:
+            logger.error('Failed to register %s', request_body)
+            raise
