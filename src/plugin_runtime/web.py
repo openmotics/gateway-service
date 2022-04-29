@@ -42,27 +42,15 @@ def _load_webinterface():
 class WebInterfaceDispatcher(object):
     # TODO: Use SDK in the future
 
-    def __init__(self, logger, hostname='localhost', port=80):
+    def __init__(self, logger, plugin_name=None, hostname='localhost', port=80):
         self._logger = logger
         self._warned = False
         self._available_calls = _load_webinterface()
         self._base_url = 'http://{0}:{1}'.format(hostname, port)
-        self._plugin_name = None
+        self._plugin_name = plugin_name
         self.notification = NotificationSDK(self._base_url, self._plugin_name)
         self.sensor = SensorSDK(self._base_url, self._plugin_name)
         self.ventilation = VentilationSDK(self._base_url, self._plugin_name)
-
-    @property
-    def plugin_name(self):
-        return self._plugin_name
-
-    @plugin_name.setter
-    def plugin_name(self, name):
-        # TODO: cleanup
-        self._plugin_name = name
-        self.notification._plugin_name = name
-        self.sensor._plugin_name = name
-        self.ventilation._plugin_name = name
 
     def __getattr__(self, attribute):
         if attribute in self.__available_calls:
