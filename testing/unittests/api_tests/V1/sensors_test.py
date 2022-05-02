@@ -55,6 +55,7 @@ class PluginSensorTests(unittest.TestCase):
 
     def test_register(self):
         self.sensor_controller.register_sensor.return_value = SensorDTO(id=10,
+                                                                        name='Example',
                                                                         physical_quantity='temperature',
                                                                         unit='celcius')
         response = self.web.register(request_body={
@@ -62,19 +63,20 @@ class PluginSensorTests(unittest.TestCase):
             'plugin': 'DummyPlugin',
             'external_id': '1111',
             'physical_quantity': 'temperature',
-            'config': {'unit': 'celcius'}
+            'unit': 'celcius',
+            'config': {'name': 'Example'}
         })
-        expected = {'id': 10, 'name': '', 'room': None, 'physical_quantity': 'temperature', 'in_use': True}
+        expected = {'id': 10, 'name': 'Example', 'room': None, 'physical_quantity': 'temperature', 'in_use': True}
         self.assertEqual(expected, json.loads(response))
         self.sensor_controller.register_sensor.assert_called_with(
-            SensorSourceDTO('plugin', name='DummyPlugin'), '1111', 'temperature', {'unit': 'celcius'}
+            SensorSourceDTO('plugin', name='DummyPlugin'), '1111', 'temperature', 'celcius', {'name': 'Example'}
         )
 
     def test_plugin_sdk(self):
         with patch.object(requests, 'request') as req:
             req.json.return_value = {}
             notification = SensorSDK('https://api.example.org', 'DummyPlugin')
-            notification.register('1111', 'temperature')
+            notification.register_temperature_celcius('1111')
             req.assert_called_with('POST',
                                    'https://api.example.org/plugin/sensor/register',
                                    headers={'User-Agent': 'Plugin DummyPlugin'},
@@ -83,4 +85,5 @@ class PluginSensorTests(unittest.TestCase):
                                          'plugin': 'DummyPlugin',
                                          'external_id': '1111',
                                          'physical_quantity': 'temperature',
+                                         'unit': 'celcius',
                                          'config': {}})

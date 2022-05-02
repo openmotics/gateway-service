@@ -116,9 +116,9 @@ class PluginSensor(RestAPIEndpoint):
             source = SensorSourceDTO(request_body['source'])
             if source.type == 'plugin':
                 source.name = request_body['plugin']
-            external_id, physical_quantity = request_body['external_id'], request_body['physical_quantity']
+            external_id, physical_quantity, unit = request_body['external_id'], request_body['physical_quantity'], request_body['unit']
             config = request_body.get('config', {})
-            sensor = self.sensor_controller.register_sensor(source, external_id, physical_quantity, config)
+            sensor = self.sensor_controller.register_sensor(source, external_id, physical_quantity, unit, config)
             return ApiResponse(body=SensorApiSerializer.serialize(sensor))
         except Exception:
             logger.error('Failed to register %s', request_body)
