@@ -321,7 +321,7 @@ class SensorControllerTest(unittest.TestCase):
 
         source_dto = SensorSourceDTO('plugin', name='dummy')
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
-            sensor_dto = self.controller.register_sensor(source_dto, 'foo', 'temperature', {'unit': 'celcius', 'name': 'example'})
+            sensor_dto = self.controller.register_sensor(source_dto, 'foo', 'temperature', 'celcius', {'name': 'initial'})
             sensor_id = sensor_dto.id
             assert sensor_id > 500
             save.assert_not_called()
@@ -339,14 +339,14 @@ class SensorControllerTest(unittest.TestCase):
             assert sensor.external_id == 'foo'
             assert sensor.physical_quantity == 'temperature'
             assert sensor.unit == 'celcius'
-            assert sensor.name == 'example'
+            assert sensor.name == 'initial'
 
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
-            sensor_dto = self.controller.register_sensor(source_dto, 'foo', 'temperature', {'unit': 'celcius', 'name': ''})
+            sensor_dto = self.controller.register_sensor(source_dto, 'foo', 'temperature', 'celcius', {'name': 'updated'})
             assert sensor_dto.id == sensor_id
-            assert sensor_dto.name == 'example'
             assert sensor_dto.physical_quantity == 'temperature'
             assert sensor_dto.unit == 'celcius'
+            assert sensor_dto.name == 'initial'
 
         with self.session as db:
             assert db.query(Sensor).count() == 1

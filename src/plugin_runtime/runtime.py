@@ -72,14 +72,7 @@ class PluginRuntime(object):
         self._reader = PluginIPCReader(os.fdopen(sys.stdin.fileno(), 'rb', 0),
                                        self._writer.log_exception)
 
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-        try:
-            http_port = int(config.get('OpenMotics', 'http_port'))
-        except (NoSectionError, NoOptionError):
-            http_port = 80
-        self._webinterface = WebInterfaceDispatcher(self._writer.log,
-                                                    port=http_port)
+        self._webinterface = None  # type: Optional[WebInterfaceDispatcher]
 
     def _init_plugin(self):
         # type: () -> None
@@ -100,10 +93,19 @@ class PluginRuntime(object):
         plugin_class = get_plugin_class(plugin_dir)
         check_plugin(plugin_class)
 
-        # Set the name, version, interfaces
-        self._name = self._webinterface.plugin_name = plugin_class.name
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        try:
+            http_port = int(config.get('OpenMotics', 'http_port'))
+        except (NoSectionError, NoOptionError):
+            http_port = 80
+
+        # Initialize webinterface
+        self._name = plugin_class.name
         self._version = plugin_class.version
-        self._interfaces = plugin_class.interfaces
+        self._webinterface = WebInterfaceDispatcher(self._writer.log,
+                                                    self._name,
+                                                    port=http_port)
 
         # Initialze the plugin
         self._plugin = plugin_class(self._webinterface, self._writer.log)

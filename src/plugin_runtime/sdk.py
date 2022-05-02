@@ -37,11 +37,21 @@ class NotificationSDK(BaseSDK):
 
 
 class SensorSDK(BaseSDK):
-    def register(self, external_id, physical_quantity, config=None):
+    def register_temperature_celcius(self, external_id, config=None):
+        return self.register(external_id, 'temperature', 'celcius', config)
+
+    def register_humidity_percent(self, external_id, config=None):
+        return self.register(external_id, 'humidity', 'percent', config)
+
+    def register_co2_ppm(self, external_id, config=None):
+        return self.register(external_id, 'co2', 'parts_per_million', config)
+
+    def register(self, external_id, physical_quantity, unit, config=None):
         data = {'source': 'plugin',
                 'plugin': self._plugin_name,
                 'external_id': external_id,
                 'physical_quantity': physical_quantity,
+                'unit': unit,
                 'config': config or {}}
         data = self._api('POST', '/plugin/sensor/register', json=data)
         return SensorDTO(data['id'], external_id=external_id)

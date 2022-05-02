@@ -223,8 +223,8 @@ class SensorController(BaseController):
             self._publish_config()
         return sensors
 
-    def register_sensor(self, source_dto, external_id, physical_quantity, default_config=None):
-        # type: (SensorSourceDTO, str, str, Optional[Dict[str,Any]]) -> SensorDTO
+    def register_sensor(self, source_dto, external_id, physical_quantity, unit, default_config=None):
+        # type: (SensorSourceDTO, str, str, str, Optional[Dict[str,Any]]) -> SensorDTO
         changed = False
         default_config = default_config or {}
         with Database.get_session() as db:
@@ -232,7 +232,8 @@ class SensorController(BaseController):
                 plugin = db.query(Plugin).filter_by(name=source_dto.name).one()  # type: Plugin
                 lookup_kwargs = {'source': source_dto.type, 'plugin': plugin,
                                  'external_id': external_id,
-                                 'physical_quantity': physical_quantity}
+                                 'physical_quantity': physical_quantity,
+                                 'unit': unit}
             else:
                 raise ValueError('Can\'t register Sensor with source {}'.format(source_dto.type))
             sensor = db.query(Sensor).filter_by(**lookup_kwargs).one_or_none()  # type: Optional[Sensor]
@@ -240,7 +241,7 @@ class SensorController(BaseController):
                 sensor = Sensor(id=get_sensor_orm_id(db, source_dto.type), **lookup_kwargs)
                 db.add(sensor)
                 changed = True
-                for field in ('name', 'unit'):
+                for field in ('name',):
                     setattr(sensor, field, default_config.get(field, ''))
             db.commit()
             sensor_dto = self.load_sensor(sensor.id)
