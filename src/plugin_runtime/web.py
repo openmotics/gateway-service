@@ -53,21 +53,21 @@ class WebInterfaceDispatcher(object):
         self.ventilation = VentilationSDK(self._base_url, self._plugin_name)
 
     def __getattr__(self, attribute):
-        if attribute in self.__available_calls:
+        if attribute in self._available_calls:
             wrapper = self.get_wrapper(attribute)
             setattr(self, attribute, wrapper)
             return wrapper
         raise AttributeError('The call \'{0}\' does not exist'.format(attribute))
 
     def warn(self):
-        if self.__warned is False:
-            self.__logger('[W] Deprecation warning:')
-            self.__logger('[W] - Plugins should not pass \'token\' to API calls')
-            self.__logger('[W] - Plugins should use keyword arguments for API calls')
-            self.__warned = True
+        if self._warned is False:
+            self._logger('[W] Deprecation warning:')
+            self._logger('[W] - Plugins should not pass \'token\' to API calls')
+            self._logger('[W] - Plugins should use keyword arguments for API calls')
+            self._warned = True
 
     def get_wrapper(self, name):
-        params = self.__available_calls[name]
+        params = self._available_calls[name]
 
         def wrapper(*args, **kwargs):
             # 1. Try to remove a possible "token" parameter, which is now deprecated
