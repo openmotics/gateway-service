@@ -9,23 +9,23 @@ It is the glue between the OpenMotics Master (microcontroller) and the rest of t
 Some parts of the code can be run locally using a dummy master implementation.
 
 ### Installing the requirements
-To run localy, it is easy to use direnv.
+To run localy, the easiest method is via direnv.
 
 ```sh
 sudo apt-get install direnv
 ```
 
 Then, add the direnv hooks to your .bashrc in your home (when using bash)
-```
+```sh
 eval "$(direnv hook bash)"
 ```
-or, when using zsh, add this to .zshr
-```
+or, when using zsh, add this to .zshrc
+```sh
 eval "$(direnv hook zsh)"
 ```
 
-### Environment: create .envrc & .env
-Next, create the .envrc file in the gateway folder which will be used by direnv
+### Environment: create .envrc
+Next, create the `.envrc` file in the gateway root folder which will be used by direnv
 
 ```
 dotenv
@@ -33,11 +33,14 @@ use nix
 layout python python3
 ```
 
+This direnv will utilize dotenv to manage the environment, use nix for the python & foreman dependencies (see shell.nix) and will utilize python3 as the default interpreter.
+
+### Environment: create .env
 The openmotics service loads a config file from `$OPENMOTICS_PREFIX/etc`
 where settings like the platform and ports can be overridden. This means that this environment variable
 must be set before starting the service.
 
-Add this to the .env file in the gateway root folder.
+Add this to the `.env` file in the gateway root folder.
 ```
 OPENMOTICS_PREFIX=/some/directory/pointing/to/openmotics/gateway
 ```
@@ -45,7 +48,7 @@ OPENMOTICS_PREFIX=/some/directory/pointing/to/openmotics/gateway
 ### Install requirements
 
 Install the python dependencies the first time:
-```
+```sh
 pip install -r requirements-py3.txt
 ```
 
@@ -108,15 +111,22 @@ pip install mypy types-all sqlalchemy-stubs
 
 ## Running the code
 
-Starting the necessary services using foreman
-```
+Start the necessary services using foreman
+```sh
 foreman start
 ```
 
 ### Local user
 The gateway locally does not require authentication.
-However, to log in the frontend, you can use the user "admin", pwd "admin".
+However, to log in the frontend, you can use the user **admin**, pwd **admin**.
 
+### VPN check
+When not running the cloud locally, it is necessary to provide the `vpn_check_url` in the `openmotics.conf` file under the `etc` folder.
+Otherwise the VPN service will fail because it cannot perform the check.
+
+```
+vpn_check_url = http://127.0.0.1:8000/portal/check_vpn/?uuid=%%s 
+```
 
 ## License
 
