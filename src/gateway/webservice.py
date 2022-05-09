@@ -20,10 +20,10 @@ from __future__ import absolute_import
 import binascii
 import logging
 import os
+import platform
 import sys
 import time
 import uuid
-
 import cherrypy
 import requests
 import six
@@ -2291,7 +2291,8 @@ class WebInterface(object):
             logger.error('Could not load master version: {0}'.format(ex))
         return {'version': gateway.__version__,
                 'gateway': gateway.__version__,
-                'master': parsed_master_version}
+                'master': parsed_master_version,
+                'python_version': platform.python_version()}
 
     # TODO: def get_versions(self):  # Something more generic that can return a general version overview (service, frontend, modules, os, ...)
 
