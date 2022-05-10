@@ -332,6 +332,7 @@ class WebInterfaceTest(unittest.TestCase):
             self.assertEqual([{
                 'id': 1,
                 'name': 'test',
+                'room': 255,
                 'amount_of_levels': 4,
                 'external_id': 'device-00001',
                 'source': {'type': 'plugin', 'name': 'dummy'},
@@ -357,6 +358,7 @@ class WebInterfaceTest(unittest.TestCase):
                 'source': {'type': 'plugin', 'name': 'dummy'},
                 'external_id': 'device-00001',
                 'name': 'test',
+                'room': 255,
                 'device': {'vendor': 'example',
                            'type': '0A',
                            'serial': 'device-00001'},
