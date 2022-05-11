@@ -684,28 +684,45 @@ class MasterCoreController(MasterController):
         return output_status
 
     def _configure_output_shutter(self, output, is_shutter):  # type: (OutputConfiguration, bool) -> None
-        shutter = ShutterConfiguration(output.id // 2)
-        output_module = output.module
+        output_set = ['01', '23', '45', '67'][output.id % 8 // 2]
+        base_output = output.id // 2 * 2
+        outputs = [OutputConfiguration(base_output),
+                   OutputConfiguration(base_output + 1)]
+        outputs[output.id % 2] = output
+
+        shutter = self._find_output_shutter(base_output)
         if is_shutter:
-            shutter.outputs.output_0 = shutter.id * 2
-            output_set = shutter.output_set
+            shutter.outputs.output_0 = base_output
             self._output_shutter_map[shutter.outputs.output_0] = shutter.id
             self._output_shutter_map[shutter.outputs.output_1] = shutter.id
             self.set_output(output_id=shutter.outputs.output_0, state=False)
             self.set_output(output_id=shutter.outputs.output_1, state=False)
-            output.output_type = OutputType.SHUTTER_RELAY
+            for output in outputs:
+                output.output_type = OutputType.SHUTTER_RELAY
         else:
-            output_set = shutter.output_set  # Previous outputs need to be restored
             self._output_shutter_map.pop(shutter.outputs.output_0, None)
             self._output_shutter_map.pop(shutter.outputs.output_1, None)
             shutter.outputs.output_0 = 255 * 2
             shutter.name = ''
-            if output.output_type == OutputType.SHUTTER_RELAY:
-                output.output_type = OutputType.OUTLET
-        setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
-        output.save(commit=False)
+            for output in outputs:
+                if output.output_type == OutputType.SHUTTER_RELAY:
+                    output.output_type = OutputType.OUTLET
+        setattr(output.module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
+        for output in outputs:
+            output.save(commit=False)
         shutter.save(commit=False)
-        output_module.save(commit=False)
+        output.module.save(commit=False)
+
+    def _find_output_shutter(self, output_id):
+        # type: (int) -> ShutterConfiguration
+        global_configuration = GlobalConfiguration()
+        nr_of_output_modules = global_configuration.number_of_output_modules
+        for module_id in range(nr_of_output_modules):
+            for i in range(4):
+                shutter = ShutterConfiguration(module_id + i)
+                if output_id == shutter.outputs.output_0:
+                    return shutter
+        return ShutterConfiguration(output_id // 2)
 
     # Shutters
 
