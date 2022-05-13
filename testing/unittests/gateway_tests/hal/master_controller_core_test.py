@@ -8,6 +8,7 @@ import mock
 from six.moves import map
 from six.moves.queue import Queue
 
+from enums import HardwareType, OutputType
 import gateway.hal.master_controller_core
 from gateway.dto import InputDTO, OutputStatusDTO, OutputDTO, PulseCounterDTO
 from gateway.dto.input import InputStatusDTO
@@ -192,6 +193,80 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.assertIn(mock.call({'id': 1, 'name': 'foo'}), deserialize.call_args_list)
             self.assertIn(mock.call({'id': 2, 'name': 'bar'}), deserialize.call_args_list)
             save.assert_called_with(commit=False)
+
+    def test_save_outputs(self):
+        self.controller.save_outputs([
+            OutputDTO(1, name='foo', module_type='O', output_type=OutputType.LIGHT),
+            OutputDTO(2, name='bar', module_type='O', output_type=OutputType.OUTLET)
+        ])
+        output = OutputConfiguration(1)
+        self.assertEqual(output.name, 'foo')
+        self.assertEqual(output.output_type, 255)
+        output = OutputConfiguration(2)
+        self.assertEqual(output.name, 'bar')
+        self.assertEqual(output.output_type, 0)
+
+    def test_save_outputs_shutter_link(self):
+        module = OutputModuleConfiguration(1)
+        module.shutter_config.are_01_outputs = False  # shutter:4 outputs:8,9
+        module.save()
+
+        def assert_existing_shutter_config():
+            module = OutputModuleConfiguration(1)
+            self.assertFalse(module.shutter_config.are_01_outputs)
+            self.assertTrue(module.shutter_config.are_45_outputs)
+            self.assertTrue(module.shutter_config.are_67_outputs)
+
+        # Convert to shutter
+        self.controller.save_outputs([
+            OutputDTO(11, name='DOWN', module_type='O', output_type=OutputType.SHUTTER_RELAY),  # output -> shutter
+        ])
+        output = OutputConfiguration(11)
+        self.assertEqual(output.name, 'DOWN')
+        self.assertEqual(output.output_type, 127)
+        self.assertFalse(output.module.shutter_config.are_23_outputs)
+        output = OutputConfiguration(10)
+        self.assertEqual(output.output_type, 127)  # both outputs changed
+        assert_existing_shutter_config()
+        shutter = ShutterConfiguration(5)
+        self.assertEqual(shutter.outputs.output_0, 10)
+        self.assertEqual(shutter.outputs.output_1, 11)
+
+        # Unlink shutter
+        self.controller.save_outputs([
+            OutputDTO(10, name='UP', module_type='O', output_type=OutputType.OUTLET),  # shutter -> output
+        ])
+        output = OutputConfiguration(10)
+        self.assertEqual(output.name, 'UP')
+        self.assertEqual(output.output_type, 0)
+        self.assertTrue(output.module.shutter_config.are_23_outputs)
+        output = OutputConfiguration(11)
+        self.assertEqual(output.output_type, 0)  # both outputs changed
+        assert_existing_shutter_config()
+        shutter = ShutterConfiguration(5)
+        self.assertEqual(shutter.outputs.output_0, 510)  # disabled
+        self.assertEqual(shutter.outputs.output_1, 511)
+
+    def test_save_outputs_shutter_dynamic_outputs(self):
+        module = OutputModuleConfiguration(1)
+        module.shutter_config.are_01_outputs = False
+        module.save()
+
+        shutter = ShutterConfiguration(0)
+        shutter.outputs.output_0 = 8  # shutter:0, outputs:8,9
+        shutter.save()
+
+        # Convert to shutter
+        self.controller.save_outputs([
+            OutputDTO(9, name='UP', module_type='O', output_type=OutputType.OUTLET),
+        ])
+        output = OutputConfiguration(9)
+        self.assertEqual(output.output_type, 0)
+        self.assertTrue(output.module.shutter_config.are_01_outputs)
+        self.assertTrue(output.module.shutter_config.are_23_outputs)
+        shutter = ShutterConfiguration(0)
+        self.assertEqual(shutter.outputs.output_0, 510)  # disabled
+        self.assertEqual(shutter.outputs.output_1, 511)
 
     def test_inputs_with_status(self):
         from gateway.hal.master_controller_core import MasterInputState
