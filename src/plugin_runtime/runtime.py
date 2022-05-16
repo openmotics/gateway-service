@@ -103,6 +103,7 @@ class PluginRuntime(object):
         # Initialize webinterface
         self._name = plugin_class.name
         self._version = plugin_class.version
+        self._interfaces = plugin_class.interfaces
         self._webinterface = WebInterfaceDispatcher(self._writer.log,
                                                     self._name,
                                                     port=http_port)
