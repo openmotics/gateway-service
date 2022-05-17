@@ -60,9 +60,10 @@ class SensorMapper(object):
         if 'name' in sensor_dto.loaded_fields:
             sensor.name = sensor_dto.name
         if 'room' in sensor_dto.loaded_fields:
-            if sensor_dto.room is not None and 0 <= sensor_dto.room <= 100:
-                room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
-            sensor.room = room
+            if sensor_dto.room not in (None, 255):
+                sensor.room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
+            else:
+                sensor.room = None
         if 'in_use' in sensor_dto.loaded_fields:
             sensor.in_use = sensor_dto.in_use
         return sensor

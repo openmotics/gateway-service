@@ -308,6 +308,16 @@ class SensorControllerTest(unittest.TestCase):
             assert [0] == [x.id for x in master_sensor_dtos]
             assert ['foo'] == [x.name for x in master_sensor_dtos]
 
+        sensor_dto = SensorDTO(id=sensor_id, room=None)
+        with mock.patch.object(self.master_controller, 'save_sensors') as save:
+            self.controller.save_sensors([sensor_dto])
+
+        with self.session as db:
+            sensor = db.get(Sensor, 42)
+            assert sensor.physical_quantity == 'temperature'
+            assert sensor.name == 'foo'
+            assert sensor.room == None
+
     def test_register_sensor(self):
         with self.session as db:
             db.add(Plugin(id=10, name='dummy', version='0.0.1'))
