@@ -84,7 +84,8 @@ class CloudAPIClient(object):
                                           timeout=5,
                                           verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
             if not response:
-                raise APIException('Error while sending events to {}. HTTP Status: {}'.format(self._hostname, response.status_code))
+                raise APIException('Error while sending events to {}. HTTP Status: {}'.format(self._hostname,
+                                                                                              response.status_code))
         except APIException:
             raise
         except ConnectionError as ce:
@@ -94,12 +95,25 @@ class CloudAPIClient(object):
 
     def send_metrics(self, metrics):
         metrics_endpoint = self._get_endpoint(Config.get_entry('cloud_endpoint_metrics', '') or 'portal/metrics/')
-        logger.debug('Uploading %d metrics to cloud...', len(metrics))
-        request = self._session.post(metrics_endpoint,
-                                     data={'metrics': json.dumps(metrics)},
-                                     timeout=30.0,
-                                     verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
-        return_data = json.loads(request.text)
-        if return_data.get('success', False) is False:
-            raise RuntimeError('{0}'.format(return_data.get('error')))
-        logger.debug('Uploaded metrics successfully')
+        query_params = {'uuid': self._gateway_uuid}
+        logger.info('Uploading %d metrics to cloud...', len(metrics))
+        try:
+            response = self._session.post(metrics_endpoint,
+                                          params=query_params,
+                                          data={'metrics': json.dumps(metrics)},
+                                          timeout=30.0,
+                                          verify=System.get_operating_system().get('ID') != System.OS.ANGSTROM)
+            if not response:
+                raise APIException('Error while sending metrics to {}. HTTP Status: {}'.format(self._hostname,
+                                                                                               response.status_code))
+            return_data = json.loads(response.text)
+            if return_data.get('success', False) is False:
+                raise APIException(return_data.get('error', 'Unknown error (HTTP {})'.format(response.status_code)))
+            logger.debug('Uploaded metrics successfully')
+        except APIException:
+            raise
+        except ConnectionError as ce:
+            raise APIException('Error while sending metrics to {}. Reason: {}'.format(self._hostname, ce))
+        except Exception as e:
+            raise APIException('Unknown error while executing API request on {}. Reason: {}'.format(self._hostname, e))
+
