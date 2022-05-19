@@ -20,6 +20,7 @@ from __future__ import absolute_import
 from gateway.dto.sensor import MasterSensorDTO
 from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import SensorConfiguration
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import List, Dict, Any
@@ -39,9 +40,10 @@ class SensorMapper(object):
     @staticmethod
     def dto_to_orm(master_sensor_dto):  # type: (MasterSensorDTO) -> EepromModel
         data = {'id': master_sensor_dto.id}  # type: Dict[str, Any]
-        for dto_field, data_field in {'name': 'name',
-                                      'offset': 'offset',
+        for dto_field, data_field in {'offset': 'offset',
                                       'virtual': 'virtual'}.items():
             if dto_field in master_sensor_dto.loaded_fields:
                 data[data_field] = getattr(master_sensor_dto, dto_field)
+        if 'name' in master_sensor_dto.loaded_fields:
+            data['name'] = Toolbox.shorten_name(master_sensor_dto.name, maxlength=16)
         return SensorConfiguration.deserialize(data)

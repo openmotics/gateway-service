@@ -20,6 +20,7 @@ from __future__ import absolute_import
 
 from gateway.dto.sensor import MasterSensorDTO
 from master.core.memory_models import SensorConfiguration
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import List, Dict, Any
@@ -36,7 +37,7 @@ class SensorMapper(object):
     def dto_to_orm(sensor_dto):  # type: (MasterSensorDTO) -> SensorConfiguration
         new_data = {'id': sensor_dto.id}  # type: Dict[str, Any]
         if 'name' in sensor_dto.loaded_fields:
-            new_data['name'] = sensor_dto.name
+            new_data['name'] = Toolbox.shorten_name(sensor_dto.name, maxlength=16)
         if 'offset' in sensor_dto.loaded_fields:
             new_data['temperature_offset'] = sensor_dto.offset
         return SensorConfiguration.deserialize(new_data)
