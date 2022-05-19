@@ -180,13 +180,16 @@ class MemoryModelDefinition(object):
     @classmethod
     def _get_fields(cls):  # type: () -> Dict[str, Any]
         """ Get the fields defined by an EepromModel child. """
-        if cls.__name__ not in MemoryModelDefinition._cache_fields:
-            MemoryModelDefinition._cache_fields[cls.__name__] = {'id': inspect.getmembers(cls, lambda f: isinstance(f, IdField)),
-                                                                 'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
-                                                                 'enums': inspect.getmembers(cls, lambda f: isinstance(f, MemoryEnumDefinition)),
-                                                                 'relations': inspect.getmembers(cls, lambda f: isinstance(f, MemoryRelation)),
-                                                                 'compositions': inspect.getmembers(cls, lambda f: isinstance(f, CompositeMemoryModelDefinition))}
-        return MemoryModelDefinition._cache_fields[cls.__name__]
+        if cls.__name__ in MemoryModelDefinition._cache_fields:
+            return MemoryModelDefinition._cache_fields[cls.__name__]
+        with MemoryModelDefinition._cache_lock:
+            if cls.__name__ not in MemoryModelDefinition._cache_fields:
+                MemoryModelDefinition._cache_fields[cls.__name__] = {'id': inspect.getmembers(cls, lambda f: isinstance(f, IdField)),
+                                                                     'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
+                                                                     'enums': inspect.getmembers(cls, lambda f: isinstance(f, MemoryEnumDefinition)),
+                                                                     'relations': inspect.getmembers(cls, lambda f: isinstance(f, MemoryRelation)),
+                                                                     'compositions': inspect.getmembers(cls, lambda f: isinstance(f, CompositeMemoryModelDefinition))}
+            return MemoryModelDefinition._cache_fields[cls.__name__]
 
     @classmethod
     def _get_id_field(cls):  # type: () -> Optional[IdField]
