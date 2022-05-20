@@ -39,7 +39,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
-from master.core.basic_action import BasicAction
+from master.core.basic_action import BasicAction, BasicActionSeries
 from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, \
@@ -371,6 +371,17 @@ class MasterCoreController(MasterController):
                                                             'action': basic_action.action,
                                                             'device_nr': basic_action.device_nr,
                                                             'extra_parameter': basic_action.extra_parameter},
+                                                    timeout=timeout,
+                                                    bypass_blockers=bypass_blockers)
+
+    def _do_basic_action_series(self, basic_action_series, timeout=2, bypass_blockers=None):
+        # type: (BasicActionSeries, Optional[int], Optional[List]) -> Optional[Dict[str, Any]]
+        logger.info('ES: Executing {}'.format(basic_action_series))
+        return self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(basic_action_series.device_nrs)),
+                                                    fields={'type': basic_action_series.action_type,
+                                                            'action': basic_action_series.action,
+                                                            'extra_parameter': basic_action_series.extra_parameter,
+                                                            'device_nrs': basic_action_series.device_nrs},
                                                     timeout=timeout,
                                                     bypass_blockers=bypass_blockers)
 
@@ -1688,10 +1699,9 @@ class MasterCoreController(MasterController):
                                                   action=ba_action,
                                                   device_nr=chunk_output_ids[0]))
             else:
-                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
-                                                     fields={'type': 0, 'action': ba_action,
-                                                             'extra_parameter': 0,
-                                                             'device_nrs': chunk_output_ids})
+                self._do_basic_action_series(BasicActionSeries(action_type=0,
+                                                               action=ba_action,
+                                                               device_nrs=chunk_output_ids))
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement
