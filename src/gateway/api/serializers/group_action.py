@@ -45,6 +45,6 @@ class GroupActionSerializer(object):
             api_data=api_data,
             mapping={'name': ('name', None),
                      'actions': ('actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')]),
-                     'show_in_app': ('show_in_app', True)}
+                     'show_in_app': ('show_in_app', None)}
         )
         return group_action_dto
