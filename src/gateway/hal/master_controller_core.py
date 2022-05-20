@@ -374,6 +374,16 @@ class MasterCoreController(MasterController):
                                                     timeout=timeout,
                                                     bypass_blockers=bypass_blockers)
 
+    def _do_basic_action_series(self, action, device_nrs, timeout=2, bypass_blockers=None):
+        # type: (int, List[int], Optional[int], Optional[List]) -> Optional[Dict[str, Any]]
+        logger.info('ES: Executing {0}'.format(action))
+        return self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(device_nrs)),
+                                                    fields={'type': 0, 'action': action,
+                                                            'extra_parameter': 0,
+                                                            'device_nrs': device_nrs},
+                                                    timeout=timeout,
+                                                    bypass_blockers=bypass_blockers)
+
     def _set_master_state(self, online):
         if online != self._master_online:
             self._master_online = online
@@ -1688,10 +1698,8 @@ class MasterCoreController(MasterController):
                                                   action=ba_action,
                                                   device_nr=chunk_output_ids[0]))
             else:
-                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
-                                                     fields={'type': 0, 'action': ba_action,
-                                                             'extra_parameter': 0,
-                                                             'device_nrs': chunk_output_ids})
+                self._do_basic_action_series(action=ba_action,
+                                             device_nrs=chunk_output_ids)
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement
