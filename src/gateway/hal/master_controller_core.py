@@ -1692,8 +1692,8 @@ class MasterCoreController(MasterController):
                 filtered_output_ids.append(output.id)
 
         # Execute action in batch; either a single BA (for 1 device) or a BA series (for 2 to 40 devices)
-        for i in range(0, len(output_ids), 40):
-            chunk_output_ids = output_ids[i:i + 40]
+        for i in range(0, len(filtered_output_ids), 40):
+            chunk_output_ids = filtered_output_ids[i:i + 40]
             if len(chunk_output_ids) == 1:
                 self._do_basic_action(BasicAction(action_type=0,
                                                   action=ba_action,

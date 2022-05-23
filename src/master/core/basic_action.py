@@ -27,7 +27,6 @@ if False:  # MYPY
 class AbstractBasicAction(object):
     _word_helper = WordField('')
     _byte_helper = ByteField('')
-    _word_array_helper = WordArrayField('', 0)
 
     def __init__(self, action_type, action, extra_parameter):
         self._action_type = self._byte_helper.encode(action_type)  # type: bytearray
@@ -140,9 +139,10 @@ class BasicAction(AbstractBasicAction):
 
 
 class BasicActionSeries(AbstractBasicAction):
-    def __init__(self, action_type, action, device_nrs=None, extra_parameter=None):  # type: (int, int, Optional[List[int]], Optional[int]) -> None
+    def __init__(self, action_type, action, device_nrs, extra_parameter=None):  # type: (int, int, List[int], Optional[int]) -> None
         super(BasicActionSeries, self).__init__(action_type, action, extra_parameter)
-        self._device_nrs = self._word_array_helper.encode(device_nrs if device_nrs is not None else [])  # type: bytearray
+        self._word_array_helper = WordArrayField('', len(device_nrs))
+        self._device_nrs = self._word_array_helper.encode(device_nrs)  # type: bytearray
 
     @property
     def device_nrs(self):  # type: () -> List[int]
@@ -157,14 +157,15 @@ class BasicActionSeries(AbstractBasicAction):
 
     @staticmethod
     def decode(data):  # type: (bytearray) -> BasicActionSeries
+        word_array_helper = WordArrayField('', len(data[4:]) // 2)
         basic_action_series = BasicActionSeries(action_type=data[0],
-                                                action=data[1])
+                                                action=data[1],
+                                                device_nrs=word_array_helper.decode(data[4:]))
         basic_action_series._extra_parameter = data[2:4]
-        basic_action_series._device_nrs = data[4:]
         return basic_action_series
 
     def __str__(self):
-        return 'ES({0},{1},{2},{3})'.format(self.action_type, self.action, self.device_nrs, self.extra_parameter)
+        return 'ES({0},{1},{2} on {3})'.format(self.action_type, self.action, self.extra_parameter, self.device_nrs)
 
     def __repr__(self):
         return str(self)
