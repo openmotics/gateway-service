@@ -401,7 +401,7 @@ class GroupActionMapper(object):
                 # 248: is equal to x (to be used always with action type 247) (see #Additional Input Values)
                 # 249: is higher than x (to be used always with action type 247) (see #Additional Input Values)
                 # 250: is lower than x (to be used always with action type 247) (see #Additional Input Values)
-                device_nr = None  # type: Optional[int]
+                device_nr = 0
                 if action_number < 32:
                     # ... if temperature sensor 0-31 (x=0-31)
                     action_map = {248: 20, 249: 19, 250: 21}
