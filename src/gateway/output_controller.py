@@ -198,9 +198,11 @@ class OutputController(BaseController):
         self._master_controller.save_dimmer_configuration(dimmer_configuration_dto)
 
     def set_all_lights(self, action):  # type: (Literal['ON', 'OFF', 'TOGGLE']) -> None
-        light_output_ids = [output.id for output in self.load_outputs()
-                            if output.in_use and output.output_type >= 128]
-        self._master_controller.set_all_lights(action=action, output_ids=light_output_ids)
+        with Database.get_session() as db:
+            # TODO: Filter on output type once it's in the ORM.
+            output_ids = [output[0] for output in db.query(Output.number).filter(Output.in_use == True)]
+        # The `set_all_lights` implementation does its own filtering for lights & shutters
+        self._master_controller.set_all_lights(action=action, output_ids=output_ids)
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         # type: (int, bool, Optional[int], Optional[int]) -> None
