@@ -114,6 +114,20 @@ class SchedulingControllerTest(unittest.TestCase):
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
 
+    def test_pause_resume(self):
+        schedule_dto = ScheduleDTO(id=1, name='schedule', start=0, action='GROUP_ACTION', arguments=0)
+        self.controller.save_schedules([schedule_dto])
+
+        with mock.patch.object(self.controller, '_abort') as abort:
+            self.controller.set_schedule_status(schedule_dto.id, 'PAUSED')
+            self.assertNotIn(schedule_dto.id, self.controller._schedules)  # disable schedule
+            abort.assert_called()
+
+        with mock.patch.object(self.controller, '_submit_schedule') as submit:
+            self.controller.set_schedule_status(schedule_dto.id, 'ACTIVE')
+            self.assertIn(schedule_dto.id, self.controller._schedules)  # enable schedule
+            submit.assert_called()
+
     def test_update_thermostat_setpoints(self):
         self.controller.update_thermostat_setpoints(0, 'heating', [
             DaySchedule(id=10, index=0, content='{"21600": 21.5}')
