@@ -261,15 +261,18 @@ class OutputControllerTest(unittest.TestCase):
             assert OutputDTO(id=42, name='foo', room=3, in_use=True) in outputs
 
     def test_output_actions(self):
-        with mock.patch.object(self.controller, 'load_outputs', return_value=[OutputDTO(id=1, output_type=1, in_use=True),
-                                                                              OutputDTO(id=2, output_type=255, in_use=True),
-                                                                              OutputDTO(id=3, output_type=255, in_use=False)]):
-            with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-                self.controller.set_all_lights(action='OFF')
-                call.assert_called_once_with(action='OFF', output_ids=[2])
-            with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-                self.controller.set_all_lights(action='ON')
-                call.assert_called_once_with(action='ON', output_ids=[2])
+        with Database.get_session() as db:
+            db.add_all([
+                Output(number=1, in_use=False),
+                Output(number=2, in_use=True)
+            ])
+            db.commit()
+        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
+            self.controller.set_all_lights(action='OFF')
+            call.assert_called_once_with(action='OFF', output_ids=[2])
+        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
+            self.controller.set_all_lights(action='ON')
+            call.assert_called_once_with(action='ON', output_ids=[2])
 
 
 class OutputStateCacheTest(unittest.TestCase):
