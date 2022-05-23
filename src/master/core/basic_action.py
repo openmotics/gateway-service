@@ -165,7 +165,7 @@ class BasicActionSeries(AbstractBasicAction):
         return basic_action_series
 
     def __str__(self):
-        return 'ES({0},{1},{2} on {3})'.format(self.action_type, self.action, self.extra_parameter, self.device_nrs)
+        return 'ES({0},{1},_,{2} on {3})'.format(self.action_type, self.action, self.extra_parameter, self.device_nrs)
 
     def __repr__(self):
         return str(self)
