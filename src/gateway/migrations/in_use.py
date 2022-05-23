@@ -38,7 +38,7 @@ class InUseMigrator(BaseMigrator):
             for output_dto in master_controller.load_outputs():
                 output_orm = db.query(Output).filter(Output.number == output_dto.id).one_or_none()  # type: Optional[Output]
                 if output_orm is not None:
-                    output_orm.in_use = output_orm.name.strip() not in ['', 'NOT_IN_USE']
+                    output_orm.in_use = output_orm.name.strip() != 'NOT_IN_USE'
                     if not output_orm.in_use:
                         output_orm.name = ''
             # Pulse Counters
@@ -46,7 +46,7 @@ class InUseMigrator(BaseMigrator):
             for pulse_counter_dto in pulse_counters:
                 pulse_counter_orm = db.query(PulseCounter).filter(PulseCounter.number == pulse_counter_dto.id).one_or_none()  # type: Optional[PulseCounter]
                 if pulse_counter_orm is not None:
-                    pulse_counter_orm.in_use = (pulse_counter_orm.name.strip() not in ['', 'NOT_IN_USE'] and
+                    pulse_counter_orm.in_use = (pulse_counter_orm.name.strip() != 'NOT_IN_USE' and
                                                 pulse_counter_dto.input_id not in [None, 255])
                     if not pulse_counter_orm.in_use:
                         pulse_counter_orm.name = ''
@@ -58,7 +58,7 @@ class InUseMigrator(BaseMigrator):
                 if input_orm is not None:
                     input_orm.in_use = ((input_dto.id in used_pulse_counter_inputs or
                                          input_dto.action != 255) and
-                                        input_orm.name.strip() not in ['', 'NOT_IN_U', 'NOT_IN_USE'])
+                                        input_orm.name.strip() not in ['NOT_IN_U', 'NOT_IN_USE'])
                     if not input_orm.in_use:
                         input_orm.name = ''
             # Shutters
@@ -66,7 +66,7 @@ class InUseMigrator(BaseMigrator):
             for shutter_dto in shutters:
                 shutter_orm = db.query(Shutter).filter(Shutter.number == shutter_dto.id).one_or_none()  # type: Optional[Shutter]
                 if shutter_orm is not None:
-                    shutter_orm.in_use = shutter_orm.name.strip() not in ['', 'NOT_IN_USE']
+                    shutter_orm.in_use = shutter_orm.name.strip() != 'NOT_IN_USE'
                     if not shutter_orm.in_use:
                         shutter_orm.name = ''
             # Shutter groups
