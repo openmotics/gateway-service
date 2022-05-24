@@ -162,7 +162,7 @@ class CoreUpdater(object):
                     break  # The marker was received
                 except Exception as ex:
                     enter_bootloader_tries -= 1
-                    if enter_bootloader_tries == 0:
+                    if enter_bootloader_tries <= 0:
                         raise
                     self._component_logger.warning(str(ex))
                     self._component_logger.warning('Could not enter bootloader, trying again')
@@ -209,7 +209,7 @@ class CoreUpdater(object):
                             time.sleep(CoreUpdater.BLOCK_WRITE_FAILURE_DELAY)
                         line_failed = True
                         block_write_tries -= 1
-                        if block_write_tries == 0:
+                        if block_write_tries <= 0:
                             raise
                 if slow_counter:
                     time.sleep(CoreUpdater.SLOW_WRITE_DELAY)
@@ -263,7 +263,7 @@ class CoreUpdater(object):
                 break
             except Exception as ex:
                 post_flash_tries -= 1
-                if post_flash_tries == 0:
+                if post_flash_tries <= 0:
                     raise
                 self._component_logger.warning('Error in post-flash power cycle, retry: {0}'.format(ex))
 
