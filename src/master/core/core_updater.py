@@ -320,7 +320,7 @@ class CoreUpdater(object):
                         self._read_queue.put(message)
             except Exception as ex:
                 self._component_logger.error('Unexpected error in read thread: {0}'.format(ex))
-                time.sleep(0.05)
+                raise  # This will abort the thread, causing a read timeout above, and aborting the bootload
 
     def _clear_read_queue(self, flush=False):
         try:
