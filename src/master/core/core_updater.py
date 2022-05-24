@@ -213,7 +213,9 @@ class CoreUpdater(object):
             component_logger.info('Flashing... Done')
         except Exception:
             failure = True
-            if not continue_after_failure:
+            if continue_after_failure:
+                component_logger.info('Continue after exception')
+            else:
                 raise
         finally:
             self._stop_reading = True
@@ -255,7 +257,7 @@ class CoreUpdater(object):
                 break
             except Exception as ex:
                 post_flash_tries -= 1
-                if post_flash_tries:
+                if post_flash_tries == 0:
                     raise
                 component_logger.warning('Error in post-flash power cycle, retry: {0}'.format(ex))
 
