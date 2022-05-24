@@ -62,9 +62,11 @@ class CoreUpdater(object):
     SLOW_WRITE_DELAY = 0.05
     BLOCK_WRITE_FAILURE_DELAY = 0.5
     BOOTLOADER_MARKER = 'DS30HexLoader'
+    SERIAL_TIMEOUT = 3.0
 
     ENTER_BOOTLOADER_TRIES = 3
     BLOCK_WRITE_TRIES = 5
+    POST_REBOOT_TRIES = 3
 
     @Inject
     def __init__(self, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
@@ -72,6 +74,7 @@ class CoreUpdater(object):
         self._master_communicator = master_communicator
         self._maintenance_communicator = maintenance_communicator
         self._cli_serial = cli_serial
+        self._cli_serial_original_timeout = cli_serial.timeout
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
@@ -81,6 +84,7 @@ class CoreUpdater(object):
         self._read_queue = Queue()  # type: Queue[str]
         self._stop_reading = False
         self._communications_trace = []  # type: List[str]
+        self._component_logger = global_logger
 
     def _handle_event(self, data):
         core_event = MasterCoreEvent(data)
@@ -91,8 +95,8 @@ class CoreUpdater(object):
     def update(self, hex_filename, version, ):
         # type: (str, str) -> None
         """ Flashes the content from an Intel HEX file to the Core """
-        component_logger = Logs.get_update_logger('master_coreplus')
-        component_logger.info('Updating Core')
+        self._component_logger = Logs.get_update_logger('master_coreplus')
+        self._component_logger.info('Updating Core')
         start_time = time.time()
 
         self._communications_trace = []
@@ -104,11 +108,11 @@ class CoreUpdater(object):
             current_version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                                    fields={},
                                                                    bypass_blockers=[CommunicationBlocker.UPDATE])['version']
-            component_logger.info('Current firmware version: {0}'.format(current_version))
+            self._component_logger.info('Current firmware version: {0}'.format(current_version))
         except Exception as ex:
-            component_logger.warning('Could not load current firmware version: {0}'.format(ex))
+            self._component_logger.warning('Could not load current firmware version: {0}'.format(ex))
 
-        component_logger.info('Updating firmware from {0} to {1}'.format(current_version if current_version is not None else 'unknown',
+        self._component_logger.info('Updating firmware from {0} to {1}'.format(current_version if current_version is not None else 'unknown',
                                                                          version if version is not None else 'unknown'))
 
         if self._master_communicator is not None and self._maintenance_communicator is not None:
@@ -128,10 +132,13 @@ class CoreUpdater(object):
         read_thread.start()
 
         failure = False
+        continue_after_failure = False
         try:
+            self._cli_serial.timeout = CoreUpdater.SERIAL_TIMEOUT
+
             # Activate bootloader by a microcontrolle restart
             # This is tried `ENTER_BOOTLOADER_TRIES` times
-            component_logger.info('Activating bootloader')
+            self._component_logger.info('Activating bootloader')
             enter_bootloader_tries = CoreUpdater.ENTER_BOOTLOADER_TRIES
             while True:
                 try:
@@ -149,26 +156,26 @@ class CoreUpdater(object):
                             raise RuntimeError()
                         bootloader_version, library_version = match.groups()
                         bootloader_version = '.'.join(str(int(i)) for i in bootloader_version.split('.'))  # Remove padding zeros
-                        component_logger.info('Entered bootloader v{0} (library v{1})'.format(bootloader_version, library_version))
+                        self._component_logger.info('Entered bootloader v{0} (library v{1})'.format(bootloader_version, library_version))
                     except Exception:
-                        component_logger.warning('Could not parse bootloader version')
+                        self._component_logger.warning('Could not parse bootloader version')
                     break  # The marker was received
                 except Exception as ex:
                     enter_bootloader_tries -= 1
-                    if enter_bootloader_tries == 0:
+                    if enter_bootloader_tries <= 0:
                         raise
-                    component_logger.warning(str(ex))
-                    component_logger.warning('Could not enter bootloader, trying again')
+                    self._component_logger.warning(str(ex))
+                    self._component_logger.warning('Could not enter bootloader, trying again')
 
             self._verify_bootloader()
-            component_logger.info('Bootloader active')
+            self._component_logger.info('Bootloader active')
 
             # Start flashing the new firmware. This happens line by line and every line is tried
             # up to `BLOCK_WRITE_TRIES` times. As soon as there is a failure, the writes will be slowed
             # down for `SLOW_WRITES` times
             slow_counter = 0
-            component_logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
-            component_logger.info('Flashing...')
+            self._component_logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
+            self._component_logger.info('Flashing...')
             for index, line in enumerate(hex_lines):
                 block_write_tries = CoreUpdater.BLOCK_WRITE_TRIES
                 line_failed = False
@@ -186,12 +193,15 @@ class CoreUpdater(object):
                         if response != 'ok':
                             raise BootloadException('Unexpected response: {0}'.format(response), fatal=False)
                         if line_failed:
-                            component_logger.info('Flashing... Line {0}/{1} succeeded'.format(index + 1, amount_lines))
+                            self._component_logger.info('Flashing... Line {0}/{1} succeeded'.format(index + 1, amount_lines))
                         if slow_counter:
                             slow_counter -= 1
                         break
                     except RuntimeError as ex:
-                        component_logger.warning('Flashing... Line {0}/{1} failed: {2}'.format(index + 1, amount_lines, ex))
+                        self._component_logger.warning('Flashing... Line {0}/{1} failed: {2}'.format(index + 1, amount_lines, ex))
+                        if index + 1 == amount_lines:
+                            # Sometimes bootloading fails at the last line, but the write action was actually successful
+                            continue_after_failure = True
                         slow_counter = CoreUpdater.SLOW_WRITES
                         if isinstance(ex, BootloadException):
                             if ex.fatal:
@@ -199,16 +209,19 @@ class CoreUpdater(object):
                             time.sleep(CoreUpdater.BLOCK_WRITE_FAILURE_DELAY)
                         line_failed = True
                         block_write_tries -= 1
-                        if block_write_tries == 0:
+                        if block_write_tries <= 0:
                             raise
                 if slow_counter:
                     time.sleep(CoreUpdater.SLOW_WRITE_DELAY)
                 if index % (amount_lines // 10) == 0 and index != 0:
-                    component_logger.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
-            component_logger.info('Flashing... Done')
+                    self._component_logger.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
+            self._component_logger.info('Flashing... Done')
         except Exception:
             failure = True
-            raise
+            if continue_after_failure:
+                self._component_logger.info('Continue after exception')
+            else:
+                raise
         finally:
             self._stop_reading = True
             read_thread.join()
@@ -217,46 +230,58 @@ class CoreUpdater(object):
                 # after the read thread is stopped.
                 with open('/tmp/bootloader.trace', 'w') as f:
                     f.write('\n'.join(self._communications_trace))
+            self._cli_serial.timeout = self._cli_serial_original_timeout
 
-        component_logger.info('Post-flash power cycle')
+        self._component_logger.info('Post-flash power cycle')
         time.sleep(CoreUpdater.POST_BOOTLOAD_DELAY)
 
-        def _prepare():
-            if self._master_communicator is not None and self._maintenance_communicator is not None:
+        def _prepare(state):
+            if not state['started'] and self._master_communicator is not None and self._maintenance_communicator is not None:
                 self._maintenance_communicator.start()
                 self._master_communicator.start()
+                state['started'] = True
             self._master_started.clear()
 
-        sub_delay = CoreUpdater.POWER_CYCLE_DELAY / 2
-        try:
-            Hardware.cycle_gpio(
-                Hardware.CoreGPIO.MASTER_POWER,
-                [False, sub_delay, _prepare, sub_delay, True]
-            )
-        except Exception:
-            component_logger.warning('Error on post-flash power cycle, powering on')
-            Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, True)
-            raise
-        component_logger.info('Waiting for startup')
-        if not self._master_started.wait(CoreUpdater.APPLICATION_STARTUP_TIMEOUT):
-            raise RuntimeError('Core was not started after {0}s'.format(CoreUpdater.APPLICATION_STARTUP_TIMEOUT))
-        component_logger.info('Startup complete')
+        prepare_state = {'started': False}
+        post_flash_tries = CoreUpdater.POST_REBOOT_TRIES
+        while True:
+            try:
+                sub_delay = CoreUpdater.POWER_CYCLE_DELAY / 2
+                try:
+                    Hardware.cycle_gpio(
+                        Hardware.CoreGPIO.MASTER_POWER,
+                        [False, sub_delay, lambda: _prepare(prepare_state), sub_delay, True]
+                    )
+                except Exception:
+                    self._component_logger.warning('Error on post-flash power cycle, powering on')
+                    Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, True)
+                    raise
+                self._component_logger.info('Waiting for startup')
+                if not self._master_started.wait(CoreUpdater.APPLICATION_STARTUP_TIMEOUT):
+                    raise RuntimeError('Core was not started after {0}s'.format(CoreUpdater.APPLICATION_STARTUP_TIMEOUT))
+                self._component_logger.info('Startup complete')
+                break
+            except Exception as ex:
+                post_flash_tries -= 1
+                if post_flash_tries <= 0:
+                    raise
+                self._component_logger.warning('Error in post-flash power cycle, retry: {0}'.format(ex))
 
         current_version = None
         try:
             current_version = self._master_communicator.do_command(command=CoreAPI.get_firmware_version(),
                                                                    fields={},
                                                                    bypass_blockers=[CommunicationBlocker.UPDATE])['version']
-            component_logger.info('Post-update firmware version: {0}'.format(current_version))
+            self._component_logger.info('Post-update firmware version: {0}'.format(current_version))
         except Exception as ex:
-            component_logger.warning('Could not load post-update firmware version: {0}'.format(ex))
+            self._component_logger.warning('Could not load post-update firmware version: {0}'.format(ex))
         if version is not None and current_version != version:
             raise RuntimeError('Post-update firmware version {0} does not match expected {1}'.format(
                 current_version if current_version is not None else 'unknown',
                 version
             ))
 
-        component_logger.info('Update completed. Took {0:.1f}s'.format(time.time() - start_time))
+        self._component_logger.info('Update completed. Took {0:.1f}s'.format(time.time() - start_time))
 
     def _verify_bootloader(self):  # type: () -> None
         while True:
@@ -283,19 +308,27 @@ class CoreUpdater(object):
     def _read(self):
         line_buffer = ''
         while not self._stop_reading:
-            bytes_waiting = self._cli_serial.inWaiting()
-            if bytes_waiting:
+            try:
                 try:
-                    line_buffer += bytearray(self._cli_serial.read(bytes_waiting)).decode()
+                    single_byte = self._cli_serial.read(1)
+                    if single_byte:
+                        line_buffer += single_byte.decode()
                 except UnicodeDecodeError:
                     pass  # Is expected when (re)booting
-            while '\n' in line_buffer:
-                message, line_buffer = line_buffer.split('\n', 1)
-                self._communications_trace.append('{0:.3f} < {1}'.format(time.time(), message))
-                if message[0] != '#':
-                    self._read_queue.put(message)
-            if not bytes_waiting:
-                time.sleep(0.01)
+                bytes_waiting = self._cli_serial.inWaiting()
+                if bytes_waiting:
+                    try:
+                        line_buffer += bytearray(self._cli_serial.read(bytes_waiting)).decode()
+                    except UnicodeDecodeError:
+                        pass  # Is expected when (re)booting
+                while '\n' in line_buffer:
+                    message, line_buffer = line_buffer.split('\n', 1)
+                    self._communications_trace.append('{0:.3f} < {1}'.format(time.time(), message))
+                    if message[0] != '#':
+                        self._read_queue.put(message)
+            except Exception as ex:
+                self._component_logger.error('Unexpected error in read thread: {0}'.format(ex))
+                raise  # This will abort the thread, causing a read timeout above, and aborting the bootload
 
     def _clear_read_queue(self, flush=False):
         try:
