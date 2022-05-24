@@ -65,6 +65,7 @@ class CoreUpdater(object):
 
     ENTER_BOOTLOADER_TRIES = 3
     BLOCK_WRITE_TRIES = 5
+    POST_REBOOT_TRIES = 3
 
     @Inject
     def __init__(self, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
@@ -128,6 +129,7 @@ class CoreUpdater(object):
         read_thread.start()
 
         failure = False
+        continue_after_failure = False
         try:
             # Activate bootloader by a microcontrolle restart
             # This is tried `ENTER_BOOTLOADER_TRIES` times
@@ -192,6 +194,9 @@ class CoreUpdater(object):
                         break
                     except RuntimeError as ex:
                         component_logger.warning('Flashing... Line {0}/{1} failed: {2}'.format(index + 1, amount_lines, ex))
+                        if index + 1 == amount_lines:
+                            # Sometimes bootloading fails at the last line, but the write action was actually successful
+                            continue_after_failure = True
                         slow_counter = CoreUpdater.SLOW_WRITES
                         if isinstance(ex, BootloadException):
                             if ex.fatal:
@@ -208,7 +213,8 @@ class CoreUpdater(object):
             component_logger.info('Flashing... Done')
         except Exception:
             failure = True
-            raise
+            if not continue_after_failure:
+                raise
         finally:
             self._stop_reading = True
             read_thread.join()
@@ -221,26 +227,37 @@ class CoreUpdater(object):
         component_logger.info('Post-flash power cycle')
         time.sleep(CoreUpdater.POST_BOOTLOAD_DELAY)
 
-        def _prepare():
-            if self._master_communicator is not None and self._maintenance_communicator is not None:
+        def _prepare(state):
+            if not state['started'] and self._master_communicator is not None and self._maintenance_communicator is not None:
                 self._maintenance_communicator.start()
                 self._master_communicator.start()
+                state['started'] = True
             self._master_started.clear()
 
-        sub_delay = CoreUpdater.POWER_CYCLE_DELAY / 2
-        try:
-            Hardware.cycle_gpio(
-                Hardware.CoreGPIO.MASTER_POWER,
-                [False, sub_delay, _prepare, sub_delay, True]
-            )
-        except Exception:
-            component_logger.warning('Error on post-flash power cycle, powering on')
-            Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, True)
-            raise
-        component_logger.info('Waiting for startup')
-        if not self._master_started.wait(CoreUpdater.APPLICATION_STARTUP_TIMEOUT):
-            raise RuntimeError('Core was not started after {0}s'.format(CoreUpdater.APPLICATION_STARTUP_TIMEOUT))
-        component_logger.info('Startup complete')
+        prepare_state = {'started': False}
+        post_flash_tries = CoreUpdater.POST_REBOOT_TRIES
+        while True:
+            try:
+                sub_delay = CoreUpdater.POWER_CYCLE_DELAY / 2
+                try:
+                    Hardware.cycle_gpio(
+                        Hardware.CoreGPIO.MASTER_POWER,
+                        [False, sub_delay, lambda: _prepare(prepare_state), sub_delay, True]
+                    )
+                except Exception:
+                    component_logger.warning('Error on post-flash power cycle, powering on')
+                    Hardware.set_gpio(Hardware.CoreGPIO.MASTER_POWER, True)
+                    raise
+                component_logger.info('Waiting for startup')
+                if not self._master_started.wait(CoreUpdater.APPLICATION_STARTUP_TIMEOUT):
+                    raise RuntimeError('Core was not started after {0}s'.format(CoreUpdater.APPLICATION_STARTUP_TIMEOUT))
+                component_logger.info('Startup complete')
+                break
+            except Exception as ex:
+                post_flash_tries -= 1
+                if post_flash_tries:
+                    raise
+                component_logger.warning('Error in post-flash power cycle, retry: {0}'.format(ex))
 
         current_version = None
         try:
