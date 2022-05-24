@@ -62,6 +62,7 @@ class CoreUpdater(object):
     SLOW_WRITE_DELAY = 0.05
     BLOCK_WRITE_FAILURE_DELAY = 0.5
     BOOTLOADER_MARKER = 'DS30HexLoader'
+    SERIAL_TIMEOUT = 3.0
 
     ENTER_BOOTLOADER_TRIES = 3
     BLOCK_WRITE_TRIES = 5
@@ -73,6 +74,7 @@ class CoreUpdater(object):
         self._master_communicator = master_communicator
         self._maintenance_communicator = maintenance_communicator
         self._cli_serial = cli_serial
+        self._cli_serial_original_timeout = cli_serial.timeout
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
@@ -131,6 +133,8 @@ class CoreUpdater(object):
         failure = False
         continue_after_failure = False
         try:
+            self._cli_serial.timeout = CoreUpdater.SERIAL_TIMEOUT
+
             # Activate bootloader by a microcontrolle restart
             # This is tried `ENTER_BOOTLOADER_TRIES` times
             self._component_logger.info('Activating bootloader')
@@ -225,6 +229,7 @@ class CoreUpdater(object):
                 # after the read thread is stopped.
                 with open('/tmp/bootloader.trace', 'w') as f:
                     f.write('\n'.join(self._communications_trace))
+            self._cli_serial.timeout = self._cli_serial_original_timeout
 
         self._component_logger.info('Post-flash power cycle')
         time.sleep(CoreUpdater.POST_BOOTLOAD_DELAY)
@@ -304,7 +309,9 @@ class CoreUpdater(object):
         while not self._stop_reading:
             try:
                 try:
-                    line_buffer += self._cli_serial.read(1).decode()
+                    single_byte = self._cli_serial.read(1)
+                    if single_byte:
+                        line_buffer += single_byte.decode()
                 except UnicodeDecodeError:
                     pass  # Is expected when (re)booting
                 bytes_waiting = self._cli_serial.inWaiting()
