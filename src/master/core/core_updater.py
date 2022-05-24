@@ -84,7 +84,7 @@ class CoreUpdater(object):
         self._read_queue = Queue()  # type: Queue[str]
         self._stop_reading = False
         self._communications_trace = []  # type: List[str]
-        self._component_logger = Logs.get_update_logger('master_coreplus')
+        self._component_logger = global_logger
 
     def _handle_event(self, data):
         core_event = MasterCoreEvent(data)
@@ -95,6 +95,7 @@ class CoreUpdater(object):
     def update(self, hex_filename, version, ):
         # type: (str, str) -> None
         """ Flashes the content from an Intel HEX file to the Core """
+        self._component_logger = Logs.get_update_logger('master_coreplus')
         self._component_logger.info('Updating Core')
         start_time = time.time()
 
