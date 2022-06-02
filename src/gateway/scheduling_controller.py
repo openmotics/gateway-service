@@ -122,14 +122,16 @@ class SchedulingController(object):
         with Database.get_session() as db:
             schedule_dtos = [ScheduleMapper(db).orm_to_dto(schedule) for schedule in db.query(Schedule)]
         for schedule_dto in schedule_dtos:
-            if self._schedules.get(schedule_dto.id) != schedule_dto:
-                self._submit_schedule(schedule_dto)
-                self._schedules[schedule_dto.id] = schedule_dto
-            stale_schedules.pop(schedule_dto.id, None)
             self._update_status(schedule_dto)
+            if schedule_dto.status == 'ACTIVE':
+                if self._schedules.get(schedule_dto.id) != schedule_dto:
+                    self._submit_schedule(schedule_dto)
+                    self._schedules[schedule_dto.id] = schedule_dto
+                stale_schedules.pop(schedule_dto.id, None)
         for schedule_dto in stale_schedules.values():
             self._abort(schedule_dto)
             self._schedules.pop(schedule_dto.id, None)
+        logger.debug('Scheduled jobs %s', self._scheduler.get_jobs())
 
     def _submit_schedule(self, schedule_dto):
         # type: (ScheduleDTO) -> None
@@ -184,7 +186,15 @@ class SchedulingController(object):
 
     def load_schedules(self):
         # type: () -> List[ScheduleDTO]
-        return [schedule_dto for schedule_dto in self._schedules.values()]
+        schedules = []
+        with Database.get_session() as db:
+            mapper = ScheduleMapper(db)
+            for schedule in db.query(Schedule):
+                if schedule.id in self._schedules:
+                    schedules.append(self._schedules[schedule.id])
+                else:
+                    schedules.append(mapper.orm_to_dto(schedule))
+        return schedules
 
     def save_schedules(self, schedules):
         # type: (List[ScheduleDTO]) -> None
@@ -283,10 +293,12 @@ class SchedulingController(object):
     def _update_status(self, schedule_dto):
         # type: (ScheduleDTO) -> None
         if schedule_dto.has_ended:
+            logger.debug('Completed schedule %s', schedule_dto.name)
             schedule_dto.next_execution = None
             schedule_dto.status = 'COMPLETED'
             with Database.get_session() as db:
                 schedule = ScheduleMapper(db).dto_to_orm(schedule_dto)
+                schedule.status = 'COMPLETED'
                 db.add(schedule)
                 db.commit()
         else:
