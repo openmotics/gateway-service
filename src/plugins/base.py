@@ -384,6 +384,7 @@ class PluginController(object):
         # Finally remove database entry.
         with Database.get_session() as db:
             db.query(Plugin).where(Plugin.name == name).delete()
+            db.commit()
 
         return {'msg': 'Plugin successfully removed'}
 
