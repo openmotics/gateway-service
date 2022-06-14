@@ -95,9 +95,9 @@ class GroupActionController(BaseController):
                     continue
                 GroupActionController._group_action_dto_to_orm(group_action_dto=group_action_dto,
                                                                group_action_orm=group_action)
+                group_actions_to_save.append(group_action_dto)
             publish = bool(db.dirty)
             db.commit()
-            group_actions_to_save.append(group_action_dto)
         self._master_controller.save_group_actions(group_actions_to_save)
         if publish:
             self._publish_config()
