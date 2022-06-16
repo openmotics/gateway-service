@@ -245,37 +245,34 @@ class OutputControllerTest(unittest.TestCase):
         with Database.get_session() as db:
             db.add_all([
                 Room(number=3),
-                Output(number=42)
+                Output(number=42, in_use=False)
             ])
             db.commit()
         with mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: OutputDTO(id=output_id)) as load, \
              mock.patch.object(self.master_controller, 'save_outputs') as save:
             self.controller.save_outputs([
-                OutputDTO(id=42, name='foo', room=3),
+                OutputDTO(id=42, name='foo', room=3, in_use=True),
             ])
             save.assert_called()
             assert save.call_args_list[0][0][0][0].id == 42
             assert save.call_args_list[0][0][0][0].name == 'foo'
             outputs = self.controller.load_outputs()
-            assert OutputDTO(id=42, room=3) in outputs
+            assert OutputDTO(id=42, name='foo', room=3, in_use=True) in outputs
 
     def test_output_actions(self):
-        with self.session as db:
-            room = Room(number=10)
+        with Database.get_session() as db:
             db.add_all([
-                room,
-                Output(number=1, room=room),
-                Output(number=3),
+                Output(number=1, in_use=False),
+                Output(number=2, in_use=True)
             ])
             db.commit()
-
         with mock.patch.object(self.master_controller, 'set_all_lights') as call:
             self.controller.set_all_lights(action='OFF')
-            call.assert_called_once_with(action='OFF')
+            call.assert_called_once_with(action='OFF', output_ids=[2])
         with mock.patch.object(self.master_controller, 'set_all_lights') as call:
             self.controller.set_all_lights(action='ON')
-            call.assert_called_once_with(action='ON')
+            call.assert_called_once_with(action='ON', output_ids=[2])
 
 
 class OutputStateCacheTest(unittest.TestCase):

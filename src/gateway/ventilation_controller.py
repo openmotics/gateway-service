@@ -23,15 +23,16 @@ import time
 from sqlalchemy import select
 
 from gateway.daemon_thread import DaemonThread
-from gateway.dto import VentilationDTO, VentilationStatusDTO
+from gateway.dto import VentilationDTO, VentilationSourceDTO, \
+    VentilationStatusDTO
 from gateway.events import GatewayEvent
 from gateway.mappers import VentilationMapper
-from gateway.models import Database, Ventilation
+from gateway.models import Database, Plugin, Ventilation
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
-    from typing import Dict, List, Optional
+    from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -125,19 +126,47 @@ class VentilationController(object):
     def load_ventilation(self, ventilation_id):
         # type: (int) -> VentilationDTO
         with Database.get_session() as db:
-            ventilation = db.get(Ventilation, ventilation_id)
+            ventilation = db.query(Ventilation).filter_by(id=ventilation_id).one()  # type: Ventilation
             return VentilationMapper(db).orm_to_dto(ventilation)
 
     def save_ventilation(self, ventilation_dto):
-        # type: (VentilationDTO) -> None
+        # type: (VentilationDTO) -> VentilationDTO
         with Database.get_session() as db:
             ventilation = VentilationMapper(db).dto_to_orm(ventilation_dto)
             db.add(ventilation)
             changed = ventilation in db.dirty
             db.commit()
-            ventilation_dto.id = ventilation.id
+            ventilation_dto = self.load_ventilation(ventilation.id)
         if changed:
             self._publish_config()
+        return ventilation_dto
+
+    def register_ventilation(self, source_dto, external_id, default_config=None):
+        # type: (VentilationSourceDTO, str, Optional[Dict[str, Any]]) -> VentilationDTO
+        default_config = default_config or {}
+        with Database.get_session() as db:
+            if source_dto.type == 'plugin':
+                plugin = db.query(Plugin).filter_by(name=source_dto.name).one()  # type: Plugin
+                lookup_kwargs = {'source': source_dto.type, 'plugin': plugin, 'external_id': external_id}
+            else:
+                raise ValueError('Can\'t register Ventilation with source {}'.format(source_dto.type))
+            ventilation = db.query(Ventilation).filter_by(**lookup_kwargs).one_or_none()  # type: Optional[Ventilation]
+            if ventilation is None:
+                ventilation = Ventilation(**lookup_kwargs)
+                for field in ('name',):
+                    setattr(ventilation, field, default_config.get(field, ''))
+                db.add(ventilation)
+            for field in ('amount_of_levels',):
+                setattr(ventilation, field, default_config.get(field, 0))
+            for field in ('device_vendor', 'device_type', 'device_serial'):
+                if field in default_config:
+                    setattr(ventilation, field, default_config.get(field, ''))
+            changed = ventilation in db.dirty
+            db.commit()
+            ventilation_dto = self.load_ventilation(ventilation.id)
+        if changed:
+            self._publish_config()
+        return ventilation_dto
 
     def get_status(self):
         # type: () -> List[VentilationStatusDTO]

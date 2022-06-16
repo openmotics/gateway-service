@@ -33,7 +33,8 @@ class GroupActionSerializer(object):
         data = {'id': group_action_dto.id,
                 'name': group_action_dto.name,
                 'actions': ','.join([str(action) for action in group_action_dto.actions]),
-                'internal': group_action_dto.internal}
+                'internal': group_action_dto.internal,
+                'show_in_app': group_action_dto.show_in_app}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -43,6 +44,7 @@ class GroupActionSerializer(object):
             dto=group_action_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
-                     'actions': ('actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')])}
+                     'actions': ('actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')]),
+                     'show_in_app': ('show_in_app', None)}
         )
         return group_action_dto

@@ -149,6 +149,12 @@ class GatewayEvent(BaseEvent):
        'mode': str,    # Auto/Manual
        'level': int,
        'connected': bool}
+
+    * NOTIFICATION
+      {'source': str,  # Gateway | Plugin name
+       'type': str,    # USER | SYSTEM
+       'topic': str,
+       'message': str}
     """
     NAMESPACE = 'OPENMOTICS'
 
@@ -161,7 +167,7 @@ class GatewayEvent(BaseEvent):
         THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
         THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'
         VENTILATION_CHANGE = 'VENTILATION_CHANGE'
+        NOTIFICATION = 'NOTIFICATION'
         ACTION = 'ACTION'
         PING = 'PING'
         PONG = 'PONG'
-

@@ -39,7 +39,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
-from master.core.basic_action import BasicAction
+from master.core.basic_action import BasicAction, BasicActionSeries
 from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, \
@@ -374,15 +374,26 @@ class MasterCoreController(MasterController):
                                                     timeout=timeout,
                                                     bypass_blockers=bypass_blockers)
 
+    def _do_basic_action_series(self, basic_action_series, timeout=2, bypass_blockers=None):
+        # type: (BasicActionSeries, Optional[int], Optional[List]) -> Optional[Dict[str, Any]]
+        logger.info('ES: Executing {}'.format(basic_action_series))
+        return self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(basic_action_series.device_nrs)),
+                                                    fields={'type': basic_action_series.action_type,
+                                                            'action': basic_action_series.action,
+                                                            'extra_parameter': basic_action_series.extra_parameter,
+                                                            'device_nrs': basic_action_series.device_nrs},
+                                                    timeout=timeout,
+                                                    bypass_blockers=bypass_blockers)
+
     def _set_master_state(self, online):
         if online != self._master_online:
             self._master_online = online
 
-    def _enumerate_io_modules(self, module_type, amount_per_module=8):
-        cmd = CoreAPI.general_configuration_number_of_modules()
-        module_count = self._master_communicator.do_command(command=cmd,
-                                                            fields={})[module_type]
-        return range(module_count * amount_per_module)
+    @staticmethod
+    def _enumerate_io_modules(module_type, amount_per_module=8):
+        global_configuration = GlobalConfiguration()
+        nr_of_modules = getattr(global_configuration, 'number_of_{0}_modules'.format(module_type))
+        return range(nr_of_modules * amount_per_module)
 
     #######################
     # Internal management #
@@ -412,8 +423,6 @@ class MasterCoreController(MasterController):
         pass  # TODO: implement
 
     def _log_stats(self):
-        def _default_if_255(value, default):
-            return value if value != 255 else default
 
         max_specs = self._master_communicator.do_command(command=CoreAPI.general_configuration_max_specs(),
                                                          fields={})
@@ -427,23 +436,19 @@ class MasterCoreController(MasterController):
         logger.info('    * Enabled: {0}'.format('Yes' if amd.automatic_discovery_enabled else 'No'))
         logger.info('    * New slave firmware: {0}'.format('Yes' if amd.new_slave_firmware_used else 'No'))
         logger.info('    * Full handshake: {0}'.format('Yes' if amd.full_handshake else 'No'))
-        logger.info('  * Output: {0}/{1}'.format(_default_if_255(global_configuration.number_of_output_modules, 0),
-                                                 max_specs['output']))
-        logger.info('  * Input: {0}/{1}'.format(_default_if_255(global_configuration.number_of_input_modules, 0),
-                                                max_specs['input']))
-        logger.info('  * Sensor: {0}/{1}'.format(_default_if_255(global_configuration.number_of_sensor_modules, 0),
-                                                 max_specs['sensor']))
-        logger.info('  * uCAN: {0}/{1}'.format(_default_if_255(global_configuration.number_of_ucan_modules, 0),
-                                               max_specs['ucan']))
-        logger.info('  * CAN Control: {0}'.format(_default_if_255(global_configuration.number_of_can_control_modules, 0)))
+        logger.info('  * Output: {0}/{1}'.format(global_configuration.number_of_output_modules, max_specs['output']))
+        logger.info('  * Input: {0}/{1}'.format(global_configuration.number_of_input_modules, max_specs['input']))
+        logger.info('  * Sensor: {0}/{1}'.format(global_configuration.number_of_sensor_modules, max_specs['sensor']))
+        logger.info('  * uCAN: {0}/{1}'.format(global_configuration.number_of_ucan_modules, max_specs['ucan']))
+        logger.info('  * CAN Control: {0}'.format(global_configuration.number_of_can_control_modules))
         logger.info('* CAN:')
         logger.info('  * Inputs: {0}'.format(global_configuration.number_of_can_inputs))
         logger.info('  * Sensors: {0}'.format(global_configuration.number_of_can_sensors))
         logger.info('  * Termination: {0}'.format(global_configuration.can_bus_termination))
         logger.info('* Scan times:')
-        logger.info('  * General bus: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_bus, 8)))
-        logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_sensor_modules, 50) * 100))
-        logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_can_control_modules, 50) * 100))
+        logger.info('  * General bus: {0}ms'.format(global_configuration.scan_time_rs485_bus))
+        logger.info('  * Sensor modules: {0}ms'.format(global_configuration.scan_time_rs485_sensor_modules * 100))
+        logger.info('  * CAN Control modules: {0}ms'.format(global_configuration.scan_time_rs485_can_control_modules * 100))
         logger.info('* Runtime stats:')
         logger.info('  * Debug:')
         logger.info('    * BA events: {0}abled'.format('Dis' if global_configuration.debug.disable_ba_events else 'En'))
@@ -570,7 +575,7 @@ class MasterCoreController(MasterController):
     def load_inputs(self):  # type: () -> List[InputDTO]
         inputs = []
         module_dtos = {module_dto.id: module_dto for module_dto in self._get_input_modules_information()}
-        for input_id in self._enumerate_io_modules('input'):
+        for input_id in MasterCoreController._enumerate_io_modules('input'):
             input_orm = InputConfiguration(input_id)
             inputs.append(self._load_input(input_orm=input_orm,
                                            module_dto=module_dtos.get(input_orm.module.id)))
@@ -652,7 +657,7 @@ class MasterCoreController(MasterController):
         outputs = []
         module_dtos, _ = self._get_output_modules_information()
         module_dto_map = {module_dto.id: module_dto for module_dto in module_dtos}
-        for output_id in self._enumerate_io_modules('output'):
+        for output_id in MasterCoreController._enumerate_io_modules('output'):
             output_orm = OutputConfiguration(output_id)
             outputs.append(self._load_output(output_orm=output_orm,
                                              module_dto=module_dto_map.get(output_id // 8)))
@@ -677,7 +682,7 @@ class MasterCoreController(MasterController):
     def load_output_status(self):
         # type: () -> List[OutputStatusDTO]
         output_status = []
-        for i in self._enumerate_io_modules('output'):
+        for i in MasterCoreController._enumerate_io_modules('output'):
             data = self._master_communicator.do_command(command=CoreAPI.output_detail(),
                                                         fields={'device_nr': i})
             timer = SVTTimer.event_timer_type_to_seconds(data['timer_type'], data['timer'])
@@ -690,28 +695,45 @@ class MasterCoreController(MasterController):
         return output_status
 
     def _configure_output_shutter(self, output, is_shutter):  # type: (OutputConfiguration, bool) -> None
-        shutter = ShutterConfiguration(output.id // 2)
-        output_module = output.module
+        output_set = ['01', '23', '45', '67'][output.id % 8 // 2]
+        base_output = output.id // 2 * 2
+        outputs = [OutputConfiguration(base_output),
+                   OutputConfiguration(base_output + 1)]
+        outputs[output.id % 2] = output
+
+        shutter = self._find_output_shutter(base_output)
         if is_shutter:
-            shutter.outputs.output_0 = shutter.id * 2
-            output_set = shutter.output_set
+            shutter.outputs.output_0 = base_output
             self._output_shutter_map[shutter.outputs.output_0] = shutter.id
             self._output_shutter_map[shutter.outputs.output_1] = shutter.id
             self.set_output(output_id=shutter.outputs.output_0, state=False)
             self.set_output(output_id=shutter.outputs.output_1, state=False)
-            output.output_type = OutputType.SHUTTER_RELAY
+            for output in outputs:
+                output.output_type = OutputType.SHUTTER_RELAY
         else:
-            output_set = shutter.output_set  # Previous outputs need to be restored
             self._output_shutter_map.pop(shutter.outputs.output_0, None)
             self._output_shutter_map.pop(shutter.outputs.output_1, None)
             shutter.outputs.output_0 = 255 * 2
             shutter.name = ''
-            if output.output_type == OutputType.SHUTTER_RELAY:
-                output.output_type = OutputType.OUTLET
-        setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
-        output.save(commit=False)
+            for output in outputs:
+                if output.output_type == OutputType.SHUTTER_RELAY:
+                    output.output_type = OutputType.OUTLET
+        setattr(output.module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_shutter)
+        for output in outputs:
+            output.save(commit=False)
         shutter.save(commit=False)
-        output_module.save(commit=False)
+        output.module.save(commit=False)
+
+    def _find_output_shutter(self, output_id):
+        # type: (int) -> ShutterConfiguration
+        global_configuration = GlobalConfiguration()
+        nr_of_output_modules = global_configuration.number_of_output_modules
+        for module_id in range(nr_of_output_modules):
+            for i in range(4):
+                shutter = ShutterConfiguration(module_id + i)
+                if output_id == shutter.outputs.output_0:
+                    return shutter
+        return ShutterConfiguration(output_id // 2)
 
     # Shutters
 
@@ -757,7 +779,7 @@ class MasterCoreController(MasterController):
         # No module metadata is returned for Gen3 shutters, as they are not real anyway. It would introduce too
         #   many issues when we make the shutter/output assignments flexible in the future.
         shutters = []
-        for shutter_id in self._enumerate_io_modules('output', amount_per_module=4):
+        for shutter_id in MasterCoreController._enumerate_io_modules('output', amount_per_module=4):
             shutters.append(self.load_shutter(shutter_id))
         return shutters
 
@@ -866,8 +888,7 @@ class MasterCoreController(MasterController):
         return self._sensor_states.get(sensor_id, {}).get('TEMPERATURE')
 
     def get_sensors_temperature(self):
-        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
-                                                                     fields={})['sensor']
+        amount_sensor_modules = GlobalConfiguration().number_of_sensor_modules
         temperatures = []
         for sensor_id in range(amount_sensor_modules * 8):
             temperatures.append(self.get_sensor_temperature(sensor_id))
@@ -877,8 +898,7 @@ class MasterCoreController(MasterController):
         return self._sensor_states.get(sensor_id, {}).get('HUMIDITY')
 
     def get_sensors_humidity(self):
-        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
-                                                                     fields={})['sensor']
+        amount_sensor_modules = GlobalConfiguration().number_of_sensor_modules
         humidities = []
         for sensor_id in range(amount_sensor_modules * 8):
             humidities.append(self.get_sensor_humidity(sensor_id))
@@ -888,8 +908,7 @@ class MasterCoreController(MasterController):
         return self._sensor_states.get(sensor_id, {}).get('BRIGHTNESS')
 
     def get_sensors_brightness(self):
-        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
-                                                                     fields={})['sensor']
+        amount_sensor_modules = GlobalConfiguration().number_of_sensor_modules
         brightnesses = []
         for sensor_id in range(amount_sensor_modules * 8):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
@@ -901,7 +920,7 @@ class MasterCoreController(MasterController):
 
     def load_sensors(self):  # type: () -> List[MasterSensorDTO]
         sensors = []
-        for i in self._enumerate_io_modules('sensor'):
+        for i in MasterCoreController._enumerate_io_modules('sensor'):
             sensors.append(self.load_sensor(i))
         return sensors
 
@@ -912,8 +931,7 @@ class MasterCoreController(MasterController):
         MemoryCommitter.commit()
 
     def _refresh_sensor_states(self):
-        amount_sensor_modules = self._master_communicator.do_command(command=CoreAPI.general_configuration_number_of_modules(),
-                                                                     fields={})['sensor']
+        amount_sensor_modules = GlobalConfiguration().number_of_sensor_modules
         for module_nr in range(amount_sensor_modules):
             temperature_values = self._master_communicator.do_command(command=CoreAPI.sensor_temperature_values(),
                                                                       fields={'module_nr': module_nr})['values']
@@ -933,18 +951,35 @@ class MasterCoreController(MasterController):
         sensor_configuration = SensorConfiguration(sensor_id)
         if sensor_configuration.module.device_type != 't':
             raise ValueError('Sensor ID {0} does not map to a virtual Sensor'.format(sensor_id))
-        self._do_basic_action(BasicAction(action_type=3,
-                                          action=sensor_id,
-                                          device_nr=Temperature.temperature_to_system_value(temperature)))
-        self._do_basic_action(BasicAction(action_type=4,
-                                          action=sensor_id,
-                                          device_nr=Humidity.humidity_to_system_value(humidity)))
-        lux = MasterCoreController._legacy_brightness_to_lux(brightness)
-        self._do_basic_action(BasicAction(action_type=5,
-                                          action=sensor_id,
-                                          device_nr=lux if lux is not None else (2 ** 16 - 1),
-                                          extra_parameter=3))  # Store full word-size lux value
+        updated_sensor_types = []  # type: List[str]
+        states = self._sensor_states.get(sensor_id, {})
+        current_temperature = states.get(MasterEvent.SensorType.TEMPERATURE)
+        if temperature != current_temperature:
+            self._do_basic_action(BasicAction(action_type=3,
+                                              action=sensor_id,
+                                              device_nr=Temperature.temperature_to_system_value(temperature)))
+            updated_sensor_types.append(MasterEvent.SensorType.TEMPERATURE)
+        current_humidity = states.get(MasterEvent.SensorType.HUMIDITY)
+        if humidity != current_humidity:
+            self._do_basic_action(BasicAction(action_type=4,
+                                              action=sensor_id,
+                                              device_nr=Humidity.humidity_to_system_value(humidity)))
+            updated_sensor_types.append(MasterEvent.SensorType.HUMIDITY)
+        current_brightness = states.get(MasterEvent.SensorType.BRIGHTNESS)
+        if brightness != current_brightness:
+            lux = MasterCoreController._legacy_brightness_to_lux(brightness)
+            self._do_basic_action(BasicAction(action_type=5,
+                                              action=sensor_id,
+                                              device_nr=lux if lux is not None else (2 ** 16 - 1),
+                                              extra_parameter=3))  # Store full word-size lux value
+            updated_sensor_types.append(MasterEvent.SensorType.BRIGHTNESS)
         self._refresh_sensor_states()
+        for sensor_type in updated_sensor_types:
+            sensor_value = self._sensor_states[sensor_id][sensor_type]
+            master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data={'sensor': sensor_id,
+                                                                             'type': sensor_type,
+                                                                             'value': sensor_value})
+            self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
 
     @staticmethod
     def _lux_to_legacy_brightness(lux):  # type: (Optional[int]) -> Optional[int]
@@ -960,9 +995,10 @@ class MasterCoreController(MasterController):
 
     # PulseCounters
 
-    def _load_pulse_counter_input_mapping(self):  # type: () -> Dict[int, int]
+    @staticmethod
+    def _load_pulse_counter_input_mapping():  # type: () -> Dict[int, int]
         mapping = {}
-        for input_id in self._enumerate_io_modules('input', amount_per_module=8):
+        for input_id in MasterCoreController._enumerate_io_modules('input', amount_per_module=8):
             input_orm = InputConfiguration(input_id)
             if input_orm.module.hardware_type not in [HardwareType.PHYSICAL, HardwareType.INTERNAL]:
                 continue  # Only physical & internal modules can count
@@ -978,13 +1014,13 @@ class MasterCoreController(MasterController):
                                persistent=True)
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
-        mapping = self._load_pulse_counter_input_mapping()
+        mapping = MasterCoreController._load_pulse_counter_input_mapping()
         return MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id,
                                                                 input_id=mapping.get(pulse_counter_id))
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         pulse_counters = []
-        mapping = self._load_pulse_counter_input_mapping()
+        mapping = MasterCoreController._load_pulse_counter_input_mapping()
         for pulse_counter_id in range(self.get_amount_of_pulse_counters()):
             pulse_counters.append(
                 MasterCoreController._generate_pulse_counter_dto(pulse_counter_id=pulse_counter_id,
@@ -993,7 +1029,7 @@ class MasterCoreController(MasterController):
         return pulse_counters
 
     def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
-        current_mapping = self._load_pulse_counter_input_mapping()
+        current_mapping = MasterCoreController._load_pulse_counter_input_mapping()
         new_mapping = copy.copy(current_mapping)
         for pc in pulse_counters:
             if pc.id >= 32 or pc.input_id is None:
@@ -1132,13 +1168,10 @@ class MasterCoreController(MasterController):
             return log
 
     def get_modules(self):
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         global_configuration = GlobalConfiguration()
 
         outputs = []
-        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
+        nr_of_output_modules = global_configuration.number_of_output_modules
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
@@ -1152,9 +1185,9 @@ class MasterCoreController(MasterController):
 
         inputs = []
         can_inputs = []
-        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
-        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
-        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
+        nr_of_input_modules = global_configuration.number_of_input_modules
+        nr_of_sensor_modules = global_configuration.number_of_sensor_modules
+        nr_of_can_controls = global_configuration.number_of_can_control_modules
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
@@ -1235,16 +1268,12 @@ class MasterCoreController(MasterController):
     @staticmethod
     def _get_input_modules_information(module_id=None, online_info=None):
         # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         dtos = []
         module_type_lookup = {'i': ModuleType.INPUT,
                               'b': ModuleType.INPUT}  # uCAN input
 
         if module_id is None:
-            global_configuration = GlobalConfiguration()
-            nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+            nr_of_input_modules = GlobalConfiguration().number_of_input_modules
             module_ids = list(range(nr_of_input_modules))
         else:
             module_ids = [module_id]
@@ -1266,9 +1295,6 @@ class MasterCoreController(MasterController):
     @staticmethod
     def _get_output_modules_information(module_id=None, online_info=None):
         # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> Tuple[List[ModuleDTO], List[ModuleDTO]]
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         output_dtos, shutter_dtos = [], []
         module_type_lookup = {'o': ModuleType.OUTPUT,
                               'l': ModuleType.OPEN_COLLECTOR,
@@ -1276,8 +1302,7 @@ class MasterCoreController(MasterController):
                               'd': ModuleType.DIM_CONTROL}
 
         if module_id is None:
-            global_configuration = GlobalConfiguration()
-            nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
+            nr_of_output_modules = GlobalConfiguration().number_of_output_modules
             module_ids = list(range(nr_of_output_modules))
         else:
             module_ids = [module_id]
@@ -1309,16 +1334,12 @@ class MasterCoreController(MasterController):
     @staticmethod
     def _get_sensor_modules_information(module_id=None, online_info=None):
         # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         dtos = []
         module_type_lookup = {'t': ModuleType.SENSOR,
                               's': ModuleType.SENSOR}  # uCAN sensor
 
         if module_id is None:
-            global_configuration = GlobalConfiguration()
-            nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
+            nr_of_sensor_modules = GlobalConfiguration().number_of_sensor_modules
             module_ids = list(range(nr_of_sensor_modules))
         else:
             module_ids = [module_id]
@@ -1346,13 +1367,9 @@ class MasterCoreController(MasterController):
     @staticmethod
     def _get_can_control_modules_information(module_id=None, online_info=None):
         # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         dtos = []
         if module_id is None:
-            global_configuration = GlobalConfiguration()
-            nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
+            nr_of_can_controls = GlobalConfiguration().number_of_can_control_modules
             module_ids = list(range(nr_of_can_controls))
         else:
             module_ids = [module_id]
@@ -1373,13 +1390,9 @@ class MasterCoreController(MasterController):
     @staticmethod
     def _get_ucan_modules_information(module_id=None, online_info=None):
         # type: (Optional[int], Dict[str, Tuple[bool, Optional[str], Optional[str]]]) -> List[ModuleDTO]
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         dtos = []
         if module_id is None:
-            global_configuration = GlobalConfiguration()
-            nr_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
+            nr_of_ucs = GlobalConfiguration().number_of_ucan_modules
             module_ids = list(range(nr_of_ucs))
         else:
             module_ids = [module_id]
@@ -1462,11 +1475,8 @@ class MasterCoreController(MasterController):
 
     def _add_virtual_module(self, configuration_type, module_type_name, module_type):
         # type: (Union[Type[OutputModuleConfiguration], Type[InputModuleConfiguration], Type[SensorModuleConfiguration]], str, str) -> None
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
         global_configuration = GlobalConfiguration()
-        number_of_modules = _default_if_255(getattr(global_configuration, 'number_of_{0}_modules'.format(module_type_name)), 0)
+        number_of_modules = getattr(global_configuration, 'number_of_{0}_modules'.format(module_type_name))
         addresses = []  # type: List[int]
         for module_id in range(number_of_modules):
             module_info = configuration_type(module_id)
@@ -1590,12 +1600,13 @@ class MasterCoreController(MasterController):
                                    logger=individual_logger)
 
     def get_backup(self):
+        # type: () -> bytearray
         data = bytearray()
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         for page in range(pages):
             page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=page, offset=0, length=page_length)
             data += self._memory_file.read([page_address])[page_address]
-        return ''.join(str(chr(entry)) for entry in data)
+        return data
 
     def restore(self, data):
         amount_of_pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
@@ -1673,7 +1684,7 @@ class MasterCoreController(MasterController):
 
         if output_ids is None:
             # None means "all lights"
-            output_ids = list(self._enumerate_io_modules('output'))
+            output_ids = list(MasterCoreController._enumerate_io_modules('output'))
         filtered_output_ids = []
         for output_id in output_ids:
             output = OutputConfiguration(output_id)
@@ -1681,17 +1692,16 @@ class MasterCoreController(MasterController):
                 filtered_output_ids.append(output.id)
 
         # Execute action in batch; either a single BA (for 1 device) or a BA series (for 2 to 40 devices)
-        for i in range(0, len(output_ids), 40):
-            chunk_output_ids = output_ids[i:i + 40]
+        for i in range(0, len(filtered_output_ids), 40):
+            chunk_output_ids = filtered_output_ids[i:i + 40]
             if len(chunk_output_ids) == 1:
                 self._do_basic_action(BasicAction(action_type=0,
                                                   action=ba_action,
                                                   device_nr=chunk_output_ids[0]))
             else:
-                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
-                                                     fields={'type': 0, 'action': ba_action,
-                                                             'extra_parameter': 0,
-                                                             'device_nrs': chunk_output_ids})
+                self._do_basic_action_series(BasicActionSeries(action_type=0,
+                                                               action=ba_action,
+                                                               device_nrs=chunk_output_ids))
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement

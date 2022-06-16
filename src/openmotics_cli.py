@@ -25,6 +25,7 @@ import time
 import constants
 import gateway
 from ioc import INJECTED, Inject
+from logs import Logs
 
 logger = logging.getLogger('openmotics')
 
@@ -149,15 +150,26 @@ def cmd_scan_energy_bus(args):
     _ = args
     from gateway.initialize import setup_minimal_energy_platform
     from gateway.energy_module_controller import EnergyModuleController
+    from serial_utils import RS485
     setup_minimal_energy_platform()
 
     @Inject
-    def f(energy_module_controller=INJECTED):  # type: (EnergyModuleController) -> None
+    def scan(energy_module_controller=INJECTED, energy_serial=INJECTED):  # type: (EnergyModuleController, RS485) -> None
         logger.info('Scanning energy bus...')
-        for module_type, address, firmware_version, hardware_version in energy_module_controller.scan_bus():
-            logger.info('* {0} {1}: {2}{3}'.format(module_type, address, firmware_version, '' if hardware_version is None else ' {0}'.format(hardware_version)))
+        energy_serial.start()
+        max_address = EnergyModuleController.VALID_ADDRESS_RANGE[1]
+        logged_percentage = 0
+        for online, module_type, address, firmware_version, hardware_version in energy_module_controller.scan_bus():
+            if online is True:
+                logger.info('* {0} {1}: {2}{3}'.format(module_type, address, firmware_version, '' if hardware_version is None else ' {0}'.format(hardware_version)))
+                if address == EnergyModuleController.DEFAULT_ADDRESS:
+                    logger.info('  Note: This module is using the default address, this can cause issues if multiple modules are added')
+            percentage = int(address / float(max_address) * 100)
+            if percentage % 10 == 0 and 100 > percentage > logged_percentage:
+                logger.info('* {0}% ({1}/{2})'.format(percentage, address, max_address))
+                logged_percentage = percentage
         logger.info('Scan complete')
-    f()
+    scan()
 
 
 def cmd_vpn_heartbeat(args):
@@ -228,9 +240,8 @@ rotate_client_certs_parser.set_defaults(func=cmd_vpn_rotate_client_certs)
 
 
 def main():
+    Logs.setup_logger()
     args = parser.parse_args()
-    logger.addHandler(logging.StreamHandler(sys.stderr))
-    logger.setLevel(logging.INFO)
     args.func(args)
 
 

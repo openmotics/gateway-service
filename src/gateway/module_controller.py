@@ -57,12 +57,17 @@ class ModuleController(BaseController):
             self._sync_structures = False
 
             logger.info('ORM sync (Modules)')
-
             amounts = {None: 0, True: 0, False: 0}
             try:
-                # Master slave modules (update/insert/delete)
+                logger.info('ORM sync (Modules): Running auto discovery...')
+                executed = self._master_controller.module_discover_auto()
+                logger.info('ORM sync (Modules): Running auto discovery... {0}'.format(
+                    'Executed' if executed else 'Skipped'
+                ))
+
                 ids = []
                 with Database.get_session() as db:
+                    logger.info('ORM sync (Modules): Sync master modules...')
                     for dto in self._master_controller.get_modules_information():
                         module = db.query(Module)\
                             .where(Module.source == dto.source, Module.address == dto.address)\
@@ -86,7 +91,7 @@ class ModuleController(BaseController):
                     db.query(Module).where(Module.id.notin_(ids), Module.source == ModuleDTO.Source.MASTER).delete()
                     db.commit()
 
-                    # Energy modules (online update live metadata)
+                    logger.info('ORM sync (Modules): Sync energy modules...')
                     for dto in self._energy_module_controller.get_modules_information():
                         module = db.query(Module)\
                             .where(Module.source == dto.source, Module.address == dto.address)\
@@ -98,12 +103,12 @@ class ModuleController(BaseController):
                             module.firmware_version = dto.firmware_version
                             module.hardware_version = dto.hardware_version
                             module.last_online_update = int(time.time())
-                            db.add(module)
                         amounts[dto.online] += 1
+                    db.commit()
+
                     logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
                         amounts[True], amounts[False], amounts[None]
                     ))
-                    db.commit()
             except CommunicationFailure as ex:
                 logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
             except Exception as ex:
@@ -152,6 +157,8 @@ class ModuleController(BaseController):
             self._master_controller.replace_module(old_address, new_address)
             if not self.run_sync_orm():
                 # The sync might already be running, so we'll make sure it does a full run (again)
+                self._sync_structures = True
+                self._send_config_event = True
                 self.request_sync_orm()
             new_module = db.query(Module)\
                 .where(Module.source == new_module.source, Module.address == new_module.address)\

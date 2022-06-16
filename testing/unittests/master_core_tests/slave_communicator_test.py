@@ -18,7 +18,6 @@ Tests for Slave communicator module.
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import logging
 import time
 import fakesleep
@@ -145,7 +144,3 @@ class SlaveCommunicatorTest(unittest.TestCase):
         else:
             crc = SlaveCommandSpec.calculate_crc(bytearray(payload))
         return bytearray(b'RC' + payload + b'C' + crc + b'\r\n')
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

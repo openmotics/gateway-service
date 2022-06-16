@@ -48,62 +48,24 @@ class SensorMapper(object):
                          physical_quantity=sensor.physical_quantity,
                          unit=sensor.unit,
                          name=sensor.name,
+                         in_use=sensor.in_use,
                          room=room)
 
     def dto_to_orm(self, sensor_dto):  # type: (SensorDTO) -> Sensor
-        plugin = None  # type: Optional[Plugin]
-        room = None  # type: Optional[Room]
-        if sensor_dto.id is not None:
-            sensor = self._db.get(Sensor, sensor_dto.id)
-        elif sensor_dto.source and sensor_dto.external_id and sensor_dto.physical_quantity:
-            if sensor_dto.source and sensor_dto.source.is_plugin:
-                plugin = self._db.query(Plugin).filter_by(name=sensor_dto.source.name).one()
-            sensor = self._db.query(Sensor) \
-                .filter_by(source=sensor_dto.source.type,
-                           external_id=sensor_dto.external_id,
-                           physical_quantity=sensor_dto.physical_quantity) \
-                .first()
-        else:
-            raise ValueError('Invalid sensor %s', sensor_dto)
-        if sensor is None:
-            if sensor_dto.source and sensor_dto.source.is_master:
-                sensor = self._db.query(Sensor) \
-                    .filter_by(source=sensor_dto.source.type,
-                               external_id=sensor_dto.external_id,
-                               physical_quantity=None) \
-                    .first()
-        if sensor is None:
-            if plugin is None and sensor_dto.source and sensor_dto.source.is_plugin:
-                plugin = self._db.query(Plugin).filter_by(name=sensor_dto.source.name).one()
-            if 'room' in sensor_dto.loaded_fields and sensor_dto.room is not None:
-                room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
+        sensor = self._db.query(Sensor).filter_by(id=sensor_dto.id).one()  # type: Sensor
+        if 'physical_quantity' in sensor_dto.loaded_fields:
+            sensor.physical_quantity = sensor_dto.physical_quantity
+        if 'unit' in sensor_dto.loaded_fields:
+            sensor.unit = sensor_dto.unit
+        if 'name' in sensor_dto.loaded_fields:
+            sensor.name = sensor_dto.name
+        if 'room' in sensor_dto.loaded_fields:
+            if sensor_dto.room not in (None, 255):
+                sensor.room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
             else:
-                query = (Sensor.source == sensor_dto.source.type) \
-                    & (Sensor.external_id == sensor_dto.external_id) \
-                    & (Sensor.room != None)
-                sensor = self._db.query(Sensor).where(query).first()
-                if sensor:
-                    room = sensor.room
-                else:
-                    room = None
-            sensor = Sensor(source=sensor_dto.source.type,
-                            plugin=plugin,
-                            external_id=sensor_dto.external_id,
-                            physical_quantity=sensor_dto.physical_quantity,
-                            unit=sensor_dto.unit,
-                            name=sensor_dto.name,
-                            room=room)
-        else:
-            if 'physical_quantity' in sensor_dto.loaded_fields:
-                sensor.physical_quantity = sensor_dto.physical_quantity
-            if 'unit' in sensor_dto.loaded_fields:
-                sensor.unit = sensor_dto.unit
-            if 'name' in sensor_dto.loaded_fields:
-                sensor.name = sensor_dto.name
-            if 'room' in sensor_dto.loaded_fields:
-                if sensor_dto.room is not None and 0 <= sensor_dto.room <= 100:
-                    room = self._db.query(Room).filter_by(number=sensor_dto.room).one()
-                sensor.room = room
+                sensor.room = None
+        if 'in_use' in sensor_dto.loaded_fields:
+            sensor.in_use = sensor_dto.in_use
         return sensor
 
     def dto_to_master_dto(self, sensor_dto):  # type: (SensorDTO) -> Optional[MasterSensorDTO]

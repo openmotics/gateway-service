@@ -16,15 +16,20 @@
 PulseCounter BLL
 """
 from __future__ import absolute_import
+
 import logging
 import time
+
 from sqlalchemy import func
-from ioc import Injectable, Inject, INJECTED, Singleton
-from serial_utils import CommunicationFailure
+
 from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
-from gateway.models import Database, PulseCounter, Room, NoResultFound
+from gateway.events import GatewayEvent
 from gateway.mappers import PulseCounterMapper
+from gateway.models import Database, NoResultFound, PulseCounter, Room
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject, Injectable, Singleton
+from serial_utils import CommunicationFailure
 
 if False:  # MYPY
     from typing import List, Dict, Optional
@@ -35,7 +40,6 @@ logger = logging.getLogger(__name__)
 @Injectable.named('pulse_counter_controller')
 @Singleton
 class PulseCounterController(BaseController):
-
     @Inject
     def __init__(self, master_controller=INJECTED):
         super(PulseCounterController, self).__init__(master_controller)
@@ -80,6 +84,28 @@ class PulseCounterController(BaseController):
         self._sync_running = False
         return True
 
+    @staticmethod
+    def _pulse_counter_orm_to_dto(pulse_counter_orm, pulse_counter_dto):
+        pulse_counter_dto.name = pulse_counter_orm.name
+        pulse_counter_dto.room = pulse_counter_orm.room.number if pulse_counter_orm.room is not None else None
+        pulse_counter_dto.in_use = pulse_counter_orm.in_use
+
+    @staticmethod
+    def _pulse_counter_dto_to_orm(pulse_counter_dto, pulse_counter_orm, db):
+        for field in ['in_use', 'name']:
+            if field in pulse_counter_dto.loaded_fields:
+                setattr(pulse_counter_orm, field, getattr(pulse_counter_dto, field))
+        if 'room' in pulse_counter_dto.loaded_fields:
+            if pulse_counter_dto.room is None:
+                pulse_counter_orm.room = None
+            elif 0 <= pulse_counter_dto.room <= 100:
+                pulse_counter_orm.room = db.query(Room).where(Room.number == pulse_counter_dto.room).one()
+
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'pulse_counter'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
         with Database.get_session() as db:
             mapper = PulseCounterMapper(db)
@@ -88,7 +114,8 @@ class PulseCounterController(BaseController):
                               .one()
             if pulse_counter.source == 'master':
                 pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter_id)
-                pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
+                PulseCounterController._pulse_counter_orm_to_dto(pulse_counter_orm=pulse_counter,
+                                                                 pulse_counter_dto=pulse_counter_dto)
             else:
                 pulse_counter_dto = mapper.orm_to_dto(pulse_counter)
         return pulse_counter_dto
@@ -105,8 +132,8 @@ class PulseCounterController(BaseController):
                     if pulse_counter_dto is None:
                         logger.warning('The ORM contains outdated PulseCounters')
                         continue
-                    pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
-                    pulse_counter_dto.name = pulse_counter.name  # Use longer ORM name
+                    PulseCounterController._pulse_counter_orm_to_dto(pulse_counter_orm=pulse_counter,
+                                                                     pulse_counter_dto=pulse_counter_dto)
                 else:
                     pulse_counter_dto = mapper.orm_to_dto(pulse_counter)
                 pulse_counter_dtos.append(pulse_counter_dto)
@@ -123,20 +150,19 @@ class PulseCounterController(BaseController):
                 if pulse_counter.source == 'master':
                     # Only master pulse counters will be passed to the MasterController batch save
                     pulse_counters_to_save.append(pulse_counter_dto)
-                    if 'name' in pulse_counter_dto.loaded_fields:
-                        pulse_counter.name = pulse_counter_dto.name
+                    PulseCounterController._pulse_counter_dto_to_orm(pulse_counter_dto=pulse_counter_dto,
+                                                                     pulse_counter_orm=pulse_counter,
+                                                                     db=db)
                 elif pulse_counter.source == 'gateway':
-                    pulse_counter = mapper.dto_to_orm(pulse_counter_dto)
+                    mapper.dto_to_orm(pulse_counter_dto)
                 else:
                     logger.warning('Trying to save a PulseCounter with unknown source {0}'.format(pulse_counter.source))
                     continue
-                if 'room' in pulse_counter_dto.loaded_fields:
-                    if pulse_counter_dto.room is None:
-                        pulse_counter.room = None
-                    elif 0 <= pulse_counter_dto.room <= 100:
-                        pulse_counter.room = db.query(Room).where(Room.number == pulse_counter_dto.room).one()
+            publish = bool(db.dirty)
             db.commit()
         self._master_controller.save_pulse_counters(pulse_counters_to_save)
+        if publish:
+            self._publish_config()
 
     def set_amount_of_pulse_counters(self, amount):  # type: (int) -> int
         # This does not make a lot of sense in an ORM driven implementation, but is for legacy purposes.
@@ -166,6 +192,7 @@ class PulseCounterController(BaseController):
                                                            persistent=False))
             db.add_all(new_pulse_counters)
             db.commit()
+        self._publish_config()
         return amount
 
     def get_amount_of_pulse_counters(self):  # type: () -> int

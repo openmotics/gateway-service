@@ -18,7 +18,6 @@ Tests for MasterCommand module.
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 
 import master.classic.master_api as master_api
 from master.classic.master_command import MasterCommandSpec, Field, OutputFieldType, DimmerFieldType, \
@@ -328,7 +327,3 @@ class MasterCommandSpecTest(unittest.TestCase):
         """ Test for MasterCommandSpec.output_has_crc. """
         self.assertFalse(master_api.basic_action(self.master_version).output_has_crc())
         self.assertTrue(master_api.read_output().output_has_crc())
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

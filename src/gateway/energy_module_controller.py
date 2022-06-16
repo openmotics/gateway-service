@@ -51,6 +51,9 @@ logger = logging.getLogger('openmotics')
 @Singleton
 class EnergyModuleController(BaseController):
 
+    VALID_ADDRESS_RANGE = [0, 254]
+    DEFAULT_ADDRESS = 1
+
     @Inject
     def __init__(self, master_controller=INJECTED, energy_communicator=INJECTED, energy_module_updater=INJECTED, pubsub=INJECTED):
         # type: (MasterController, EnergyCommunicator, EnergyModuleUpdater, PubSub) -> None
@@ -95,6 +98,7 @@ class EnergyModuleController(BaseController):
         date = datetime.now()
         with Database.get_session() as db:
             energy_modules = db.query(EnergyModule)\
+                .join(Module, isouter=True)\
                 .where(Module.module_type != ModuleType.P1_CONCENTRATOR)\
                 .all()
             for energy_module in energy_modules:
@@ -113,6 +117,11 @@ class EnergyModuleController(BaseController):
                         self._time_cache[energy_module.number] = daynight
                     except CommunicationTimedOutException:
                         logger.warning('Could not set day/night for EnergyModule {0}: Timed out'.format(energy_module.number))
+
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     @staticmethod
     def _is_day_time(times, date):  # type: (Optional[str], datetime) -> bool
@@ -151,19 +160,18 @@ class EnergyModuleController(BaseController):
             return 0
         return self._energy_communicator.get_seconds_since_last_success()
 
-    def scan_bus(self):  # type: () -> Generator[Tuple[str, int, str, Optional[str]], None, None]
+    def scan_bus(self):  # type: () -> Generator[Tuple[bool, str, int, Optional[str], Optional[str]], None, None]
         if not self._enabled:
+            logger.info('Scan aborted, controller is disabled')
             return
-        for address in range(256):
-            if address < 250:
-                continue
+        for address in range(255):
             for module_type, version in {'E/P': EnergyEnums.Version.ENERGY_MODULE,
                                          'C': EnergyEnums.Version.P1_CONCENTRATOR}.items():
                 try:
                     firmware_version, hardware_version = self._energy_module_updater.get_module_firmware_version(address, version)
-                    yield module_type, address, firmware_version, hardware_version
+                    yield True, module_type, address, firmware_version, hardware_version
                 except CommunicationTimedOutException:
-                    pass  # Expected
+                    yield False, module_type, address, None, None
                 except Exception as ex:
                     logger.error('Error scanning address {0} {1}: {2}'.format(module_type, address, ex))
 
@@ -291,7 +299,10 @@ class EnergyModuleController(BaseController):
 
                 helper = self._get_helper(energy_module.version)
                 helper.configure_cts(energy_module=energy_module)
+            publish = bool(db.dirty)
             db.commit()
+        if publish:
+            self._publish_config()
 
     def get_realtime_p1(self):  # type: () -> List[Dict[str, Any]]
         if not self._enabled:

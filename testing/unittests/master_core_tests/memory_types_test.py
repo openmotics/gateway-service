@@ -69,7 +69,8 @@ class MemoryTypesTest(unittest.TestCase):
                                            [{}, 0, bytearray([0])],
                                            [{}, 20, bytearray([20])],
                                            [{}, 2 ** 8 - 1, bytearray([255])],
-                                           [{}, 2 ** 8, ValueError]])
+                                           [{}, 2 ** 8, ValueError],
+                                           [{'default': 50}, 255, bytearray([255]), 50]])
 
     def test_word_field(self):
         self._test_field(MemoryWordField, [[{}, -1, ValueError],

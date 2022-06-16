@@ -53,7 +53,7 @@ class ShutterMapper(object):
     def dto_to_orm(shutter_dto):  # type: (ShutterDTO) -> ShutterConfiguration
         new_data = {'id': shutter_dto.id}  # type: Dict[str, Any]
         if 'name' in shutter_dto.loaded_fields:
-            new_data['name'] = shutter_dto.name
+            new_data['name'] = Toolbox.shorten_name(shutter_dto.name, maxlength=16)
         for field in ['timer_up', 'timer_down']:
             dto_value = getattr(shutter_dto, field)
             if dto_value is None:

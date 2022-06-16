@@ -20,15 +20,16 @@ from __future__ import absolute_import
 import binascii
 import logging
 import os
+import platform
 import sys
 import time
 import uuid
-
 import cherrypy
 import requests
 import six
 import ujson as json
 from cherrypy.lib.static import serve_file
+from cloud.events import EventSender
 from decorator import decorator
 from sqlalchemy.orm.exc import NoResultFound
 from six.moves.urllib.parse import unquote_plus
@@ -50,7 +51,7 @@ from gateway.dto import GlobalRTD10DTO, InputStatusDTO, PumpGroupDTO, \
     RoomDTO, ScheduleDTO, UserDTO
 from gateway.energy.energy_communicator import InAddressModeException
 from gateway.enums import ModuleType, ShutterEnums, UpdateEnums, UserEnums
-from gateway.events import BaseEvent
+from gateway.events import BaseEvent, GatewayEvent
 from gateway.exceptions import CommunicationFailure, \
     FeatureUnavailableException, InMaintenanceModeException, \
     ItemDoesNotExistException, ParseException, UnsupportedException, \
@@ -391,7 +392,7 @@ class WebInterface(object):
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
                  uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
-                 update_controller=INJECTED):
+                 update_controller=INJECTED, event_sender=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -412,6 +413,7 @@ class WebInterface(object):
         self._system_controller = system_controller  # type: SystemController
         self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
         self._update_controller = update_controller  # type: UpdateController
+        self._event_sender = event_sender # type: EventSender
 
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._message_client = message_client  # type: Optional[MessageClient]
@@ -614,6 +616,34 @@ class WebInterface(object):
         self._user_controller.remove_user(user_dto)
         return {}
 
+    @openmotics_api(auth=True, check=types(source=str, topic=str, message=str, type=str))
+    def send_notification(self, source, topic, message, type='USER'):  # type: (str, str, str, str) -> Dict[str, Any]
+        """
+        Send a NOTIFICATION event to all subscribers.
+
+        :param source: the source of the notification
+        :type source: str
+        :param topic: the topic of the notification
+        :type topic: str
+        :param message: the message of the notification
+        :type message: str
+        :param type: the type of the notification (user, system, ...)
+        :type type: str
+        """
+        if source in ['', None]:
+            raise ValueError('Source cannot be empty')
+        if topic in ['', None]:
+            raise ValueError('Topic cannot be empty')
+        if type not in ['USER', 'SYSTEM']:
+            raise ValueError('Not a valid type: {}'.format(type))
+        gateway_event = GatewayEvent(event_type=GatewayEvent.Types.NOTIFICATION,
+                                     data={'source': source,
+                                           'type': type,
+                                           'topic': topic,
+                                           'message': message})
+        self._event_sender.enqueue_event(gateway_event)
+        return {'notification': gateway_event.serialize()}
+
     @openmotics_api(auth=True, plugin_exposed=False)
     def open_maintenance(self):
         """
@@ -724,6 +754,10 @@ class WebInterface(object):
             'modules_information',  # Clean module information
             'dynamic_updates',  # Dynamic updates
             'copy_thermostat_schedules',  # Allow to copy schedules and certain presets with a single API call
+            'pause_schedules',  # Allow schedules to be paused/resumed
+            'show_in_app_property',  # Supports the `show_in_app` property
+            'long_names',  # Supports long (255 char) names
+            'in_use_property',  # Supports the in_use property
             # TODO: remove
             'default_timer_disabled',
             '100_steps_dimmer',
@@ -2257,7 +2291,8 @@ class WebInterface(object):
             logger.error('Could not load master version: {0}'.format(ex))
         return {'version': gateway.__version__,
                 'gateway': gateway.__version__,
-                'master': parsed_master_version}
+                'master': parsed_master_version,
+                'python_version': platform.python_version()}
 
     # TODO: def get_versions(self):  # Something more generic that can return a general version overview (service, frontend, modules, os, ...)
 
@@ -2365,7 +2400,6 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
         schedule_dto = ScheduleDTO(id=None,
-                                   source=Schedule.Sources.GATEWAY,
                                    name=name,
                                    start=start,
                                    action=schedule_type,
@@ -2387,6 +2421,16 @@ class WebInterface(object):
                                                    'params': schedule.arguments['parameters']})}
                             for schedule in self._scheduling_controller.load_schedules()
                             if schedule.action == 'LOCAL_API']}
+
+    @openmotics_api(auth=True, check=types(schedule_id=int))
+    def pause_schedule(self, schedule_id):
+        schedule_dto = self._scheduling_controller.set_schedule_status(schedule_id, 'PAUSED')
+        return {'schedule': ScheduleSerializer.serialize(schedule_dto, fields=None)}
+
+    @openmotics_api(auth=True, check=types(schedule_id=int))
+    def resume_schedule(self, schedule_id):
+        schedule_dto = self._scheduling_controller.set_schedule_status(schedule_id, 'ACTIVE')
+        return {'schedule': ScheduleSerializer.serialize(schedule_dto, fields=None)}
 
     @openmotics_api(auth=True)
     def list_schedules(self):

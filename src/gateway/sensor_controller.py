@@ -86,6 +86,8 @@ class SensorController(BaseController):
                                                     value=master_event.data['value']))
             else:
                 logger.warning('Received value for unknown %s sensor %s', key, master_event)
+                self._sync_structures = True
+                self._send_config_event = True
                 self.request_sync_orm()
 
     def _sync_orm_structure(self, structure):  # type: (SyncStructure) -> None
@@ -140,7 +142,6 @@ class SensorController(BaseController):
                                    unit=unit,
                                    name=master_sensor_dto.name)
             sensor, _ = self._create_or_update_sensor(db, sensor_dto)
-
             sensor_dto.id = sensor.id
             self._master_cache[(physical_quantity, i)] = sensor_dto
 
@@ -199,11 +200,11 @@ class SensorController(BaseController):
         publish = False
         master_sensors = []
         with Database.get_session() as db:
+            mapper = SensorMapper(db)
             for sensor_dto in sensors:
-                sensor, changed = self._create_or_update_sensor(db, sensor_dto)
-                publish |= changed
+                sensor = mapper.dto_to_orm(sensor_dto)
+                publish |= sensor in db.dirty
 
-                sensor_dto.id = sensor.id
                 sensor_dto.external_id = sensor.external_id
                 if sensor_dto.source is None:
                     source_name = None
@@ -212,7 +213,7 @@ class SensorController(BaseController):
                     sensor_dto.source = SensorSourceDTO(sensor.source, name=source_name)
                 if sensor_dto.physical_quantity is None:
                     sensor_dto.physical_quantity = sensor.physical_quantity
-                master_dto = SensorMapper(db).dto_to_master_dto(sensor_dto)
+                master_dto = mapper.dto_to_master_dto(sensor_dto)
                 if master_dto:
                     master_sensors.append(master_dto)
             db.commit()
@@ -222,13 +223,73 @@ class SensorController(BaseController):
             self._publish_config()
         return sensors
 
+    def register_sensor(self, source_dto, external_id, physical_quantity, unit, default_config=None):
+        # type: (SensorSourceDTO, str, str, str, Optional[Dict[str,Any]]) -> SensorDTO
+        changed = False
+        default_config = default_config or {}
+        with Database.get_session() as db:
+            if source_dto.type == 'plugin':
+                plugin = db.query(Plugin).filter_by(name=source_dto.name).one()  # type: Plugin
+                lookup_kwargs = {'source': source_dto.type, 'plugin': plugin,
+                                 'external_id': external_id,
+                                 'physical_quantity': physical_quantity,
+                                 'unit': unit}
+            else:
+                raise ValueError('Can\'t register Sensor with source {}'.format(source_dto.type))
+            sensor = db.query(Sensor).filter_by(**lookup_kwargs).one_or_none()  # type: Optional[Sensor]
+            if sensor is None:
+                sensor = Sensor(id=get_sensor_orm_id(db, source_dto.type), **lookup_kwargs)
+                db.add(sensor)
+                changed = True
+                for field in ('name',):
+                    setattr(sensor, field, default_config.get(field, ''))
+            db.commit()
+            sensor_dto = self.load_sensor(sensor.id)
+        if changed:
+            self._publish_config()
+        return sensor_dto
+
     def _create_or_update_sensor(self, db, sensor_dto):  # type: (Any, SensorDTO) -> Tuple[Sensor, bool]
         changed = False
-        sensor = SensorMapper(db).dto_to_orm(sensor_dto)
-        if sensor.id is None:
-            sensor.id = get_sensor_orm_id(db, sensor.source)
-            db.add(sensor)
-            changed = True
+        if sensor_dto.id:
+            sensor = SensorMapper(db).dto_to_orm(sensor_dto)
+        else:
+            if 'physical_quantity' in sensor_dto.loaded_fields and 'external_id' in sensor_dto.loaded_fields:
+                sensor = db.query(Sensor) \
+                    .filter_by(source=Sensor.Sources.MASTER,
+                               external_id=sensor_dto.external_id,
+                               physical_quantity=sensor_dto.physical_quantity) \
+                    .one_or_none()
+            if sensor is None:
+                sensor = db.query(Sensor) \
+                    .filter_by(source=Sensor.Sources.MASTER,
+                               external_id=sensor_dto.external_id,
+                               physical_quantity=None) \
+                    .first()
+            if sensor:
+                sensor_dto.id = sensor.id
+                sensor = SensorMapper(db).dto_to_orm(sensor_dto)
+            if sensor is None and sensor_dto.source:
+                if 'room' in sensor_dto.loaded_fields and sensor_dto.room is not None:
+                    room = db.query(Room).filter_by(number=sensor_dto.room).one()
+                else:
+                    query = (Sensor.source == sensor_dto.source.type) \
+                        & (Sensor.external_id == sensor_dto.external_id) \
+                        & (Sensor.room != None)
+                    sensor = db.query(Sensor).where(query).first()
+                    if sensor:
+                        room = sensor.room
+                    else:
+                        room = None
+                sensor = Sensor(id=get_sensor_orm_id(db, sensor_dto.source.type),
+                                source=sensor_dto.source.type,
+                                external_id=sensor_dto.external_id,
+                                physical_quantity=sensor_dto.physical_quantity,
+                                unit=sensor_dto.unit,
+                                name=sensor_dto.name,
+                                in_use=sensor_dto.in_use or True,
+                                room=room)
+                db.add(sensor)
         if sensor.source == Sensor.Sources.MASTER and sensor.id > 200:
             db.rollback()
             db.query(Sensor).filter_by(id=sensor.id).delete()

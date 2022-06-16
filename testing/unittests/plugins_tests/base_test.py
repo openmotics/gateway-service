@@ -151,13 +151,14 @@ from plugins.base import *
 class P1(OMPluginBase):
     name = 'P1'
     version = '1.0.0'
-    interfaces = []
+    interfaces = [("metrics", "1.0")]
 """)
             controller = PluginControllerTest._get_controller()
             controller.start()
             plugin_list = controller.get_plugins()
             self.assertEqual(1, len(plugin_list))
             self.assertEqual('P1', plugin_list[0].name)
+            self.assertEqual([["metrics", "1.0"]], plugin_list[0].interfaces)
             with Database.get_session() as db:
                 plugin = db.query(Plugin).filter_by(name='P1').one()
                 self.assertEqual('1.0.0', plugin.version)

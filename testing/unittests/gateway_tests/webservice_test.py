@@ -20,6 +20,7 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
+from cloud.events import EventSender
 from enums import HardwareType
 from gateway.api.serializers import SensorSerializer
 from gateway.dto import DimmerConfigurationDTO, EnergyModuleDTO, ModuleDTO, \
@@ -61,6 +62,7 @@ class WebInterfaceTest(unittest.TestCase):
         self.ventilation_controller = mock.Mock(VentilationController)
         self.module_controller = mock.Mock(ModuleController)
         self.energy_module_controller = mock.Mock(EnergyModuleController)
+        self.event_sender = mock.Mock(EventSender)
         SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
                             group_action_controller=mock.Mock(GroupActionController),
                             input_controller=mock.Mock(InputController),
@@ -78,6 +80,7 @@ class WebInterfaceTest(unittest.TestCase):
                             ventilation_controller=self.ventilation_controller,
                             module_controller=self.module_controller,
                             energy_module_controller=self.energy_module_controller,
+                            event_sender=self.event_sender,
                             uart_controller=mock.Mock(),
                             update_controller=mock.Mock())
         self.web = WebInterface()
@@ -162,6 +165,7 @@ class WebInterfaceTest(unittest.TestCase):
                                external_id='0',
                                physical_quantity='temperature',
                                unit='celcius',
+                               in_use=True,
                                name='foo')
         with mock.patch.object(self.sensor_controller, 'load_sensors',
                                return_value=[sensor_dto]):
@@ -175,6 +179,7 @@ class WebInterfaceTest(unittest.TestCase):
                 'name': 'foo',
                 'room': 255,
                 'offset': 0,
+                'in_use': True,
                 'virtual': False,
             }], json.loads(response)['config'])
 
@@ -183,6 +188,7 @@ class WebInterfaceTest(unittest.TestCase):
                   'name': 'foo',
                   'room': 255,
                   'offset': 0,
+                  'in_use': True,
                   'virtual': False}
         sensor_dto = SensorSerializer.deserialize(config)
         expected_response = [SensorSerializer.serialize(sensor_dto, fields=None)]
@@ -326,6 +332,7 @@ class WebInterfaceTest(unittest.TestCase):
             self.assertEqual([{
                 'id': 1,
                 'name': 'test',
+                'room': 255,
                 'amount_of_levels': 4,
                 'external_id': 'device-00001',
                 'source': {'type': 'plugin', 'name': 'dummy'},
@@ -351,6 +358,7 @@ class WebInterfaceTest(unittest.TestCase):
                 'source': {'type': 'plugin', 'name': 'dummy'},
                 'external_id': 'device-00001',
                 'name': 'test',
+                'room': 255,
                 'device': {'vendor': 'example',
                            'type': '0A',
                            'serial': 'device-00001'},
@@ -489,3 +497,16 @@ class WebInterfaceTest(unittest.TestCase):
                                            'inverted0': True, 'inverted1': False, 'inverted2': False, 'inverted3': False, 'inverted4': False, 'inverted5': False, 'inverted6': False, 'inverted7': False, 'inverted8': False, 'inverted9': False, 'inverted10': False, 'inverted11': False,
                                            'sensor0': 4, 'sensor1': 2, 'sensor2': 2, 'sensor3': 3, 'sensor4': 2, 'sensor5': 2, 'sensor6': 2, 'sensor7': 2, 'sensor8': 2, 'sensor9': 2, 'sensor10': 2, 'sensor11': 2,
                                            'times0': '', 'times1': '', 'times2': '', 'times3': '', 'times4': '', 'times5': '', 'times6': '', 'times7': '', 'times8': '', 'times9': '', 'times10': '', 'times11': ''}]}, api_response)
+
+    def test_send_notification(self):
+        with mock.patch.object(self.event_sender, 'enqueue_event') as enqueue_event:
+            api_response = json.loads(self.web.send_notification('Test plugin', 'Test topic', 'Test message', type='USER'))
+            enqueue_event.assert_called()
+            self.assertEqual({'notification': {'_version': 1.0,
+                                               'data': {'message': 'Test message',
+                                                        'source': 'Test plugin',
+                                                        'topic': 'Test topic',
+                                                        'type': 'USER'},
+                                               'error': {'code': 0, 'description': 'no error'},
+                                               'type': 'NOTIFICATION'},
+                              'success': True}, api_response)

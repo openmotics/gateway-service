@@ -112,21 +112,6 @@ def _openmotics_api_v1(f, *args, **kwargs):
     return contents
 
 
-class AuthenticationLevel(Enum):
-    NONE = 'none'  # Not authenticated at all on any level
-    HIGH = 'high'  # Authenticated with username/password
-
-
-def check_authentication_security_level(checked_token, required_level=None):
-    # type: (AuthenticationToken, Optional[AuthenticationLevel]) -> AuthenticationLevel
-    level = AuthenticationLevel.NONE
-    if checked_token is not None and checked_token.login_method == LoginMethod.PASSWORD:
-        level = AuthenticationLevel.HIGH
-    if required_level is not None and level != required_level and required_level == AuthenticationLevel.HIGH:
-        raise UnAuthorizedException('Authentication level "HIGH" required')
-    return level
-
-
 def _get_authentication_token_from_request():
     request = cherrypy.request
     token = None
@@ -151,7 +136,7 @@ def _get_authentication_token_from_request():
     return token
 
 
-def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, auth_level=AuthenticationLevel.NONE, allowed_user_roles=None, pass_security_level=False):
+def authentication_handler_v1(pass_token=False, pass_role=False, auth=True, auth_locahost=False, allowed_user_roles=None):
     request = cherrypy.request
     if request.method == 'OPTIONS':
         return
@@ -166,21 +151,23 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
             raise UnAuthorizedException('The passed authentication token is invalid')
 
 
-        # check the security level for this call
-        if auth:
+        # Determine whether to check authentication
+        if request.remote.ip == '127.0.0.1':
+            # From localhost apis don't require authentication unless auth_locahost=True is set.
+            check_auth = (auth and auth_locahost) or allowed_user_roles
+        else:
+            check_auth = auth or allowed_user_roles
+        if check_auth:
             if checked_token is None:
                 raise UnAuthorizedException('Unauthorized API call: No login information')
             if allowed_user_roles is not None and checked_token.user.role not in allowed_user_roles:
                 raise UnAuthorizedException('User role is not allowed for this API call: Allowed: {}, Got: {}'.format(allowed_user_roles, checked_token.user.role))
-        checked_auth_level = check_authentication_security_level(checked_token, auth_level)
 
         # Pass the appropriate data to the api call
         if pass_token is True:
             request.params['auth_token'] = checked_token
         if pass_role is True:
             request.params['auth_role'] = checked_token.user.role if checked_token is not None else None
-        if pass_security_level is True:
-            request.params['auth_security_level'] = checked_auth_level
     except UnAuthorizedException as ex:
         cherrypy.response.status = 401  # Unauthorized
         contents = ex.message
@@ -241,26 +228,36 @@ def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
         request.handler = None  # TODO: Use generic cherrypy event handler + @log_access
 
 
+def cors_handler_v1():
+    if cherrypy.request.method == 'OPTIONS':
+        cherrypy.request.handler = None
+    cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+    cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+    cherrypy.response.headers['Access-Control-Allow-Methods'] = 'POST, GET, PUT, DELETE'
+
+
 # Assign the v1 authentication handler
+cherrypy.tools.cors_v1 = cherrypy.Tool('before_handler', cors_handler_v1)
 cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication_handler_v1)
 cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler_v1)
 
 
 # Decorator to be used in the RestAPIEndpoint subclasses for defining how the api is exposed
-def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=False, auth_level=AuthenticationLevel.NONE, pass_token=False, pass_role=False,
-                      allowed_user_roles=None, expect_body_type=None, pass_security_level=False, mask=None):
-    # type: (Callable[..., Any], Dict[Any, Any], bool, bool, AuthenticationLevel, bool, bool, List[Any], Optional[str], bool, Optional[List[str]]) -> Callable[..., Any]
+def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=True, auth_locahost=False,
+                      pass_token=False, pass_role=False, allowed_user_roles=None,
+                      expect_body_type=None, mask=None):
+    # type: (Callable[..., Any], Dict[Any, Any], bool, bool, bool, bool, bool, List[Any], Optional[str], Optional[List[str]]) -> Callable[..., Any]
     def decorator_openmotics_api_v1(func):
         # First layer decorator: Error handling
         func = _openmotics_api_v1(func)
+
+        func = cherrypy.tools.cors_v1()(func)
 
         # Second layer decorator: Authentication
         func = cherrypy.tools.authenticated_v1(pass_token=pass_token,
                                                pass_role=pass_role,
                                                allowed_user_roles=allowed_user_roles,
-                                               pass_security_level=pass_security_level,
-                                               auth=auth,
-                                               auth_level=auth_level
+                                               auth=auth, auth_locahost=auth_locahost
                                                )(func)
 
         # Third layer decorator: Check parameters

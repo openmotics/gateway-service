@@ -33,7 +33,8 @@ class ShutterGroupSerializer(object):
         data = {'id': shutter_group_dto.id,
                 'timer_up': Toolbox.denonify(shutter_group_dto.timer_up, ShutterGroupSerializer.BYTE_MAX),
                 'timer_down': Toolbox.denonify(shutter_group_dto.timer_down, ShutterGroupSerializer.BYTE_MAX),
-                'room': Toolbox.denonify(shutter_group_dto.room, ShutterGroupSerializer.BYTE_MAX)}
+                'room': Toolbox.denonify(shutter_group_dto.room, ShutterGroupSerializer.BYTE_MAX),
+                'in_use': shutter_group_dto.in_use}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -44,6 +45,7 @@ class ShutterGroupSerializer(object):
             api_data=api_data,
             mapping={'timer_up': ('timer_up', ShutterGroupSerializer.BYTE_MAX),
                      'timer_down': ('timer_down', ShutterGroupSerializer.BYTE_MAX),
-                     'room': ('room', ShutterGroupSerializer.BYTE_MAX)}
+                     'room': ('room', ShutterGroupSerializer.BYTE_MAX),
+                     'in_use': ('in_use', None)}
         )
         return shutter_group_dto

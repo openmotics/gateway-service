@@ -20,7 +20,6 @@ Tests for the pulses module.
 
 from __future__ import absolute_import
 import unittest
-import xmlrunner
 import mock
 from mock import Mock
 from sqlalchemy import create_engine
@@ -198,7 +197,3 @@ class PulseCounterControllerTest(unittest.TestCase):
         # Set configuration for unexisting pulse counter
         with self.assertRaises(NoResultFound):
             controller.load_pulse_counter(26)
-
-
-if __name__ == '__main__':
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

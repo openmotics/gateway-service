@@ -53,7 +53,7 @@ class MockedCore(object):
         self.controller = MasterCoreController()
         self.write_log = []
 
-    def _do_command(self, command, fields, timeout=None):
+    def _do_command(self, command, fields, timeout=None, bypass_blockers=None):
         _ = timeout
         instruction = ''.join(str(chr(c)) for c in command.instruction)
         if instruction == 'MR':

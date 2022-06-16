@@ -18,7 +18,7 @@ import ujson as json
 import cherrypy
 
 from gateway.dto import UserDTO
-from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, AuthenticationLevel, LoginMethod, ApiResponse
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, LoginMethod, ApiResponse
 
 from .base import BaseCherryPyUnitTester
 
@@ -70,9 +70,6 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
                 self.route_dispatcher.connect('get_rest', '/auth/courier',
                                               controller=self, action='get_rest_auth_courier',
                                               conditions={'method': ['GET']})
-                self.route_dispatcher.connect('get_rest', '/auth/level/high',
-                                              controller=self, action='get_rest_auth_level_high',
-                                              conditions={'method': ['GET']})
 
                 # --- POST ---
                 self.route_dispatcher.connect('post_rest', '',
@@ -92,47 +89,35 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
                                               controller=self, action='delete_rest_auth',
                                               conditions={'method': ['DELETE']})
 
-            @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
+            @openmotics_api_v1(auth=False)
             def get_rest(self):
                 return ApiResponse(body='get_method', is_json=False)
 
-            @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
-                               allowed_user_roles=['ADMIN'])
+            @openmotics_api_v1(auth=True, allowed_user_roles=['ADMIN'])
             def get_rest_auth_admin(self):
                 return ApiResponse(body='get_method_auth_admin', is_json=False)
 
-            @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
-                               allowed_user_roles=['TECHNICIAN'])
+            @openmotics_api_v1(auth=True, allowed_user_roles=['TECHNICIAN'])
             def get_rest_auth_technician(self):
                 return ApiResponse(body='get_method_auth_technician', is_json=False)
 
-            @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
-                               allowed_user_roles=['COURIER'])
+            @openmotics_api_v1(auth=True, allowed_user_roles=['COURIER'])
             def get_rest_auth_courier(self):
                 return ApiResponse(body='get_method_auth_courier', is_json=False)
 
-            @openmotics_api_v1(auth=False,
-                               auth_level=AuthenticationLevel.HIGH,
-                               pass_role=False,
-                               pass_token=False)
-            def get_rest_auth_level_high(self):
-                return ApiResponse(body='get_method_auth_level_high', is_json=False)
-
-            @openmotics_api_v1(auth=False, pass_role=True, pass_token=False)
+            @openmotics_api_v1(auth=False, pass_role=True)
             def post_rest_no_auth_no_body(self, auth_role):
                 return ApiResponse(body={'role': auth_role})
 
-            @openmotics_api_v1(auth=True, pass_role=True, pass_token=False,
-                               expect_body_type='JSON')
+            @openmotics_api_v1(auth=True, pass_role=True, expect_body_type='JSON')
             def post_rest_auth_json(self, auth_role, request_body):
                 return ApiResponse(body={'role': auth_role, 'request_body': request_body})
 
-            @openmotics_api_v1(auth=True, pass_role=False, pass_token=True,
-                               expect_body_type='RAW')
+            @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='RAW')
             def put_rest_auth_raw(self, auth_token, request_body):
                 return ApiResponse(body={'token_userrole': auth_token.user.role, 'request_body': request_body})
 
-            @openmotics_api_v1(auth=True, pass_role=False, pass_token=False)
+            @openmotics_api_v1(auth=True, auth_locahost=True)
             def delete_rest_auth(self):
                 return ApiResponse(body='Delete', is_json=False)
 
@@ -143,64 +128,54 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
     def test_get(self):
         resp = self.GET('/rest')
-        self.assertStatus('200 OK')
         self.assertBody('get_method')
+        self.assertStatus('200 OK')
         self.assertNoHeaderItemValue('Content-Type', 'application/json')
 
     def test_get_auth_admin(self):
         resp = self.GET('/rest/auth/admin', login_user=self.test_admin)
-        self.assertStatus('200 OK')
         self.assertBody('get_method_auth_admin')
+        self.assertStatus('200 OK')
 
     def test_get_auth_non_admin(self):
         resp = self.GET('/rest/auth/admin', login_user=self.test_user)
-        self.assertStatus('401 Unauthorized')
         self.assertBody("Unauthorized operation: User role is not allowed for this API call: Allowed: ['ADMIN'], Got: USER")
+        self.assertStatus('401 Unauthorized')
 
     def test_get_auth_courier(self):
         resp = self.GET('/rest/auth/courier', login_user=self.test_courier)
-        self.assertStatus('200 OK')
         self.assertBody('get_method_auth_courier')
+        self.assertStatus('200 OK')
 
     def test_get_auth_non_courier(self):
         resp = self.GET('/rest/auth/courier', login_user=self.test_user)
-        self.assertStatus('401 Unauthorized')
         self.assertBody("Unauthorized operation: User role is not allowed for this API call: Allowed: ['COURIER'], Got: USER")
-
-    def test_get_auth_level_high(self):
-        resp = self.GET('/rest/auth/level/high', login_user=self.test_user, login_method=LoginMethod.PIN_CODE)
         self.assertStatus('401 Unauthorized')
-
-        resp = self.GET('/rest/auth/level/high', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE)
-        self.assertStatus('401 Unauthorized')
-
-        resp = self.GET('/rest/auth/level/high', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
-        self.assertStatus('200 OK')
 
     def test_post(self):
         resp = self.POST('/rest', login_user=None)
-        self.assertStatus('200 OK')
         self.assertBody(json.dumps({'role': None}))
+        self.assertStatus('200 OK')
         self.assertHeaderItemValue('Content-Type', 'application/json')
 
     def test_post_json(self):
         body_dict = {'body': 'test'}
         body = json.dumps(body_dict)
         resp = self.POST('/rest/noauth/json', login_user=self.test_user, body=body)
-        self.assertStatus('200 OK')
         self.assertBody(json.dumps({'role': 'USER', 'request_body': body_dict}))
+        self.assertStatus('200 OK')
 
     def test_post_non_json(self):
         body = 'test'
         resp = self.POST('/rest/noauth/json', login_user=self.test_user, body=body)
-        self.assertStatus('400 Bad Request')
         self.assertBody('Could not parse input: Could not parse the json body type')
+        self.assertStatus('400 Bad Request')
 
     def test_put_non_raw(self):
         body = 'test'
         resp = self.PUT('/rest/noauth/raw', login_user=self.test_user, body=body)
-        self.assertStatus('200 OK')
         self.assertBody(json.dumps({'token_userrole': 'USER', 'request_body': body}))
+        self.assertStatus('200 OK')
 
     def test_delete_no_auth(self):
         resp = self.DELETE('/rest/auth', login_user=None)
@@ -208,5 +183,5 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
     def test_delete_auth(self):
         resp = self.DELETE('/rest/auth', login_user=self.test_courier)
-        self.assertStatus('200 OK')
         self.assertBody('Delete')
+        self.assertStatus('200 OK')

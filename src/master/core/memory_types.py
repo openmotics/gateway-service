@@ -180,13 +180,16 @@ class MemoryModelDefinition(object):
     @classmethod
     def _get_fields(cls):  # type: () -> Dict[str, Any]
         """ Get the fields defined by an EepromModel child. """
-        if cls.__name__ not in MemoryModelDefinition._cache_fields:
-            MemoryModelDefinition._cache_fields[cls.__name__] = {'id': inspect.getmembers(cls, lambda f: isinstance(f, IdField)),
-                                                                 'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
-                                                                 'enums': inspect.getmembers(cls, lambda f: isinstance(f, MemoryEnumDefinition)),
-                                                                 'relations': inspect.getmembers(cls, lambda f: isinstance(f, MemoryRelation)),
-                                                                 'compositions': inspect.getmembers(cls, lambda f: isinstance(f, CompositeMemoryModelDefinition))}
-        return MemoryModelDefinition._cache_fields[cls.__name__]
+        if cls.__name__ in MemoryModelDefinition._cache_fields:
+            return MemoryModelDefinition._cache_fields[cls.__name__]
+        with MemoryModelDefinition._cache_lock:
+            if cls.__name__ not in MemoryModelDefinition._cache_fields:
+                MemoryModelDefinition._cache_fields[cls.__name__] = {'id': inspect.getmembers(cls, lambda f: isinstance(f, IdField)),
+                                                                     'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
+                                                                     'enums': inspect.getmembers(cls, lambda f: isinstance(f, MemoryEnumDefinition)),
+                                                                     'relations': inspect.getmembers(cls, lambda f: isinstance(f, MemoryRelation)),
+                                                                     'compositions': inspect.getmembers(cls, lambda f: isinstance(f, CompositeMemoryModelDefinition))}
+            return MemoryModelDefinition._cache_fields[cls.__name__]
 
     @classmethod
     def _get_id_field(cls):  # type: () -> Optional[IdField]
@@ -404,19 +407,23 @@ class MemoryStringField(MemoryField):
 
 
 class MemoryByteField(MemoryField):
-    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None, default=None):
         super(MemoryByteField, self).__init__(memory_type=memory_type,
                                               address_spec=address_spec,
                                               read_only=read_only,
                                               checksum=checksum,
                                               length=1)
+        self._default = default
 
     def encode(self, value, field_name):  # type: (int, str) -> bytearray
         self._check_limits(value, field_name)
         return bytearray([value])
 
     def decode(self, data):  # type: (bytearray) -> int
-        return data[0]
+        value = data[0]
+        if self._default is not None and value == 255:
+            return self._default
+        return value
 
 
 class MemoryBooleanField(MemoryField):
@@ -683,7 +690,7 @@ class IdField(object):
             if limits[0] > limits[1]:
                 limit_info = 'No records available.'
             elif limits[0] == limits[1]:
-                limit_info = 'Only one records available: {0}'.format(limits[0])
+                limit_info = 'Only one record available: {0}'.format(limits[0])
             else:
                 limit_info = 'Available records: {0} <= id <= {1}'.format(limits[0], limits[1])
             raise NoResultFound('Could not find {0}({1}). {2}'.format(class_name, '' if id is None else id, limit_info))

@@ -106,6 +106,11 @@ class OutputController(BaseController):
             # This is an expected situation
             raise DaemonThreadWait
 
+    def _publish_config(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+
     def _publish_output_change(self, output_dto):
         # type: (OutputDTO) -> None
         event_status = {'on': output_dto.state.status, 'locked': output_dto.state.locked}
@@ -130,13 +135,30 @@ class OutputController(BaseController):
         # TODO also support plugins
         return list(self._cache.get_state().values())
 
+    @staticmethod
+    def _output_orm_to_dto(output_orm, output_dto):
+        output_dto.name = output_orm.name
+        output_dto.room = output_orm.room.number if output_orm.room is not None else None
+        output_dto.in_use = output_orm.in_use
+
+    @staticmethod
+    def _output_dto_to_orm(output_dto, output_orm, db):
+        for field in ['name', 'in_use']:
+            if field in output_dto.loaded_fields:
+                setattr(output_orm, field, getattr(output_dto, field))
+        if 'room' in output_dto.loaded_fields:
+            if output_dto.room in (None, 255):
+                output_orm.room = None
+            else:
+                output_orm.room = db.query(Room).filter_by(number=output_dto.room).one()
+
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         with Database.get_session() as db:
             output = db.query(Output) \
                        .filter_by(number=output_id) \
                        .one()  # type: Output
             output_dto = self._master_controller.load_output(output_id=output_id)
-            output_dto.room = output.room.number if output.room is not None else None
+            OutputController._output_orm_to_dto(output_orm=output, output_dto=output_dto)
             return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
@@ -144,7 +166,7 @@ class OutputController(BaseController):
         with Database.get_session() as db:
             for output in db.query(Output):  # type: Output
                 output_dto = self._master_controller.load_output(output_id=output.number)
-                output_dto.room = output.room.number if output.room is not None else None
+                OutputController._output_orm_to_dto(output_orm=output, output_dto=output_dto)
                 output_dtos.append(output_dto)
             self._cache.update_outputs(output_dtos)
         return output_dtos
@@ -158,14 +180,14 @@ class OutputController(BaseController):
                     .one_or_none()  # type: Optional[Output]
                 if output is None:
                     raise ValueError('Output {0} does not exist'.format(output_dto.id))
-                if 'room' in output_dto.loaded_fields:
-                    if output_dto.room in (None, 255):
-                        output.room = None
-                    else:
-                        output.room = db.query(Room).filter_by(number=output_dto.room).one()
+                else:
+                    OutputController._output_dto_to_orm(output_dto=output_dto, output_orm=output, db=db)
                 outputs_to_save.append(output_dto)
+            publish = bool(db.dirty)
             db.commit()
         self._master_controller.save_outputs(outputs_to_save)
+        if publish:
+            self._publish_config()
 
     def load_dimmer_configuration(self):
         # type: () -> DimmerConfigurationDTO
@@ -176,8 +198,11 @@ class OutputController(BaseController):
         self._master_controller.save_dimmer_configuration(dimmer_configuration_dto)
 
     def set_all_lights(self, action):  # type: (Literal['ON', 'OFF', 'TOGGLE']) -> None
-        # TODO: Also include other sources (e.g. plugins) once implemented
-        self._master_controller.set_all_lights(action=action)
+        with Database.get_session() as db:
+            # TODO: Filter on output type once it's in the ORM.
+            output_ids = [output[0] for output in db.query(Output.number).filter(Output.in_use == True)]
+        # The `set_all_lights` implementation does its own filtering for lights & shutters
+        self._master_controller.set_all_lights(action=action, output_ids=output_ids)
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         # type: (int, bool, Optional[int], Optional[int]) -> None

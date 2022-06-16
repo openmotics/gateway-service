@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 
 class VentilationSerializer(object):
+    BYTE_MAX = 255
+
     @staticmethod
     def serialize(ventilation_dto, fields):
         # type: (VentilationDTO, Optional[List[str]]) -> Dict[str,Any]
@@ -40,6 +42,7 @@ class VentilationSerializer(object):
                 'source': {'type': ventilation_dto.source.type,
                            'name': ventilation_dto.source.name},
                 'name': Toolbox.denonify(ventilation_dto.name, ''),
+                'room': Toolbox.denonify(ventilation_dto.room, VentilationSerializer.BYTE_MAX),
                 'amount_of_levels': Toolbox.denonify(ventilation_dto.amount_of_levels, 0),
                 'device': {'vendor': Toolbox.denonify(ventilation_dto.device_vendor, ''),
                            'type': Toolbox.denonify(ventilation_dto.device_type, '')}}
@@ -54,14 +57,15 @@ class VentilationSerializer(object):
             ventilation_id = api_data['id']
         source_dto = None  # type: Optional[VentilationSourceDTO]
         if 'source' in api_data:
-            source_dto = VentilationSourceDTO(None,
-                                              name=api_data['source']['name'],
-                                              type=api_data['source']['type'])
+            source_dto = VentilationSourceDTO(api_data['source']['type'],
+                                              name=api_data['source']['name'])
         ventilation_dto = VentilationDTO(id=ventilation_id, source=source_dto)
         if 'external_id' in api_data:
             ventilation_dto.external_id = Toolbox.nonify(api_data['external_id'], '')
         if 'name' in api_data:
             ventilation_dto.name = Toolbox.nonify(api_data['name'], '')
+        if 'room' in api_data:
+            logger.warning('Assigning room not supported in v0 api')
         if 'amount_of_levels' in api_data:
             ventilation_dto.amount_of_levels = Toolbox.nonify(api_data['amount_of_levels'], '')
         if 'device' in api_data:

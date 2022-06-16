@@ -17,6 +17,7 @@
 GroupAction Mapper
 """
 from __future__ import absolute_import
+from toolbox import Toolbox
 from gateway.dto import GroupActionDTO
 from master.core.group_action import GroupAction
 from master.core.basic_action import BasicAction
@@ -39,9 +40,8 @@ class GroupActionMapper(object):
     @staticmethod
     def dto_to_orm(group_action_dto):  # type: (GroupActionDTO) -> GroupAction
         data = {'id': group_action_dto.id}  # type: Dict[str, Any]
-        for dto_field, data_field in {'name': 'name'}.items():
-            if dto_field in group_action_dto.loaded_fields:
-                data[data_field] = getattr(group_action_dto, dto_field)
+        if 'name' in group_action_dto.loaded_fields:
+            data['name'] = Toolbox.shorten_name(group_action_dto.name, maxlength=16)
         if 'actions' in group_action_dto.loaded_fields:
             data['actions'] = GroupActionMapper.classic_actions_to_core_actions(group_action_dto.actions)
         return GroupAction(**data)
@@ -103,12 +103,12 @@ class GroupActionMapper(object):
                 if action.action in map_100_t:
                     new_classic_actions += [247, action.device_nr + map_100_t[action.action][1],
                                             map_100_t[action.action][0], action.extra_parameter]
-                map_100_t = {40: (249, 228), 31: (248, 228), 42: (250, 228),
+                map_100_t = {40: (249, 228), 41: (248, 228), 42: (250, 228),
                              43: (249, 229), 44: (248, 229), 45: (250, 229),
                              46: (249, 230), 47: (249, 230), 48: (250, 230)}
                 if action.action in map_100_t:
                     new_classic_actions += [247, map_100_t[action.action][1],
-                                            map_100_t[action.action][0], action.device_nr]
+                                            map_100_t[action.action][0], action.extra_parameter]
             elif action.action_type == 251:
                 if action.action == 0:
                     new_classic_actions += [{0: 171, 1: 172, 2: 173}[action.extra_parameter], min(255, action.device_nr)]
@@ -401,7 +401,7 @@ class GroupActionMapper(object):
                 # 248: is equal to x (to be used always with action type 247) (see #Additional Input Values)
                 # 249: is higher than x (to be used always with action type 247) (see #Additional Input Values)
                 # 250: is lower than x (to be used always with action type 247) (see #Additional Input Values)
-                extra_parameter = None  # type: Optional[int]
+                device_nr = 0
                 if action_number < 32:
                     # ... if temperature sensor 0-31 (x=0-31)
                     action_map = {248: 20, 249: 19, 250: 21}
@@ -420,15 +420,15 @@ class GroupActionMapper(object):
                 elif action_number == 228:
                     # ... if time hour (x=228)
                     action_map = {248: 41, 249: 40, 250: 42}
-                    device_nr = next_action_number
+                    extra_parameter = next_action_number
                 elif action_number == 229:
                     # ... if time minute (x=229)
                     action_map = {248: 44, 249: 43, 250: 45}
-                    device_nr = next_action_number
+                    extra_parameter = next_action_number
                 elif action_number == 230:
                     # ... if day (x=230)
                     action_map = {248: 47, 249: 46, 250: 48}
-                    device_nr = next_action_number
+                    extra_parameter = next_action_number
                 else:
                     # ... if temperature setpoint 0-23 (x=96-119)
                     # ... if free variable 0-31 (x=128-159)

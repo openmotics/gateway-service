@@ -93,15 +93,6 @@ class CoreAPI(object):
                                response_fields=[ByteField('type'), ByteArrayField('information', lambda length: length - 1)])
 
     @staticmethod
-    def general_configuration_number_of_modules():  # type: () -> CoreCommandSpec
-        """ Receives general configuration regarding number of modules """
-        return CoreCommandSpec(instruction='GC',
-                               request_fields=[LiteralBytesField(0)],
-                               response_fields=[ByteField('type'), ByteField('output'), ByteField('input'),
-                                                ByteField('sensor'), ByteField('ucan'), ByteField('ucan_input'), ByteField('ucan_sensor'),
-                                                ByteField('power_rs485'), ByteField('power_can')])
-
-    @staticmethod
     def general_configuration_max_specs():  # type: () -> CoreCommandSpec
         """ Receives general configuration regarding maximum specifications (e.g. max number of input modules, max number of basic actions, ...) """
         return CoreCommandSpec(instruction='GC',

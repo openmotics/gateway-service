@@ -23,7 +23,6 @@ import time
 import unittest
 import mock
 
-import xmlrunner
 from pytest import mark
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -237,7 +236,3 @@ class EnergyCommunicatorTest(unittest.TestCase):
         time.sleep(1.1)
 
         self.assertEqual((49.5, ), self.communicator.do_command(1, action))
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

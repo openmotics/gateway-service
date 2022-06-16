@@ -24,12 +24,13 @@ if False:  # MYPY
 
 
 class VentilationDTO(BaseDTO):
-    def __init__(self, id, source, external_id='', name='', amount_of_levels=0,
+    def __init__(self, id, source=None, external_id='', name='', room=None, amount_of_levels=0,
                  device_vendor='', device_type='', device_serial=''):
         self.id = id  # type: int
         self.source = source  # type: VentilationSourceDTO
         self.external_id = external_id  # type: str
         self.name = name  # type: str
+        self.room = room  # type: Optional[int]
         self.amount_of_levels = amount_of_levels  # type: int
         self.device_vendor = device_vendor  # type: str
         self.device_type = device_type  # type: str
@@ -40,9 +41,9 @@ class VentilationSourceDTO(BaseDTO):
     class Type(object):
         PLUGIN = 'plugin'
 
-    def __init__(self, id, type='', name=''):
-        self.id = id  # type: int
+    def __init__(self, type, id=None, name=''):
         self.type = type  # type: str
+        self.id = id  # type: int
         self.name = name  # type: str
 
     @property

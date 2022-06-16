@@ -23,9 +23,10 @@ if False:  # MYPY
 
 
 class PulseCounterDTO(BaseDTO):
-    def __init__(self, id, name='', room=None, input_id=None, persistent=False):
+    def __init__(self, id, name='', room=None, input_id=None, persistent=False, in_use=True):
         self.id = id  # type: int
         self.name = name  # type: str
         self.input_id = input_id  # type: Optional[int]
         self.room = room  # type: Optional[int]
+        self.in_use = in_use  # type: bool
         self.persistent = persistent  # type: bool

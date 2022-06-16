@@ -1,6 +1,10 @@
 from __future__ import absolute_import
+
 import re
+
 import requests
+
+from plugin_runtime.sdk import NotificationSDK, SensorSDK, VentilationSDK
 
 try:
     import ujson as json
@@ -38,30 +42,32 @@ def _load_webinterface():
 class WebInterfaceDispatcher(object):
     # TODO: Use SDK in the future
 
-    def __init__(self, logger, hostname='localhost', port=80):
-        self.__logger = logger
-        self.__hostname = hostname
-        self.__port = port
-        self.__warned = False
-        self.__available_calls = _load_webinterface()
-        self.plugin_name = None
+    def __init__(self, logger, plugin_name=None, hostname='localhost', port=80):
+        self._logger = logger
+        self._warned = False
+        self._available_calls = _load_webinterface()
+        self._base_url = 'http://{0}:{1}'.format(hostname, port)
+        self._plugin_name = plugin_name
+        self.notification = NotificationSDK(self._base_url, self._plugin_name)
+        self.sensor = SensorSDK(self._base_url, self._plugin_name)
+        self.ventilation = VentilationSDK(self._base_url, self._plugin_name)
 
     def __getattr__(self, attribute):
-        if attribute in self.__available_calls:
+        if attribute in self._available_calls:
             wrapper = self.get_wrapper(attribute)
             setattr(self, attribute, wrapper)
             return wrapper
         raise AttributeError('The call \'{0}\' does not exist'.format(attribute))
 
     def warn(self):
-        if self.__warned is False:
-            self.__logger('[W] Deprecation warning:')
-            self.__logger('[W] - Plugins should not pass \'token\' to API calls')
-            self.__logger('[W] - Plugins should use keyword arguments for API calls')
-            self.__warned = True
+        if self._warned is False:
+            self._logger('[W] Deprecation warning:')
+            self._logger('[W] - Plugins should not pass \'token\' to API calls')
+            self._logger('[W] - Plugins should use keyword arguments for API calls')
+            self._warned = True
 
     def get_wrapper(self, name):
-        params = self.__available_calls[name]
+        params = self._available_calls[name]
 
         def wrapper(*args, **kwargs):
             # 1. Try to remove a possible "token" parameter, which is now deprecated
@@ -82,10 +88,10 @@ class WebInterfaceDispatcher(object):
                     kwargs[arg] = 'None'
             # 4. Perform the http call
             try:
-                response = requests.get('http://{0}:{1}/{2}'.format(self.__hostname, self.__port, name),
+                response = requests.get('{0}/{1}'.format(self._base_url, name),
                                         params=kwargs,
                                         timeout=30.0,
-                                        headers={'User-Agent': 'Plugin {0}'.format(self.plugin_name)})
+                                        headers={'User-Agent': 'Plugin {0}'.format(self._plugin_name)})
                 return response.text
             except Exception:
                 return json.dumps({'success': False,

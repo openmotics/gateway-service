@@ -22,6 +22,9 @@ from gateway.dto.shutter import ShutterDTO
 from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import ShutterConfiguration
 
+if False:  # MYPY
+    from typing import Dict, Any
+
 
 class ShutterMapper(object):
     WORD_MAX = 2 ** 16 - 1
@@ -41,11 +44,9 @@ class ShutterMapper(object):
 
     @staticmethod
     def dto_to_orm(shutter_dto):  # type: (ShutterDTO) -> EepromModel
-        data = {'id': shutter_dto.id,
-                'name': shutter_dto.name}
-        for field in ['name']:
-            if field in shutter_dto.loaded_fields:
-                data[field] = getattr(shutter_dto, field)
+        data = {'id': shutter_dto.id}  # type: Dict[str, Any]
+        if 'name' in shutter_dto.loaded_fields:
+            data['name'] = Toolbox.shorten_name(shutter_dto.name, maxlength=16)
         for field in ['timer_up', 'timer_down', 'up_down_config', 'group_1', 'group_2']:
             if field in shutter_dto.loaded_fields:
                 data[field] = Toolbox.denonify(getattr(shutter_dto, field), ShutterMapper.BYTE_MAX)

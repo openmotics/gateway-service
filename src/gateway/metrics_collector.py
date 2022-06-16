@@ -44,7 +44,7 @@ if False:  # MYPY
     from gateway.module_controller import ModuleController
     from gateway.shutter_controller import ShutterController
     from gateway.pulse_counter_controller import PulseCounterController
-    from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO
+    from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO, ShutterDTO
 
 logger = logging.getLogger(__name__)
 
@@ -264,10 +264,9 @@ class MetricsCollector(object):
                 if output_info is None:
                     continue
                 output_dto, output_status = output_info
-                output_name = output_dto.name
                 status = output_status.get('status')
                 dimmer = output_status.get('dimmer')
-                if output_name != '' and status is not None and dimmer is not None:
+                if output_dto.in_use and status is not None and dimmer is not None:
                     if output_dto.module_type in ['O', 'o']:
                         level = 100
                     else:
@@ -275,7 +274,7 @@ class MetricsCollector(object):
                     if status == 0:
                         level = 0
                     tags = {'id': output_id,
-                            'name': output_name,
+                            'name': output_dto.name,
                             'module_type': MetricsCollector.OUTPUT_MODULE_TYPES.get(output_dto.module_type, 'unknown'),
                             'type': MetricsCollector.OUTPUT_OUTPUT_TYPES.get(output_dto.output_type, 'unknown')}
                     self._enqueue_metrics(metric_type=metric_type,
@@ -291,15 +290,16 @@ class MetricsCollector(object):
             inputs = self._environment_inputs
             if input_id not in inputs:
                 return
-            input_name = inputs[input_id].name
-            if input_name != '':
-                tags = {'type': 'input',
-                        'id': input_id,
-                        'name': input_name}
-                self._enqueue_metrics(metric_type='event',
-                                      values={'value': bool(status)},
-                                      tags=tags,
-                                      timestamp=now)
+            input_dto = inputs[input_id]
+            if not input_dto.in_use:
+                return
+            tags = {'type': 'input',
+                    'id': input_id,
+                    'name': input_dto.name}
+            self._enqueue_metrics(metric_type='event',
+                                  values={'value': bool(status)},
+                                  tags=tags,
+                                  timestamp=now)
         except Exception as ex:
             logger.exception('Error processing input: {0}'.format(ex))
 
@@ -528,8 +528,7 @@ class MetricsCollector(object):
 
         status_map = {s.id: s for s in self._shutter_controller.get_shutters_status()}
         for shutter_id, shutter_dto in self._environment_shutters.items():
-            # TODO: Add a flag to the ORM to store this "in use" metadata
-            if shutter_dto.name in ('', 'NOT_IN_USE'):
+            if not shutter_dto.in_use:
                 continue
             tags = {'id': shutter_dto.id,
                     'name': shutter_dto.name}
@@ -563,8 +562,7 @@ class MetricsCollector(object):
         now = time.time()
         status_map = {s.id: s for s in self._sensor_controller.get_sensors_status()}
         for sensor_id, sensor_dto in self._environment_sensors.items():
-            # TODO: Add a flag to the ORM to store this "in use" metadata
-            if sensor_dto.name in ('', 'NOT_IN_USE'):
+            if not sensor_dto.in_use:
                 continue
             tags = {'id': sensor_id,
                     'name': sensor_dto.name,
@@ -665,20 +663,22 @@ class MetricsCollector(object):
             try:
                 for counter_id, counter_dto in self._environment_pulse_counters.items():
                     counters_data[counter_id] = {'name': counter_dto.name,
-                                                 'input': counter_dto.input_id}
+                                                 'input': counter_dto.input_id,
+                                                 'in_use': counter_dto.in_use}
                 values = self._pulse_counter_controller.get_values()
                 for counter_id in counters_data:
                     if counter_id in values:
                         counters_data[counter_id]['count'] = values[counter_id]
                 for counter_id in counters_data:
                     counter = counters_data[counter_id]
-                    if counter['name'] != '' and counter['count'] is not None:
-                        self._enqueue_metrics(metric_type=metric_type,
-                                              values={'value': int(counter['count'])},
-                                              tags={'name': counter['name'],
-                                                    'input': counter['input'],
-                                                    'id': 'P{0}'.format(counter_id)},
-                                              timestamp=now)
+                    if not counter['in_use'] or counter['count'] is None:
+                        continue
+                    self._enqueue_metrics(metric_type=metric_type,
+                                          values={'value': int(counter['count'])},
+                                          tags={'name': counter['name'],
+                                                'input': counter['input'],
+                                                'id': 'P{0}'.format(counter_id)},
+                                          timestamp=now)
             except CommunicationFailure as ex:
                 logger.error('Error getting pulse counter status: {}'.format(ex))
             except Exception as ex:

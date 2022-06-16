@@ -20,7 +20,6 @@ from __future__ import absolute_import
 
 import mock
 import unittest
-import xmlrunner
 import logging
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -119,7 +118,3 @@ class ConfigControllerTest(unittest.TestCase):
 
         res = Config.get_entry('bool', None)
         self.assertEqual(res, True)
-
-
-if __name__ == '__main__':
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
