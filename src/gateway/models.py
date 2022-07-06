@@ -30,6 +30,23 @@ from sqlalchemy.schema import MetaData
 
 import constants
 
+
+# start of explicitly activate foreign key constraints
+
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlite3 import Connection as SQLite3Connection
+
+@event.listens_for(Engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    if isinstance(dbapi_connection, SQLite3Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON;")
+        cursor.close()
+
+# end of explicitly activate foreign key constraints
+
+
 _ = and_, NoResultFound  # For easier import
 
 if False:  # MYPY
