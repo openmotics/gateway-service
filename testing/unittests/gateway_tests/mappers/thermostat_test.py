@@ -88,7 +88,7 @@ class ThermostatMapperTests(unittest.TestCase):
                 Output(number=8),
                 Output(number=9),
                 ThermostatGroup(id=2, number=1, name='group'),
-                Thermostat(number=0, name='thermostat', start=0, thermostat_group_id=1),
+                Thermostat(number=0, name='thermostat', start=0, thermostat_group_id=2),
                 Valve(name='Valve (output 8)', output_id=1),
                 ValveToThermostatAssociation(valve_id=1, thermostat_id=1, priority=3)
             ])
