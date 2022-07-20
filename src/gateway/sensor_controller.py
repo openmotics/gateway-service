@@ -57,6 +57,15 @@ class SensorController(BaseController):
         self._status = {}  # type: Dict[int, SensorStatusDTO]
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.SENSOR, self._handle_master_event)
 
+    def sync_state(self):
+        # type: () -> None
+        logger.debug('Publishing latest sensor status')
+        for status_dto in self._status.values():
+            event_data = {'id': status_dto.id,
+                          'value': status_dto.value}
+            gateway_event = GatewayEvent(GatewayEvent.Types.SENSOR_CHANGE, event_data)
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
+
     def _publish_config(self):
         # type: () -> None
         gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'sensor'})
@@ -112,12 +121,6 @@ class SensorController(BaseController):
                 if count > 0:
                     logger.info('Removed {} unreferenced sensor(s)'.format(count))
                 db.commit()
-
-            for status_dto in self._status.values():
-                event_data = {'id': status_dto.id,
-                              'value': status_dto.value}
-                gateway_event = GatewayEvent(GatewayEvent.Types.SENSOR_CHANGE, event_data)
-                self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
         else:
             super(SensorController, self)._sync_orm_structure(structure)
 

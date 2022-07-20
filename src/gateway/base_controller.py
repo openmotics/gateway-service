@@ -82,7 +82,7 @@ class BaseController(object):
         if self._sync_orm_thread is not None:
             self._sync_orm_thread.stop()
 
-    def request_sync_state(self):
+    def sync_state(self):
         # type: () -> None
         pass  # TODO generalize status syncing
 
@@ -132,9 +132,9 @@ class BaseController(object):
                     type_name = orm_model.__name__.lower()
                     gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': type_name})
                     self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
-                    self.request_sync_state()
         finally:
             self._sync_running = False
+            self.sync_state()
         return True
 
     def _sync_orm_structure(self, structure):

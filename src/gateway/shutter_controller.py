@@ -84,28 +84,13 @@ class ShutterController(BaseController):
         self._verbose = verbose
         self._config_lock = Lock()
 
-        self._sync_state_thread = None  # type: Optional[DaemonThread]
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, self._handle_master_event)
 
     # Update internal shutter configuration cache
 
-    def start(self):
-        # type: () -> None
-        super(ShutterController, self).start()
-        self._sync_state_thread = DaemonThread(name='shuttersyncstate',
-                                               target=self._sync_state,
-                                               interval=600, delay=10)
-        self._sync_state_thread.start()
-
-    def stop(self):
-        # type: () -> None
-        super(ShutterController, self).stop()
-        if self._sync_state_thread:
-            self._sync_state_thread.stop()
-            self._sync_state_thread = None
-
-    def _sync_state(self):
+    def sync_state(self):
         # this is not syncing the shutter state with the master, but is used to publish the state periodically
+        logger.debug('Publishing latest shutter status')
         for shutter_id, shutter_dto in self._shutters.items():
             try:
                 self._publish_shutter_state(shutter_id, shutter_dto, self._states[shutter_id])

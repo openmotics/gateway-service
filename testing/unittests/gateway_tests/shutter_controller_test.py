@@ -42,6 +42,7 @@ MODELS = [Shutter, Room]
 
 class ShutterControllerTest(unittest.TestCase):
     """ Tests for ShutterController. """
+    maxDiff = None
 
     SHUTTER_CONFIG = [ShutterDTO(id=0,
                                  steps=None,
@@ -541,6 +542,7 @@ class ShutterControllerTest(unittest.TestCase):
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, lambda event: events.append(event))
         try:
             controller.start()
+            controller.sync_state()  # manually trigger sync state, since orm sync is disabled
             self.pubsub._publish_all_events()
             self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED',
                                                                                   'position': None,

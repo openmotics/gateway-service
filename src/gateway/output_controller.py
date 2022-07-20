@@ -52,28 +52,8 @@ class OutputController(BaseController):
         # type: (MasterController) -> None
         super(OutputController, self).__init__(master_controller)
         self._cache = OutputStateCache()
-        self._sync_state_thread = None  # type: Optional[DaemonThread]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.OUTPUT, self._handle_master_event)
-
-    def start(self):
-        # type: () -> None
-        super(OutputController, self).start()
-        self._sync_state_thread = DaemonThread(name='outputsyncstate',
-                                               target=self._sync_state,
-                                               interval=600, delay=10)
-        self._sync_state_thread.start()
-
-    def stop(self):
-        # type: () -> None
-        super(OutputController, self).stop()
-        if self._sync_state_thread:
-            self._sync_state_thread.stop()
-            self._sync_state_thread = None
-
-    def request_sync_state(self):
-        if self._sync_state_thread:
-            self._sync_state_thread.request_single_run()
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
@@ -91,8 +71,9 @@ class OutputController(BaseController):
         if changed and output_dto is not None:
             self._publish_output_change(output_dto)
 
-    def _sync_state(self):
+    def sync_state(self):
         try:
+            logger.debug('Publishing latest output status')
             self.load_outputs()
             for state_dto in self._master_controller.load_output_status():
                 _, output_dto = self._cache.handle_change(state_dto)
