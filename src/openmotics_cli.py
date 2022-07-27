@@ -36,19 +36,20 @@ def cmd_feature_thermostats(args):
         logger.error('--enable and --disable are mutually exclusive')
 
     with Database.get_session() as db:
+        feature = db.query(Feature).filter_by(name='thermostats_gateway').one_or_none()
+        if feature is None:
+            feature = Feature(name='thermostats_gateway')
         if args.enable or args.disable:
             logger.info('Updating feature thermostats_gateway')
-            enabled = args.enable and not args.disable
-            feature = db.query(Feature).filter_by(name='thermostats_gateway').one_or_none()
-            if feature is None:
-                feature = Feature(name='thermostats_gateway')
-            feature.enabled = enabled
+            feature.enabled = args.enable and not args.disable
+        migration = None
         if args.migrate:
             logger.info('Updating data migration for thermostats')
             migration = db.query(DataMigration).filter_by(name='thermostats').one_or_none()
             if migration:
                 migration.migrated = False
         db.commit()
+
 
         logger.info('')
         logger.info('    feature:   thermostats_gateway enabled=%s', feature.enabled)

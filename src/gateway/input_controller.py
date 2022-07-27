@@ -51,30 +51,11 @@ class InputController(BaseController):
         # type: (MasterController) -> None
         super(InputController, self).__init__(master_controller)
         self._cache = InputStateCache()
-        self._sync_state_thread = None  # type: Optional[DaemonThread]
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.INPUT, self._handle_master_event)
 
-    def start(self):
-        # type: () -> None
-        super(InputController, self).start()
-        self._sync_state_thread = DaemonThread(name='inputsyncstate',
-                                               target=self._sync_state,
-                                               interval=600, delay=10)
-        self._sync_state_thread.start()
-
-    def stop(self):
-        # type: () -> None
-        super(InputController, self).stop()
-        if self._sync_state_thread:
-            self._sync_state_thread.stop()
-            self._sync_state_thread = None
-
-    def request_sync_state(self):
-        if self._sync_state_thread:
-            self._sync_state_thread.request_single_run()
-
-    def _sync_state(self):
+    def sync_state(self):
         try:
+            logger.debug('Publishing latest input status')
             for state_dto in self._master_controller.load_input_status():
                 _, input_dto = self._cache.handle_change(state_dto)
                 if input_dto is not None:

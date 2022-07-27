@@ -76,7 +76,8 @@ class InputControllerTest(unittest.TestCase):
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
 
         input_dto = InputDTO(id=42)
-        with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
+        with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]), \
+             mock.patch.object(self.master_controller, 'load_input_status', return_value=[]):
             self.controller._sync_structures = True
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
@@ -167,7 +168,7 @@ class InputControllerTest(unittest.TestCase):
                                return_value=[InputStatusDTO(id=2, status=True),
                                              InputStatusDTO(id=40, status=True)]):
             self.controller.load_inputs()
-            self.controller._sync_state()
+            self.controller.sync_state()
             self.pubsub._publish_all_events(blocking=False)
             self.assertListEqual([GatewayEvent('INPUT_CHANGE',
                                   {'id': 2, 'status': True, "location": {"room_id": 255}}),
@@ -180,7 +181,7 @@ class InputControllerTest(unittest.TestCase):
                                return_value=[InputStatusDTO(id=2, status=True),
                                              InputStatusDTO(id=40, status=False)]):
             events = []
-            self.controller._sync_state()
+            self.controller.sync_state()
             self.pubsub._publish_all_events(blocking=False)
             self.assertListEqual([GatewayEvent('INPUT_CHANGE',
                                   {'id': 2, 'status': True, "location": {"room_id": 255}}),
