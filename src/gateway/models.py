@@ -21,22 +21,30 @@ import time
 
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, \
     Text, UniqueConstraint, and_, create_engine
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import RelationshipProperty, relationship, \
     scoped_session, sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import MetaData
-from sqlite3 import Connection as SQLite3Connection
-from sqlalchemy import event
+
 import constants
 
 
-# explicitly activate foreign key constraints
-def _set_fk_pragma(dbapi_connection, connection_record):
+# start of explicitly activate foreign key constraints
+
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlite3 import Connection as SQLite3Connection
+
+@event.listens_for(Engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, SQLite3Connection):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.close()
+
+# end of explicitly activate foreign key constraints
 
 
 _ = and_, NoResultFound  # For easier import
@@ -52,9 +60,6 @@ SQLALCHEMY_DATABASE_URL = "sqlite:///{}".format(constants.get_gateway_database_f
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
-# bind the foreign key pragma listener explicitly to this engine, making sure not to use a global listener with a
-# decorator as then the alembic migration will apply it too, resulting in data loss after migration
-event.listen(engine, 'connect', _set_fk_pragma)
 session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Session = scoped_session(session_factory)
 
