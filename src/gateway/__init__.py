@@ -14,4 +14,4 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """ Module containing the functionality provided by the gateway. """
 
-__version__ = '2.25.3'
+__version__ = '2.25.4'
