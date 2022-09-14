@@ -85,6 +85,7 @@ def cmd_shell(args):
           metrics_controller=INJECTED,
           module_controller=INJECTED,
           output_controller=INJECTED,
+          valve_pump_controller=INJECTED,
           plugin_controller=INJECTED,
           energy_module_controller=INJECTED,
           pubsub=INJECTED,

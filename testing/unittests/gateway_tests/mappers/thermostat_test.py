@@ -28,8 +28,7 @@ from gateway.mappers.thermostat import ThermostatMapper, \
     ThermostatScheduleMapper
 from gateway.models import Base, Database, DaySchedule, Feature, Output, \
     OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
-    Room, Sensor, Thermostat, ThermostatGroup, Valve, \
-    ValveToThermostatAssociation
+    Room, Sensor, Thermostat, ThermostatGroup, Valve, IndoorLinkValves
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 from master.classic.eeprom_models import PumpGroupConfiguration
@@ -90,21 +89,20 @@ class ThermostatMapperTests(unittest.TestCase):
                 ThermostatGroup(id=2, number=1, name='group'),
                 Thermostat(number=0, name='thermostat', start=0, thermostat_group_id=2),
                 Valve(name='Valve (output 8)', output_id=1),
-                ValveToThermostatAssociation(valve_id=1, thermostat_id=1, priority=3)
+                IndoorLinkValves(valve_id=1, thermostat_link_id=1)
             ])
             db.commit()
 
         thermostat_dto = ThermostatDTO(id=0, output0=8, output1=9)
         with self.session as db:
             update, _ = ThermostatMapper(db).get_valve_links(thermostat_dto, 'heating')
-            assert [x.valve.name for x in update] == ['Valve (output 8)', 'Valve (output 9)']
+            assert [x.valve.name for x in update] == ['Valve (output 9)']
             db.add_all(update)
             db.commit()
 
         with self.session as db:
             thermostat = db.get(Thermostat, 1)
             assert [x.name for x in thermostat.valves] == ['Valve (output 8)', 'Valve (output 9)']
-            assert [x.priority for x in thermostat.heating_valve_associations] == [0, 1]
 
         with self.session as db:
             update, remove = ThermostatMapper(db).get_valve_links(thermostat_dto, 'heating')
@@ -116,7 +114,6 @@ class ThermostatMapperTests(unittest.TestCase):
             update, remove = ThermostatMapper(db).get_valve_links(thermostat_dto, 'heating')
             assert [x.valve.name for x in update] == []
             assert len(remove) == 1
-            assert [x.priority for x in remove] == [1]
 
     def test_day_schedules(self):
         with self.session as db:

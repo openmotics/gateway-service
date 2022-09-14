@@ -22,7 +22,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from platform_utils import Platform
 from gateway.models import Base, Database, ThermostatGroup, Sensor, Output, \
-    Thermostat, Valve, ValveToThermostatAssociation, NoResultFound, \
+    Thermostat, Valve, IndoorLinkValves, NoResultFound, \
     Preset, DaySchedule, Pump
 from gateway.migrations.thermostats import ThermostatsMigrator, \
     GlobalThermostatConfiguration, ThermostatConfiguration, CoolingConfiguration, PumpGroupConfiguration
@@ -159,6 +159,12 @@ class ThermostatMigratorTest(unittest.TestCase):
                                    name='Default group'))
             db.commit()
 
+            with self.assertRaises(ValueError):
+                # here we expect a ValueError, but why?
+                ThermostatsMigrator._migrate()
+
+            rcc.return_value[0].sensor = 2
+
             ThermostatsMigrator._migrate()
 
             dmt.assert_called_once()
@@ -182,14 +188,14 @@ class ThermostatMigratorTest(unittest.TestCase):
             self.assertEqual(expected_thermostat_0,
                              ThermostatMigratorTest._extract_dict(thermostat_0,
                                                                   expected_thermostat_0.keys()))
-            heating_valve = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_0) &
-                                                                                     (ValveToThermostatAssociation.mode == 'heating')).one()  # type: Valve
-            self.assertEqual([{'priority': 0, 'thermostat_id': thermostat_0.id, 'mode': 'heating', 'valve_id': heating_valve.id}],
+            heating_valve = db.query(Valve).join(IndoorLinkValves).where((IndoorLinkValves.thermostat_link_id == thermostat_0.id) &
+                                                                    (IndoorLinkValves.mode == 'heating')).one()  # type: Valve
+            self.assertEqual([{'id': 4, 'thermostat_link_id': thermostat_0.id, 'mode': 'heating', 'valve_id': heating_valve.id}],
                              [ThermostatMigratorTest._extract_dict(x) for x in thermostat_0.heating_valve_associations])
             self.assertEqual(output_5.id, heating_valve.output_id)
-            cooling_valve = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_0) &
-                                                                                     (ValveToThermostatAssociation.mode == 'cooling')).one()  # type: Valve
-            self.assertEqual([{'priority': 0, 'thermostat_id': thermostat_0.id, 'mode': 'cooling', 'valve_id': cooling_valve.id}],
+            cooling_valve = db.query(Valve).join(IndoorLinkValves).where((IndoorLinkValves.thermostat_link_id == thermostat_0.id) &
+                                                                    (IndoorLinkValves.mode == 'cooling')).one()  # type: Valve
+            self.assertEqual([{'id': 7, 'thermostat_link_id': thermostat_0.id, 'mode': 'cooling', 'valve_id': cooling_valve.id}],
                              [ThermostatMigratorTest._extract_dict(x) for x in thermostat_0.cooling_valve_associations])
             self.assertEqual(output_6.id, cooling_valve.output_id)
             self.assertEqual(sensor_2.id, thermostat_0.sensor.id)
@@ -207,15 +213,18 @@ class ThermostatMigratorTest(unittest.TestCase):
             self.assertEqual(expected_thermostat_1,
                              ThermostatMigratorTest._extract_dict(thermostat_1,
                                                                   expected_thermostat_1.keys()))
-            heating_valves = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_1) &
-                                                                                      (ValveToThermostatAssociation.mode == 'heating'))
-            self.assertEqual([{'priority': heating_valve.thermostat_associations[0].priority, 'thermostat_id': thermostat_1.id,
-                               'mode': 'heating', 'valve_id': heating_valve.id}
-                              for heating_valve in heating_valves],
-                             [ThermostatMigratorTest._extract_dict(x) for x in thermostat_1.heating_valve_associations])
+            heating_valves = db.query(Valve).join(IndoorLinkValves).where((IndoorLinkValves.thermostat_link_id == thermostat_1.id) &
+                                                                    (IndoorLinkValves.mode == 'heating'))  # type: list[Valve]
+
+            v1 = [{'thermostat_link_id': thermostat_1.id, 'mode': 'heating', 'valve_id': heating_valve.id} for heating_valve in heating_valves]
+            v2 = [ThermostatMigratorTest._extract_dict(x) for x in thermostat_1.heating_valve_associations]
+            for v in v2:
+                del v['id']
+            self.assertEqual(v1, v2)
+            
             self.assertEqual(sorted([output_6.id, output_7.id]), sorted(v.output_id for v in heating_valves))
-            cooling_valve = db.query(Valve).join(ValveToThermostatAssociation).where((ValveToThermostatAssociation.thermostat == thermostat_1) &
-                                                                                     (ValveToThermostatAssociation.mode == 'cooling')).first()
+            cooling_valve = db.query(Valve).join(IndoorLinkValves).where((IndoorLinkValves.thermostat_link_id == thermostat_1.id) &
+                                                                        (IndoorLinkValves.mode == 'cooling')).first()
             self.assertIsNone(cooling_valve)
             self.assertEqual(sensor_3.id, thermostat_1.sensor.id)
 

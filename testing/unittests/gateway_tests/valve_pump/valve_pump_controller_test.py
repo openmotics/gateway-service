@@ -27,8 +27,7 @@ import fakesleep
 from gateway.models import Base, Database, Output, Pump, \
     PumpToValveAssociation, Valve
 from gateway.output_controller import OutputController
-from gateway.thermostat.gateway.pump_valve_controller import \
-    PumpValveController
+from gateway.valve_pump.valve_pump_controller import ValvePumpController
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
@@ -68,8 +67,10 @@ class PumpValveControllerTest(unittest.TestCase):
             db.commit()
 
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
-        controller = PumpValveController()
-        controller.refresh_from_db()
+        controller = ValvePumpController()
+        controller.update_from_db()
+
+        self.assertEqual(3, len(controller._valve_drivers))
 
         self.assertIn(1, controller._valve_drivers)
         valve_driver_1 = controller.get_valve_driver(1)
@@ -85,7 +86,7 @@ class PumpValveControllerTest(unittest.TestCase):
                                           (75, 'cascade', [100, 50]),
                                           (50, 'cascade', [100, 0]),
                                           (0, 'cascade', [0, 0])]:
-            controller.set_valves(percentage, [1, 2], mode)
+            controller._set_valves(percentage, [1, 2], mode)
             self.assertEqual(results[0], valve_driver_1._desired_percentage)
             self.assertEqual(results[1], valve_driver_2._desired_percentage)
             self.assertEqual(0, valve_driver_3._desired_percentage)
@@ -108,8 +109,8 @@ class PumpValveControllerTest(unittest.TestCase):
             db.commit()
 
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
-        controller = PumpValveController()
-        controller.refresh_from_db()
+        controller = ValvePumpController()
+        controller.update_from_db()
 
         valve_driver_1 = controller.get_valve_driver(1)
         valve_driver_2 = controller.get_valve_driver(2)
@@ -126,8 +127,7 @@ class PumpValveControllerTest(unittest.TestCase):
 
         # Set the second valve to 50%
         # The pump should only be turned on after 15s
-        valve_driver_2.set(50)
-        controller.steer()
+        controller.steer(50, [2])
         self.assertFalse(pump_driver_1.state)
         self.assertEqual(0, valve_driver_1.percentage)
         self.assertEqual(50, valve_driver_2.percentage)
@@ -136,7 +136,7 @@ class PumpValveControllerTest(unittest.TestCase):
 
         # Pump still off after 10s
         time.sleep(10)
-        controller.steer()
+        controller.update_system()
         self.assertFalse(pump_driver_1.state)
         self.assertEqual(0, valve_driver_1.percentage)
         self.assertEqual(50, valve_driver_2.percentage)
@@ -145,7 +145,7 @@ class PumpValveControllerTest(unittest.TestCase):
 
         # Pump is on after 10s
         time.sleep(10)
-        controller.steer()
+        controller.update_system()
         self.assertTrue(pump_driver_1.state)
         self.assertEqual(0, valve_driver_1.percentage)
         self.assertEqual(50, valve_driver_2.percentage)
@@ -153,9 +153,7 @@ class PumpValveControllerTest(unittest.TestCase):
         self.assertEqual(0, valve_driver_3.percentage)
 
         # Other valves are also opened
-        valve_driver_1.set(100)
-        valve_driver_3.set(100)
-        controller.steer()
+        controller.steer(100, [1, 3])
         self.assertTrue(pump_driver_1.state)
         self.assertEqual(100, valve_driver_1.percentage)
         self.assertEqual(50, valve_driver_2.percentage)
@@ -164,7 +162,7 @@ class PumpValveControllerTest(unittest.TestCase):
 
         # After a time, both valves are fully open
         time.sleep(40)
-        controller.steer()
+        controller.update_system()
         self.assertTrue(pump_driver_1.state)
         self.assertEqual(100, valve_driver_1.percentage)
         self.assertEqual(50, valve_driver_2.percentage)
@@ -173,10 +171,7 @@ class PumpValveControllerTest(unittest.TestCase):
 
         # Two valves are closed again
         # When valves are closed, the pumps are stopped immediately
-        valve_driver_2.set(0)
-        valve_driver_3.set(0)
-        time.sleep(10)
-        controller.steer()
+        controller.steer(0, [2,3])
         self.assertTrue(pump_driver_1.state)
         self.assertEqual(100, valve_driver_1.percentage)
         self.assertEqual(0, valve_driver_2.percentage)

@@ -47,9 +47,9 @@ class ValveDriver(object):
     def percentage(self):  # type: () -> int
         return self._current_percentage
 
-    @property
-    def is_open(self):  # type: () -> bool
-        now_open = self._current_percentage > 0
+    def is_open(self, percentage=0):  # type: (int) -> bool
+        # return true if valve is open, return false if valve is not open or still moving
+        now_open = self._current_percentage > percentage
         return now_open if not self.in_transition else False
 
     @property

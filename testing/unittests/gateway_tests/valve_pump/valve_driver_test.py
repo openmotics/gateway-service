@@ -26,7 +26,7 @@ import fakesleep
 from gateway.models import Base, Database, Output, Pump, \
     PumpToValveAssociation, Valve
 from gateway.output_controller import OutputController
-from gateway.thermostat.gateway.valve_driver import ValveDriver
+from gateway.valve_pump.valve_driver import ValveDriver
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -69,7 +69,8 @@ class ValveDriverTest(unittest.TestCase):
 
         self.assertEqual(0, driver.percentage)
         self.assertEqual(0, driver._desired_percentage)
-        self.assertFalse(driver.is_open)
+        self.assertEqual(0, driver._current_percentage)
+        self.assertFalse(driver.is_open())
         self.assertFalse(driver.in_transition)
 
         driver.set(50)
@@ -83,13 +84,13 @@ class ValveDriverTest(unittest.TestCase):
         driver._output_controller.set_output_status.assert_called_once()
         self.assertFalse(driver.will_open)
         self.assertEqual(100, driver.percentage)
-        self.assertFalse(driver.is_open)
+        self.assertFalse(driver.is_open())
         self.assertTrue(driver.in_transition)
 
         time.sleep(20)
-        self.assertFalse(driver.is_open)
+        self.assertFalse(driver.is_open())
         self.assertTrue(driver.in_transition)
 
         time.sleep(15)
-        self.assertTrue(driver.is_open)
+        self.assertTrue(driver.is_open())
         self.assertFalse(driver.in_transition)

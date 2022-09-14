@@ -33,10 +33,11 @@ from gateway.hal.master_event import MasterEvent
 from gateway.models import Base, Database, DaySchedule, Output, \
     OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
     Room, Sensor, Thermostat, ThermostatGroup, Valve, \
-    ValveToThermostatAssociation
+    IndoorLinkValves
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
+from gateway.valve_pump.valve_pump_controller import ValvePumpController
 from gateway.sensor_controller import SensorController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
@@ -44,7 +45,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
 MODELS = [Pump, Output, Valve, PumpToValveAssociation, Thermostat,
-          ThermostatGroup, ValveToThermostatAssociation, Room, Sensor, Preset,
+          ThermostatGroup, IndoorLinkValves, Room, Sensor, Preset,
           OutputToThermostatGroupAssociation, DaySchedule]
 
 
@@ -74,10 +75,12 @@ class ThermostatControllerTest(unittest.TestCase):
         sensor_controller = mock.Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self.scheduling_controller = mock.Mock(SchedulingController)
+        valve_pump_controller = ValvePumpController()
         SetUpTestInjections(pubsub=self.pubsub,
                             scheduling_controller=self.scheduling_controller,
                             output_controller=self.output_controller,
-                            sensor_controller=sensor_controller)
+                            sensor_controller=sensor_controller,
+                            valve_pump_controller=valve_pump_controller)
         self.controller = ThermostatControllerGateway()
         self.controller._sync_auto_setpoints = False
         SetUpTestInjections(thermostat_controller=self.controller)
@@ -115,10 +118,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 
@@ -153,10 +156,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 
@@ -213,18 +216,18 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
-                ValveToThermostatAssociation(mode='cooling',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 9)',
-                                                         output=Output(number=9))),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 10)',
-                                                         output=Output(number=10))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
+                IndoorLinkValves(mode='cooling',
+                                 thermostat_link_id=1,
+                                 valve=Valve(name='Valve (output 9)',
+                                             output=Output(number=9))),
+                IndoorLinkValves(mode='heating',
+                                 thermostat_link_id=1,
+                                 valve=Valve(name='Valve (output 10)',
+                                             output=Output(number=10))),
             ])
             db.commit()
 
@@ -300,10 +303,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
                 Sensor(source='master', external_id='11', physical_quantity='temperature', name=''),
                 Output(number=0),
                 Output(number=1),
@@ -401,10 +404,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
                 OutputToThermostatGroupAssociation(thermostat_group_id=1,
                                                    mode='heating',
                                                    value=100,
@@ -523,10 +526,10 @@ class ThermostatControllerTest(unittest.TestCase):
                            valve_config='equal',
                            sensor=Sensor(source='master', external_id='10', physical_quantity='temperature', name=''),
                            group=ThermostatGroup(number=0, name='thermostat group', threshold_temperature=10.0, mode='heating')),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 
@@ -579,10 +582,10 @@ class ThermostatControllerTest(unittest.TestCase):
                            valve_config='equal',
                            sensor=Sensor(source='master', external_id='10', physical_quantity='temperature', name=''),
                            group=ThermostatGroup(number=0, name='thermostat group', threshold_temperature=10.0, mode='heating')),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 

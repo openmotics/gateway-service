@@ -32,9 +32,8 @@ from gateway.models import Database, DaySchedule, Output, \
     Schedule, Sensor, Thermostat, ThermostatGroup, Valve, \
     ValveToThermostatAssociation
 from gateway.pubsub import PubSub
+from gateway.valve_pump.valve_pump_controller import ValvePumpController
 from gateway.scheduling_controller import SchedulingController
-from gateway.thermostat.gateway.pump_valve_controller import \
-    PumpValveController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
 from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
@@ -57,18 +56,17 @@ class ThermostatControllerGateway(ThermostatController):
     PUMP_UPDATE_INTERVAL = 30
 
     @Inject
-    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED):
-        # type: (OutputController, SensorController, SchedulingController, PubSub) -> None
+    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED, valve_pump_controller=INJECTED):
+        # type: (OutputController, SensorController, SchedulingController, PubSub, ValvePumpController) -> None
         super(ThermostatControllerGateway, self).__init__(output_controller)
         self._sensor_controller = sensor_controller
         self._scheduling_controller = scheduling_controller
         self._pubsub = pubsub
+        self._valve_pump_controller = valve_pump_controller
         self._running = False
         self._sync_auto_setpoints = True
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
-        self._update_pumps_thread = None  # type: Optional[DaemonThread]
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
-        self._pump_valve_controller = PumpValveController()
 
         self._pubsub.subscribe_gateway_events(PubSub.GatewayTopics.SCHEDULER, self._handle_scheduler_event)
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.THERMOSTAT, self._handle_master_event)
@@ -87,10 +85,6 @@ class ThermostatControllerGateway(ThermostatController):
                                                  interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
             self._pid_loop_thread.start()
 
-            self._update_pumps_thread = DaemonThread(name='thermostatpumps',
-                                                     target=self._update_pumps,
-                                                     interval=self.PUMP_UPDATE_INTERVAL)
-            self._update_pumps_thread.start()
             super(ThermostatControllerGateway, self).start()
             logger.info('Starting gateway thermostatcontroller... Done')
         else:
@@ -102,8 +96,6 @@ class ThermostatControllerGateway(ThermostatController):
         self._running = False
         if self._pid_loop_thread is not None:
             self._pid_loop_thread.stop()
-        if self._update_pumps_thread is not None:
-            self._update_pumps_thread.stop()
         super(ThermostatControllerGateway, self).stop()
 
     def _pid_tick(self):  # type: () -> None
@@ -155,9 +147,11 @@ class ThermostatControllerGateway(ThermostatController):
                         self.set_current_preset(thermostat_nr, preset_type=preset)
                     logger.info('Changed preset for all Thermostats to {0} by master event'.format(preset))
 
+
     def refresh_config_from_db(self):  # type: () -> None
         self.refresh_thermostats_from_db()
-        self._pump_valve_controller.refresh_from_db()
+        self._valve_pump_controller.update_from_db()
+
 
     def refresh_thermostats_from_db(self):  # type: () -> None
         self._sync_auto_presets()
@@ -167,7 +161,7 @@ class ThermostatControllerGateway(ThermostatController):
                 removed_thermostats.discard(thermostat.number)
                 pid = self.thermostat_pids.get(thermostat.number)
                 if pid is None:
-                    pid = ThermostatPid(thermostat, self._pump_valve_controller)
+                    pid = ThermostatPid(thermostat)
                     pid.subscribe_state_changes(self._thermostat_changed)
                     self.thermostat_pids[thermostat.number] = pid
             # TODO: Delete stale/removed thermostats
@@ -181,12 +175,6 @@ class ThermostatControllerGateway(ThermostatController):
                 if pid:
                     pid.update_thermostat()
                     pid.tick()
-
-    def _update_pumps(self):  # type: () -> None
-        try:
-            self._pump_valve_controller.steer()
-        except Exception:
-            logger.exception('Could not update pumps.')
 
     def _sync(self):  # type: () -> None
         # refresh the config from the database

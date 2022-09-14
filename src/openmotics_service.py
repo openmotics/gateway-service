@@ -47,6 +47,7 @@ if False:  # MYPY
     from gateway.authentication_controller import AuthenticationController
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.output_controller import OutputController
+    from gateway.valve_pump.valve_pump_controller import ValvePumpController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
     from gateway.maintenance_controller import MaintenanceController

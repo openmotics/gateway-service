@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.models import DaySchedule, Output, Preset, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
+    Thermostat, ThermostatGroup, Valve, IndoorLinkValves
 
 if False:  # MYPY
     from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple
@@ -116,13 +116,14 @@ class ThermostatMapper(object):
             raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(thermostat.sensor.id, thermostat.sensor.physical_quantity))
         return thermostat
 
-    def get_valve_links(self, thermostat_dto, mode):  # type: (ThermostatDTO, str) -> Tuple[List[ValveToThermostatAssociation], List[ValveToThermostatAssociation]]
+    def get_valve_links(self, thermostat_dto, mode):  # type: (ThermostatDTO, str) -> Tuple[List[IndoorLinkValves], List[IndoorLinkValves]]
+        # in the return tuple, the first List contains updated IndoorLinkValves and the second List contains removed IndoorLinkValves
         thermostat = self._db.query(Thermostat) \
             .where(Thermostat.number == thermostat_dto.id) \
             .one()  # type: Thermostat
 
         outputs = {x.number: x for x in self._db.query(Output).join(Valve, isouter=True)}  # type: Dict[int,Output]
-        valve_associations = iter(getattr(thermostat, '{0}_valve_associations'.format(mode))) # type: Iterator[ValveToThermostatAssociation]
+        valve_associations = iter(getattr(thermostat, '{0}_valve_associations'.format(mode))) # type: Iterator[IndoorLinkValves]
 
         links = []
         for field, priority in [('output0', 0),
@@ -135,16 +136,15 @@ class ThermostatMapper(object):
                         valve = Valve(output=output, name='Valve (output {0})'.format(output.number))
                     association = next(valve_associations, None)
                     if association is None:
-                        links.append(ValveToThermostatAssociation(
-                            thermostat=thermostat,
+                        links.append(IndoorLinkValves(
+                            thermostat_link_id=thermostat.id,
                             valve=valve,
-                            priority=priority,
                             mode=mode,
                         ))
                     else:
-                        if association.valve_id != valve.id or association.priority != priority:
+                        # if association.valve_id != valve.id or association.priority != priority: (this is the old if)
+                        if association.valve_id != valve.id:
                             association.valve = valve
-                            association.priority = priority
                             links.append(association)
         return links, list(valve_associations)
 
