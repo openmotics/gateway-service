@@ -26,8 +26,10 @@ from sqlalchemy.orm import RelationshipProperty, relationship, \
     scoped_session, sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import MetaData
+# from sqlalchemy_utils import ChoiceType
 from sqlite3 import Connection as SQLite3Connection
 from sqlalchemy import event
+
 import constants
 
 
@@ -378,31 +380,47 @@ class ThermostatGroup(Base, MasterNumber):
 
     sensor = relationship('Sensor')  # type: RelationshipProperty[Optional[Sensor]]
     thermostats = relationship('Thermostat', back_populates='group')  # type: RelationshipProperty[List[Thermostat]]
-    outputs = relationship('Output', secondary='outputtothermostatgroup')  # type: RelationshipProperty[List[Output]]
+    outputs = relationship('Output', secondary='hvac_output_link')  # type: RelationshipProperty[List[Output]]
 
-    heating_output_associations = relationship('OutputToThermostatGroupAssociation',
-                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "heating")',
-                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
-                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
-    cooling_output_associations = relationship('OutputToThermostatGroupAssociation',
-                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "cooling")',
-                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
-                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
+    heating_output_associations = relationship('HvacOutputLink',
+                                               primaryjoin='and_(ThermostatGroup.id == HvacOutputLink.hvac_id, HvacOutputLink.mode == "heating")',
+                                               order_by='asc(HvacOutputLink.id)',
+                                               back_populates='hvac')  # type: RelationshipProperty[List[HvacOutputLink]]
+    cooling_output_associations = relationship('HvacOutputLink',
+                                               primaryjoin='and_(ThermostatGroup.id == HvacOutputLink.hvac_id, HvacOutputLink.mode == "cooling")',
+                                               order_by='asc(HvacOutputLink.id)',
+                                               back_populates='hvac')  # type: RelationshipProperty[List[HvacOutputLink]]
 
 
-class OutputToThermostatGroupAssociation(Base):
-    __tablename__ = 'outputtothermostatgroup'
-    __table_args__ = {'sqlite_autoincrement': True}
 
-    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), primary_key=True)
-    thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), primary_key=True)
-    mode = Column(String(255), nullable=False, primary_key=True)  # The mode this config is used for. Options: 'heating' or 'cooling'
 
-    index = Column(Integer, nullable=False)  # The index of this output in the config 0-3
-    value = Column(Integer, nullable=False)  # The value that needs to be set on the output when in this mode (0-100)
+# thermostatsV2
+class HvacOutputLink(Base):
+    class Modes(object):
+        HEATING = 'heating'
+        COOLING = 'cooling'
+        OFF = 'off'
+        
+
+    __tablename__ = "hvac_output_link"
+    __table_args__ = (
+        UniqueConstraint('hvac_id', 'output_id', 'mode'),
+        {'sqlite_autoincrement': True},
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # hvac_id = Column(Integer, ForeignKey('hvac.id', ondelete='CASCADE'), nullable=False)
+    hvac_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), nullable=False)  # todo: currently this is the id of thermostat_group_id but setting name for future changes
+    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), nullable=False)
+    mode = Column(String, nullable=False, default='heating')  # The mode this config is used for
+
+    value = Column(Integer, nullable=False, default=100)  # The value that needs to be set on the output when in this mode (0-100)
 
     output = relationship('Output')
-    thermostat_group = relationship('ThermostatGroup')
+    hvac = relationship('ThermostatGroup')
+
+
 
 
 class PumpToValveAssociation(Base):

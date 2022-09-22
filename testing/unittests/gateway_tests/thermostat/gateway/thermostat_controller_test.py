@@ -31,7 +31,7 @@ from gateway.dto import OutputStatusDTO, PumpGroupDTO, ScheduleDTO, \
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Base, Database, DaySchedule, Output, \
-    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
+    HvacOutputLink, Preset, Pump, PumpToValveAssociation, \
     Room, Sensor, Thermostat, ThermostatGroup, Valve, \
     IndoorLinkValves
 from gateway.output_controller import OutputController
@@ -46,7 +46,8 @@ from logs import Logs
 
 MODELS = [Pump, Output, Valve, PumpToValveAssociation, Thermostat,
           ThermostatGroup, IndoorLinkValves, Room, Sensor, Preset,
-          OutputToThermostatGroupAssociation, DaySchedule]
+          HvacOutputLink, DaySchedule]
+
 
 
 class ThermostatControllerTest(unittest.TestCase):
@@ -340,15 +341,15 @@ class ThermostatControllerTest(unittest.TestCase):
         with self.session as db:
             group = db.query(ThermostatGroup).filter_by(number=0).one()
             self.assertEqual(15.0, group.threshold_temperature)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.heating_output_associations]
             self.assertEqual(2, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 0, 'mode': 'heating', 'output': 0}, associations)
-            self.assertIn({'index': 1, 'value': 100, 'mode': 'heating', 'output': 1}, associations)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            self.assertIn({'value': 0, 'mode': 'heating', 'output': 0}, associations)
+            self.assertIn({'value': 100, 'mode': 'heating', 'output': 1}, associations)
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.cooling_output_associations]
             self.assertEqual(1, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 100, 'mode': 'cooling', 'output': 2}, associations)
+            self.assertIn({'value': 100, 'mode': 'cooling', 'output': 2}, associations)
 
         new_thermostat_group_dto = ThermostatGroupDTO(id=0,
                                                       name='Default',
@@ -367,14 +368,14 @@ class ThermostatControllerTest(unittest.TestCase):
             group = db.query(ThermostatGroup).filter_by(number=0).one()
             self.assertIsNone(group.sensor)
             self.assertIsNone(group.threshold_temperature)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.heating_output_associations]
             self.assertEqual(1, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 50, 'mode': 'heating', 'output': 0}, associations)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            self.assertIn({'value': 50, 'mode': 'heating', 'output': 0}, associations)
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.cooling_output_associations]
             self.assertEqual(1, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 0, 'mode': 'cooling', 'output': 2}, associations)
+            self.assertIn({'value': 0, 'mode': 'cooling', 'output': 2}, associations)
 
         self.assertEqual(new_thermostat_group_dto, self.controller.load_thermostat_group(0))
 
@@ -408,16 +409,14 @@ class ThermostatControllerTest(unittest.TestCase):
                                 thermostat_link_id=1,
                                 valve=Valve(name='Valve (output 8)',
                                             output=Output(number=8))),
-                OutputToThermostatGroupAssociation(thermostat_group_id=1,
-                                                   mode='heating',
-                                                   value=100,
-                                                   index=0,
-                                                   output=Output(number=0)),
-                OutputToThermostatGroupAssociation(thermostat_group_id=1,
-                                                   mode='cooling',
-                                                   value=0,
-                                                   index=0,
-                                                   output=Output(number=1)),
+                HvacOutputLink(hvac_id=1,
+                               mode='heating',
+                               value=100,
+                               output=Output(number=0)),
+                HvacOutputLink(hvac_id=1,
+                               mode='cooling',
+                               value=0,
+                               output=Output(number=1)),
             ])
             db.commit()
 

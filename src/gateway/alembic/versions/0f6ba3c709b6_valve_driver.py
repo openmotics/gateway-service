@@ -1,7 +1,7 @@
 """valve_driver
 
 Revision ID: 0f6ba3c709b6
-Revises: 9813cf3ca8f3
+Revises: dd7b74eca352
 Create Date: 2022-08-23 16:33:18.326993
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '0f6ba3c709b6'
-down_revision = '9813cf3ca8f3'
+down_revision = 'dd7b74eca352'
 branch_labels = None
 depends_on = None
 

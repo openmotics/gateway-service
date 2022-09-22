@@ -19,7 +19,7 @@ from datetime import timedelta
 
 from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import Database, DaySchedule, Feature, Output, \
-    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, Room, Sensor, \
+    Preset, Pump, PumpToValveAssociation, Room, Sensor, \
     Thermostat, ThermostatGroup, Valve, IndoorLinkValves
 
 from ioc import INJECTED, Inject
@@ -267,7 +267,7 @@ class ThermostatsMigrator(BaseMigrator):
         # Remove all existing gateway configuration
         with Database.get_session() as db:
             db.query(Thermostat).delete()
-            db.query(OutputToThermostatGroupAssociation).delete()
+            # db.query(OutputToThermostatGroupAssociation).delete()
             db.query(Pump).delete()
             db.query(Valve).delete()
 

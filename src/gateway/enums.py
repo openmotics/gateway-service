@@ -84,6 +84,7 @@ class UserEnums(object):
 
 
 class ThermostatMode(object):
+    OFF     = 'off'      # type: Literal['off']
     COOLING = 'cooling'  # type: Literal['cooling']
     HEATING = 'heating'  # type: Literal['heating']
 

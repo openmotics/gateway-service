@@ -28,14 +28,18 @@ from gateway.exceptions import UnsupportedException
 from gateway.hal.master_event import MasterEvent
 from gateway.mappers import ThermostatMapper
 from gateway.models import Database, DaySchedule, Output, \
-    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
-    Schedule, Sensor, Thermostat, ThermostatGroup, Valve, \
-    IndoorLinkValves
+    HvacOutputLink, Preset, Pump, Sensor, Thermostat, \
+    ThermostatGroup, Valve
+#    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
+#    Schedule, Sensor, Thermostat, ThermostatGroup, Valve, \
+#    IndoorLinkValves
+
 from gateway.pubsub import PubSub
 from gateway.valve_pump.valve_pump_controller import ValvePumpController
 from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
 from gateway.thermostat.thermostat_controller import ThermostatController
+from gateway.thermostat.gateway.hvac_drivers import HvacContactDriver
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
@@ -70,6 +74,8 @@ class ThermostatControllerGateway(ThermostatController):
 
         self._pubsub.subscribe_gateway_events(PubSub.GatewayTopics.SCHEDULER, self._handle_scheduler_event)
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.THERMOSTAT, self._handle_master_event)
+
+        self._drivers = {}  # type: Dict[int, HvacContactDriver]
 
     def get_features(self):
         # type: () -> Set[str]
@@ -152,6 +158,10 @@ class ThermostatControllerGateway(ThermostatController):
         self.refresh_thermostats_from_db()
         self._valve_pump_controller.update_from_db()
 
+
+        # update heating/cooling output drivers
+        for key, driver in self._drivers.items():
+            driver._update_from_database()
 
     def refresh_thermostats_from_db(self):  # type: () -> None
         self._sync_auto_presets()
@@ -424,12 +434,19 @@ class ThermostatControllerGateway(ThermostatController):
 
     def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
         # type: (int, Optional[str], Optional[str]) -> None
+
+        # check if a driver already exists, create a driver if not
+        if thermostat_group_id not in self._drivers:
+            self._drivers[thermostat_group_id] = HvacContactDriver(thermostat_group_id)
+        # fetch the driver for this thermostat group
+        driver = self._drivers[thermostat_group_id]
+
         with Database.get_session() as db:
             thermostat_group = db.query(ThermostatGroup).filter_by(number=thermostat_group_id).one()  # type: ThermostatGroup
             changed = False
             if mode is not None and thermostat_group.mode != mode:
                 thermostat_group.mode = mode
-                self._set_mode_outputs(thermostat_group)
+                driver.steer(mode=mode)
                 self._thermostat_group_changed(thermostat_group)
                 changed = True
             if changed or state is not None:
@@ -444,13 +461,6 @@ class ThermostatControllerGateway(ThermostatController):
             if changed:
                 for thermostat in thermostat_group.thermostats:
                     self.tick_thermostat(thermostat.number)
-
-    def _set_mode_outputs(self, thermostat_group):  # type: (ThermostatGroup) -> None
-        associations = getattr(thermostat_group, '{0}_output_associations'.format(thermostat_group.mode))  # type: List[OutputToThermostatGroupAssociation]
-        for output_to_thermostat_group in associations:
-            self._output_controller.set_output_status(output_id=output_to_thermostat_group.output.number,
-                                                      is_on=output_to_thermostat_group.value > 0,
-                                                      dimmer=output_to_thermostat_group.value)
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         mode = ThermostatMode.HEATING
@@ -599,17 +609,27 @@ class ThermostatControllerGateway(ThermostatController):
                                                       pump_delay=pump_delay)
             for mode, associations in [(ThermostatGroup.Modes.HEATING, group.heating_output_associations),
                                        (ThermostatGroup.Modes.COOLING, group.cooling_output_associations)]:
+                index = 0
                 for output_to_thermostat_group in associations:
-                    field = 'switch_to_{0}_{1}'.format(mode, output_to_thermostat_group.index)
+                    field = 'switch_to_{0}_{1}'.format(mode, index)
                     setattr(thermostat_group_dto, field, (output_to_thermostat_group.output.number, output_to_thermostat_group.value))
+                    index += 1
             return thermostat_group_dto
+
+
 
     def save_thermostat_groups(self, thermostat_groups):  # type: (List[ThermostatGroupDTO]) -> None
         # Update thermostat group configuration
         logger.debug('saving %s', thermostat_groups)
         with Database.get_session() as db:
+
+            # get all available groups from the database as a dictionary Dict[group_number, ThermostatGroup]
             groups = {x.number: x for x in db.query(ThermostatGroup)}  # type: Dict[int, ThermostatGroup]
+
+            # loop over all the new information from the api call
             for thermostat_group_dto in thermostat_groups:
+
+                # get the group database object & update information
                 thermostat_group = groups.get(thermostat_group_dto.id)
                 if thermostat_group is None:
                     logger.info('creating <ThermostatGroup %s>', thermostat_group_dto.id)
@@ -630,38 +650,49 @@ class ThermostatControllerGateway(ThermostatController):
                 if thermostat_group in db.dirty:
                     self._thermostat_group_changed(thermostat_group)
 
-                # Link configuration outputs to global thermostat config
+                # Link configuration outputs to global thermostat config, from here on we update the outputs linked to a group
                 for mode, associations in [(ThermostatMode.HEATING, thermostat_group.heating_output_associations),
-                                           (ThermostatMode.COOLING, thermostat_group.cooling_output_associations)]:
+                                           (ThermostatMode.COOLING, thermostat_group.cooling_output_associations)
+                                           # (thermostatMode.OFF, thermostat_group.off_output_associations)
+                                           ]:
+
+                    # we currently allow 4 connections for both heating and cooling (8 total)
                     for i in range(4):
                         field = 'switch_to_{0}_{1}'.format(mode, i)
+
+                        # check if this field is provided in the api call / dto object
                         if field not in thermostat_group_dto.loaded_fields:
                             continue
 
+                        # check if an association exists
                         try:
-                            output_to_thermostat_group = associations[i]
+                            hvac_output_link = associations[i]  # type: Optional[HvacOutputLink]
                         except IndexError:
-                            output_to_thermostat_group = None
-                        data = getattr(thermostat_group_dto, field)
+                            hvac_output_link = None
+
+                        data = getattr(thermostat_group_dto, field)  # type: Tuple[int, int]
                         if data is None:
-                            if output_to_thermostat_group is not None:
-                                db.delete(output_to_thermostat_group)
+                            if hvac_output_link is not None:
+                                db.delete(hvac_output_link)
                         else:
                             output_number, value = data
                             output = db.query(Output).filter_by(number=output_number).one()  # type: Output
-                            if output_to_thermostat_group is None:
+
+                            # create new output entry if none exists
+                            if hvac_output_link is None:
                                 db.add(
-                                    OutputToThermostatGroupAssociation(
-                                        thermostat_group=thermostat_group,
+                                    HvacOutputLink(
+                                        hvac=thermostat_group,
                                         mode=mode,
-                                        index=i,
                                         output=output,
                                         value=value
                                     )
                                 )
+
+                            # update output entry if one exists
                             else:
-                                output_to_thermostat_group.output = output
-                                output_to_thermostat_group.value = value
+                                hvac_output_link.output = output
+                                hvac_output_link.value = value
 
                 if 'pump_delay' in thermostat_group_dto.loaded_fields:
                     # Set valve delay for all valves in this group
@@ -673,6 +704,8 @@ class ThermostatControllerGateway(ThermostatController):
             db.commit()
         if self._sync_thread:
             self._sync_thread.request_single_run()
+
+
 
     def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
         with Database.get_session() as db:

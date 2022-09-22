@@ -27,8 +27,10 @@ from gateway.hal.mappers_classic import PumpGroupMapper
 from gateway.mappers.thermostat import ThermostatMapper, \
     ThermostatScheduleMapper
 from gateway.models import Base, Database, DaySchedule, Feature, Output, \
-    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
-    Room, Sensor, Thermostat, ThermostatGroup, Valve, IndoorLinkValves
+    HvacOutputLink, Preset, Pump, PumpToValveAssociation, \
+    Room, Sensor, Thermostat, ThermostatGroup, Valve, \
+    IndoorLinkValves
+    
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 from master.classic.eeprom_models import PumpGroupConfiguration
