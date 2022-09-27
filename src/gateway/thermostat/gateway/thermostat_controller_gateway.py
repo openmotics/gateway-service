@@ -40,6 +40,7 @@ from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.thermostat.gateway.hvac_drivers import HvacContactDriver
+from gateway.thermostat.gateway.setpoint_controller import SetpointController
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
@@ -60,11 +61,11 @@ class ThermostatControllerGateway(ThermostatController):
     PUMP_UPDATE_INTERVAL = 30
 
     @Inject
-    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED, valve_pump_controller=INJECTED):
-        # type: (OutputController, SensorController, SchedulingController, PubSub, ValvePumpController) -> None
+    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, setpoint_controller=INJECTED, pubsub=INJECTED, valve_pump_controller=INJECTED):
+        # type: (OutputController, SensorController, SetpointController, PubSub, ValvePumpController) -> None
         super(ThermostatControllerGateway, self).__init__(output_controller)
         self._sensor_controller = sensor_controller
-        self._scheduling_controller = scheduling_controller
+        self._setpoint_controller = setpoint_controller
         self._pubsub = pubsub
         self._valve_pump_controller = valve_pump_controller
         self._running = False
@@ -150,7 +151,9 @@ class ThermostatControllerGateway(ThermostatController):
                         stmt = select(Thermostat.number)  # type: ignore
                         numbers = db.execute(stmt).scalars()
                     for thermostat_nr in numbers:
-                        self.set_current_preset(thermostat_nr, preset_type=preset)
+                        thermostat_id = self._thermostatnr_to_thermostatid(thermostat_nr)
+                        if thermostat_id is not None:
+                            self._setpoint_controller.set_current_preset(thermostat_id=thermostat_id, preset_type=preset)
                     logger.info('Changed preset for all Thermostats to {0} by master event'.format(preset))
 
 
@@ -214,6 +217,7 @@ class ThermostatControllerGateway(ThermostatController):
                 logger.exception('Could not publish %s', pid)
 
     def _sync_auto_presets(self):
+        # update preset table auto column when "_sync_auto_setpoints" is True for ?all thermostats
         # type: () -> None
         if not self._sync_auto_setpoints:
             return
@@ -232,7 +236,7 @@ class ThermostatControllerGateway(ThermostatController):
                                 schedule = DaySchedule(index=i, thermostat=preset.thermostat, mode=mode)
                                 schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
                                 day_schedules.append(schedule)
-                        _, setpoint = self._scheduling_controller.last_thermostat_setpoint(day_schedules)
+                        _, setpoint = self._setpoint_controller.last_thermostat_setpoint(day_schedules)
                         setattr(preset, field, setpoint)
                     except StopIteration:
                         logger.warning('could not determine %s setpoint from schedule', mode)
@@ -245,90 +249,23 @@ class ThermostatControllerGateway(ThermostatController):
                 thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()  # type: Thermostat
                 for mode, day_schedules in [(ThermostatGroup.Modes.HEATING, thermostat.heating_schedules),
                                             (ThermostatGroup.Modes.COOLING, thermostat.cooling_schedules)]:
-                    self._scheduling_controller.update_thermostat_setpoints(thermostat_id, mode, day_schedules)
+                    self._setpoint_controller.update_thermostat_setpoints(thermostat_id, mode, day_schedules)
 
     def set_current_setpoint(self, thermostat_id, temperature=None, heating_temperature=None, cooling_temperature=None):
         # type: (int, Optional[float], Optional[float], Optional[float]) -> None
         with Database.get_session() as db:
             thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()
-            self._set_current_setpoint(thermostat,
+            self._setpoint_controller._overrule_current_setpoint(thermostat,
                                        temperature=temperature,
                                        heating_temperature=heating_temperature,
                                        cooling_temperature=cooling_temperature)
             db.commit()
         self.tick_thermostat(thermostat_id)
 
-    def _set_current_setpoint(self, thermostat, temperature=None, heating_temperature=None, cooling_temperature=None):
-        # type: (Thermostat, Optional[float], Optional[float], Optional[float]) -> bool
-        if temperature is None and heating_temperature is None and cooling_temperature is None:
-            return False
-
-        # When setting a setpoint manually, switch to manual preset except for when we are in scheduled mode
-        # scheduled mode will override the setpoint when the next edge in the schedule is triggered
-        active_preset = thermostat.active_preset  # type: Optional[Preset]
-        if active_preset is None or active_preset.type not in [Preset.Types.AUTO, Preset.Types.MANUAL]:
-            active_preset = next((x for x in thermostat.presets if x.type == Preset.Types.MANUAL), None)
-            if active_preset is None:
-                active_preset = Preset(type=Preset.Types.MANUAL)
-                thermostat.presets.append(active_preset)
-            for p in thermostat.presets:
-                p.active = False
-            active_preset.active = True
-
-        if heating_temperature is None:
-            heating_temperature = temperature
-        if heating_temperature is not None:
-            active_preset.heating_setpoint = float(heating_temperature)  # type: ignore
-
-        if cooling_temperature is None:
-            cooling_temperature = temperature
-        if cooling_temperature is not None:
-            active_preset.cooling_setpoint = float(cooling_temperature)  # type: ignore
-        return True
-
     def get_current_preset(self, thermostat_number):  # type: (int) -> str
         with Database.get_session() as db:
             thermostat = db.query(Thermostat).filter_by(number=thermostat_number).one()  # type: Thermostat
             return thermostat.active_preset.type
-
-    def set_current_preset(self, thermostat_id, preset_type):  # type: (int, str) -> None
-        with Database.get_session() as db:
-            thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()  # type: Thermostat
-            self._set_current_preset(thermostat, preset_type=preset_type)
-            change = bool(db.dirty)
-            db.commit()
-        if change:
-            self.tick_thermostat(thermostat_id)
-
-    def _set_current_preset(self, thermostat, preset_type):
-        # type: (Thermostat, str) -> None
-        preset = next((x for x in thermostat.presets if x.type == preset_type), None)  # type: Optional[Preset]
-        if preset is None:
-            preset = Preset(thermostat=thermostat, type=preset_type,
-                            heating_setpoint=Preset.DEFAULT_PRESETS['heating'].get(preset_type, 14.0),
-                            cooling_setpoint=Preset.DEFAULT_PRESETS['cooling'].get(preset_type, 30.0))  # type: ignore
-
-        if preset.type == Preset.Types.AUTO:
-            # Restore setpoint from auto schedule.
-            now = datetime.now()
-            items = [(ThermostatGroup.Modes.HEATING, 'heating_setpoint', thermostat.heating_schedules),
-                     (ThermostatGroup.Modes.COOLING, 'cooling_setpoint', thermostat.cooling_schedules)]
-            for mode, field, day_schedules in items:
-                try:
-                    if not day_schedules:
-                        for i in range(7):
-                            schedule = DaySchedule(index=i, thermostat=thermostat, mode=mode)
-                            schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
-                            day_schedules.append(schedule)
-                    _, setpoint = self._scheduling_controller.last_thermostat_setpoint(day_schedules)
-                    setattr(preset, field, setpoint)
-                except StopIteration:
-                    logger.warning('could not determine %s setpoint from schedule', mode)
-
-        if thermostat.active_preset != preset:
-            for p in thermostat.presets:
-                p.active = False
-            preset.active = True
 
     def _set_current_state(self, thermostat, state):
         # type: (Thermostat, str) -> None
@@ -454,7 +391,7 @@ class ThermostatControllerGateway(ThermostatController):
                     if state is not None:
                         self._set_current_state(thermostat,
                                                 state=state)
-                    self._set_current_preset(thermostat=thermostat,
+                    self._setpoint_controller._set_current_preset(thermostat=thermostat,
                                              preset_type=Preset.Types.AUTO)
             change = bool(db.dirty)
             db.commit()
@@ -543,7 +480,7 @@ class ThermostatControllerGateway(ThermostatController):
                 preset_type = Preset.Types.AUTO  # type: str
             else:
                 preset_type = Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.AUTO)
-            self._set_current_preset(thermostat, preset_type=preset_type)
+            self._setpoint_controller._set_current_preset(thermostat, preset_type=preset_type)
             change = bool(db.dirty)
             db.commit()
         if change:
@@ -555,14 +492,14 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()
             change = False
             if preset is not None:
-                self._set_current_preset(thermostat,
+                self._setpoint_controller._set_current_preset(thermostat,
                                          preset_type=preset)
             if state is not None:
                 self._set_current_state(thermostat=thermostat,
                                         state=state)
             if temperature is not None:
-                self._set_current_setpoint(thermostat=thermostat,
-                                           temperature=temperature)
+                self._setpoint_controller._overrule_current_setpoint(thermostat=thermostat,
+                                                               temperature=temperature)
             change = bool(db.dirty)
             db.commit()
         if change:
@@ -830,6 +767,14 @@ class ThermostatControllerGateway(ThermostatController):
                                      {'id': thermostat_group.number,
                                       'status': {'mode': thermostat_group.mode.upper()}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
+
+    def _thermostatnr_to_thermostatid(self, thermostat_nr):  # type: (int) -> Optional[int]
+        with Database.get_session() as db:
+            thermostat = db.query(Thermostat).filter_by(number=thermostat_nr).one_or_none()  # type: Optional[ThermostatGroup]
+        if thermostat is not None:
+            return thermostat.id
+        return None
+
 
     # Obsolete unsupported calls
 

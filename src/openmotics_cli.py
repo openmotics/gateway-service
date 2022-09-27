@@ -92,6 +92,7 @@ def cmd_shell(args):
           pulse_counter_controller=INJECTED,
           room_controller=INJECTED,
           scheduling_controller=INJECTED,
+          setpoint_controller=INJECTED,
           sensor_controller=INJECTED,
           shutter_controller=INJECTED,
           thermostat_controller=INJECTED,

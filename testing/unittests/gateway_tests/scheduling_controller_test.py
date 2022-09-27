@@ -32,6 +32,7 @@ from gateway.hal.master_controller import MasterController
 from gateway.models import Base, Database, DaySchedule, Schedule
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
+from gateway.thermostat.gateway.setpoint_controller import SetpointController
 from gateway.system_controller import SystemController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
@@ -62,6 +63,7 @@ class SchedulingControllerTest(unittest.TestCase):
 
         self.group_action_controller = mock.Mock(GroupActionController)
         self.master_controller = mock.Mock(MasterController)
+
         SetUpTestInjections(master_controller=self.master_controller,
                             message_client=None,
                             module_controller=None,
@@ -83,98 +85,80 @@ class SchedulingControllerTest(unittest.TestCase):
                             update_controller=None,
                             event_sender=None,
                             user_controller=None,
-                            ventilation_controller=None)
-        self.controller = SchedulingController()
-        SetUpTestInjections(scheduling_controller=self.controller)
+                            ventilation_controller=None,
+                            hvac_controller=None)
+
+        self.scheduling_controller = SchedulingController()
+        SetUpTestInjections(scheduling_controller=self.scheduling_controller)
+        self.setpoint_controller = SetpointController()
+
         self.web_interface = WebInterface()
-        self.controller.set_webinterface(self.web_interface)
+        self.scheduling_controller.set_webinterface(self.web_interface)
         self.scheduler = mock.Mock(BackgroundScheduler)
         self.scheduler.get_job.return_value = None
-        self.controller._scheduler = self.scheduler
+        self.scheduling_controller._scheduler = self.scheduler
         # patch: do not wait to async sync_configuration using a new thread, but directly sync inline for testing
-        mock_refresh = mock.patch.object(self.controller, 'refresh_schedules',
-                                         side_effect=self.controller._sync_configuration)
+        mock_refresh = mock.patch.object(self.scheduling_controller, 'refresh_schedules',
+                                         side_effect=self.scheduling_controller._sync_configuration)
         mock_refresh.start()
-        self.controller._scheduler.start()
+        self.scheduling_controller._scheduler.start()
 
     def tearDown(self):
-        self.controller.stop()
+        self.scheduling_controller.stop()
 
     def test_save_load(self):
         dto = ScheduleDTO(id=None, name='schedule', start=0, action='GROUP_ACTION', arguments=0)
-        self.controller.save_schedules([dto])
-        loaded_dto = self.controller.load_schedule(schedule_id=1)
+        self.scheduling_controller.save_schedules([dto])
+        loaded_dto = self.scheduling_controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
-        self.controller._schedules = {}  # Clear internal cache
-        self.controller._sync_configuration()
-        loaded_dto = self.controller.load_schedule(schedule_id=1)
+        self.scheduling_controller._schedules = {}  # Clear internal cache
+        self.scheduling_controller._sync_configuration()
+        loaded_dto = self.scheduling_controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
 
     def test_pause_resume(self):
         schedule_dto = ScheduleDTO(id=1, name='schedule', start=0, action='GROUP_ACTION', arguments=0)
-        self.controller.save_schedules([schedule_dto])
+        self.scheduling_controller.save_schedules([schedule_dto])
 
-        with mock.patch.object(self.controller, '_abort') as abort:
-            self.controller.set_schedule_status(schedule_dto.id, 'PAUSED')
-            self.assertNotIn(schedule_dto.id, self.controller._schedules)  # disable schedule
+        with mock.patch.object(self.scheduling_controller, '_abort') as abort:
+            self.scheduling_controller.set_schedule_status(schedule_dto.id, 'PAUSED')
+            self.assertNotIn(schedule_dto.id, self.scheduling_controller._schedules)  # disable schedule
             abort.assert_called()
 
-        with mock.patch.object(self.controller, '_submit_schedule') as submit:
-            self.controller.set_schedule_status(schedule_dto.id, 'ACTIVE')
-            self.assertIn(schedule_dto.id, self.controller._schedules)  # enable schedule
+        with mock.patch.object(self.scheduling_controller, '_submit_schedule') as submit:
+            self.scheduling_controller.set_schedule_status(schedule_dto.id, 'ACTIVE')
+            self.assertIn(schedule_dto.id, self.scheduling_controller._schedules)  # enable schedule
             submit.assert_called()
-
-    def test_update_thermostat_setpoints(self):
-        self.controller.update_thermostat_setpoints(0, 'heating', [
-            DaySchedule(id=10, index=0, content='{"21600": 21.5}')
-        ])
-        jobs = self.controller._scheduler.get_jobs()
-        assert len(self.scheduler.add_job.call_args_list) == 1
-        job_id = self.scheduler.add_job.call_args_list[0][1]['id']
-        assert job_id == 'thermostat.heating.0.mon.06h00m'
-        setpoint_dto = self.scheduler.add_job.call_args_list[0][1]['args'][0]
-        assert setpoint_dto.thermostat == 0
-        assert setpoint_dto.temperature == 21.5
-
-        self.controller.update_thermostat_setpoints(0, 'heating', [
-            DaySchedule(id=10, index=0, content='{"28800": 22.0}')
-        ])
-        assert len(self.scheduler.add_job.call_args_list) == 2
-        job_id = self.scheduler.add_job.call_args_list[1][1]['id']
-        assert job_id == 'thermostat.heating.0.mon.08h00m'
-        setpoint_dto = self.scheduler.add_job.call_args_list[1][1]['args'][0]
-        assert setpoint_dto.thermostat == 0
-        assert setpoint_dto.temperature == 22.0
 
     def test_base_validation(self):
         with self.assertRaises(RuntimeError):
             # Must have a name
             schedule = Schedule(name=None)
-            self.controller._validate(schedule)
+            self.scheduling_controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # Unaccepted action
             schedule = Schedule(name='test', start=time.time(), action='FOO')
-            self.controller._validate(schedule)
+            self.scheduling_controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # Duration too short
             schedule = Schedule(name='test', start=time.time(), action='GROUP_ACTION', duration=10)
-            self.controller._validate(schedule)
+            self.scheduling_controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # End when not repeating
             schedule = Schedule(name='test', start=time.time(), action='GROUP_ACTION', end=time.time() + 1)
-            self.controller._validate(schedule)
+            self.scheduling_controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # Invalid repeat string
             schedule = Schedule(name='test', start=time.time(), action='GROUP_ACTION', repeat='foo')
-            self.controller._validate(schedule)
+            self.scheduling_controller._validate(schedule)
 
     def test_validate_group_action(self):
-        # New self.controller is empty
-        self.assertEqual(0, len(self.controller.load_schedules()))
+        # New self.scheduling_controller is empty
+        self.assertEqual(0, len(self.scheduling_controller.load_schedules()))
 
         # Doesn't support duration
         with self.assertRaises(RuntimeError) as ctx:
@@ -198,14 +182,14 @@ class SchedulingControllerTest(unittest.TestCase):
                                    start=time.time() + 0.5,
                                    action='GROUP_ACTION',
                                    arguments=1)
-        self.controller._execute_schedule(schedule_dto)
+        self.scheduling_controller._execute_schedule(schedule_dto)
         assert schedule_dto.last_executed is not None
         assert schedule_dto.status == 'COMPLETED'
         self.group_action_controller.do_group_action.assert_called_with(1)
 
     def test_validate_basic_action(self):
-        # New self.controller is empty
-        assert len(self.controller.load_schedules()) == 0
+        # New self.scheduling_controller is empty
+        assert len(self.scheduling_controller.load_schedules()) == 0
 
         # Doesn't support duration
         duration_error = 'A schedule of type BASIC_ACTION does not have a duration. It is a one-time trigger'
@@ -231,14 +215,14 @@ class SchedulingControllerTest(unittest.TestCase):
                                    start=time.time() + 0.5,
                                    action='BASIC_ACTION',
                                    arguments={'action_type': 1, 'action_number': 2})
-        self.controller._execute_schedule(schedule_dto)
+        self.scheduling_controller._execute_schedule(schedule_dto)
         assert schedule_dto.last_executed is not None
         assert schedule_dto.status == 'COMPLETED'
         self.group_action_controller.do_basic_action.assert_called_with(action_number=2, action_type=1)
 
     def test_validate_local_api(self):
-        # New self.controller is empty
-        self.assertEqual(0, len(self.controller.load_schedules()))
+        # New self.scheduling_controller is empty
+        self.assertEqual(0, len(self.scheduling_controller.load_schedules()))
 
         # Doesn't support duration
         with self.assertRaises(RuntimeError) as ctx:
@@ -275,7 +259,7 @@ class SchedulingControllerTest(unittest.TestCase):
                                    arguments={'name': 'do_basic_action',
                                               'parameters': {'action_type': 3,
                                                              'action_number': 4}})
-        self.controller._execute_schedule(schedule_dto)
+        self.scheduling_controller._execute_schedule(schedule_dto)
         assert schedule_dto.last_executed is not None
         assert schedule_dto.status == 'COMPLETED'
         self.group_action_controller.do_basic_action.assert_called_with(3, 4)
@@ -285,13 +269,13 @@ class SchedulingControllerTest(unittest.TestCase):
                            arguments={'action_type': 1, 'action_number': 2})
         self._add_schedule(name='group_action', start=0, action='GROUP_ACTION',
                            arguments=1)
-        schedules = self.controller.load_schedules()
+        schedules = self.scheduling_controller.load_schedules()
         self.assertEqual(2, len(schedules))
         self.assertEqual(['basic_action', 'group_action'], sorted(s.name for s in schedules))
         for s in schedules:
             if s.name == 'group_action':
-                self.controller.remove_schedules([s])
-        schedules = self.controller.load_schedules()
+                self.scheduling_controller.remove_schedules([s])
+        schedules = self.scheduling_controller.load_schedules()
         self.assertEqual(1, len(schedules))
         self.assertEqual('basic_action', schedules[0].name)
 
@@ -301,7 +285,7 @@ class SchedulingControllerTest(unittest.TestCase):
                            action='GROUP_ACTION',
                            arguments=1,
                            status='ACTIVE')
-        schedule = self.controller.load_schedules()[0]
+        schedule = self.scheduling_controller.load_schedules()[0]
         self.assertEqual(schedule.status, 'ACTIVE')
         self.assertIsNone(schedule.last_executed)
 
@@ -313,10 +297,10 @@ class SchedulingControllerTest(unittest.TestCase):
                            action='GROUP_ACTION',
                            arguments=1,
                            status='ACTIVE')
-        schedule = self.controller.load_schedules()[0]
+        schedule = self.scheduling_controller.load_schedules()[0]
         self.assertEqual(schedule.status, 'COMPLETED')
         self.assertIsNone(schedule.last_executed)
 
     def _add_schedule(self, **kwargs):
         dto = ScheduleDTO(id=None, **kwargs)
-        self.controller.save_schedules([dto])
+        self.scheduling_controller.save_schedules([dto])

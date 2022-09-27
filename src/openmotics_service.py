@@ -56,6 +56,7 @@ if False:  # MYPY
     from gateway.metrics_controller import MetricsController
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.scheduling_controller import SchedulingController
+    from gateway.setpoint_controller import SetpointController
     from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
     from gateway.system_controller import SystemController
@@ -133,6 +134,7 @@ class OpenmoticsService(object):
               metrics_controller=INJECTED,  # type: MetricsController
               passthrough_service=INJECTED,  # type: PassthroughService
               scheduling_controller=INJECTED,  # type: SchedulingController
+              setpoint_controller=INJECTED,  # type: SetpointController
               metrics_collector=INJECTED,  # type: MetricsCollector
               web_service=INJECTED,  # type: WebService
               web_interface=INJECTED,  # type: WebInterface
