@@ -658,9 +658,15 @@ class ThermostatControllerGateway(ThermostatController):
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         with Database.get_session() as db:
             pump = db.get(Pump, pump_group_id)  # type: Pump
+
             # FIXME: Workaround for mode filtering
-            heating_valves = [x for x in pump.valves
-                              if x.thermostat_associations[0].mode == ThermostatGroup.Modes.HEATING]  # type: ignore
+            heating_valves = []
+            for valve in pump.valves:
+                for link in valve.thermostat_associations:
+                    if link.mode == ThermostatGroup.Modes.HEATING:
+                        heating_valves.append(valve)
+                        break
+
             return PumpGroupDTO(id=pump_group_id,
                                 pump_output_id=pump.output.number,
                                 valve_output_ids=[valve.output.number for valve in heating_valves])
@@ -669,9 +675,15 @@ class ThermostatControllerGateway(ThermostatController):
         pump_groups = []
         with Database.get_session() as db:
             for pump in db.query(Pump):  # type: Pump
+
                 # FIXME: Workaround for mode filtering
-                heating_valves = [x for x in pump.valves
-                                  if x.thermostat_associations[0].mode == ThermostatGroup.Modes.HEATING]  # type: ignore
+                heating_valves = []
+                for valve in pump.valves:
+                    for link in valve.thermostat_associations:
+                        if link.mode == ThermostatGroup.Modes.HEATING:
+                            heating_valves.append(valve)
+                            break
+
                 pump_groups.append(PumpGroupDTO(id=pump.id,
                                                 pump_output_id=pump.output.number,
                                                 valve_output_ids=[valve.output.number for valve in heating_valves]))
@@ -683,8 +695,14 @@ class ThermostatControllerGateway(ThermostatController):
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         with Database.get_session() as db:
             pump = db.get(Pump, pump_group_id)  # type: Pump
-            cooling_valves = [x for x in pump.valves
-                              if x.thermostat_associations[0].mode == ThermostatGroup.Modes.COOLING]  # type: ignore
+
+            cooling_valves = []
+            for valve in pump.valves:
+                for link in valve.thermostat_associations:
+                    if link.mode == ThermostatGroup.Modes.COOLING:
+                        cooling_valves.append(valve)
+                        break
+
             return PumpGroupDTO(id=pump_group_id,
                                 pump_output_id=pump.output.number,
                                 valve_output_ids=[valve.output.number for valve in cooling_valves])
@@ -693,9 +711,15 @@ class ThermostatControllerGateway(ThermostatController):
         pump_groups = []
         with Database.get_session() as db:
             for pump in db.query(Pump):  # type: Pump
+
                 # FIXME: Workaround for mode filtering
-                cooling_valves = [x for x in pump.valves
-                                  if x.thermostat_associations[0].mode == ThermostatGroup.Modes.COOLING]  # type: ignore
+                cooling_valves = []
+                for valve in pump.valves:
+                    for link in valve.thermostat_associations:
+                        if link.mode == ThermostatGroup.Modes.COOLING:
+                            cooling_valves.append(valve)
+                            break
+
                 pump_groups.append(PumpGroupDTO(id=pump.id,
                                                 pump_output_id=pump.output.number,
                                                 valve_output_ids=[valve.output.number for valve in cooling_valves]))
@@ -719,12 +743,18 @@ class ThermostatControllerGateway(ThermostatController):
                     else:
                         pump.output = db.query(Output).filter_by(number=pump_group_dto.pump_output_id).one()
                 if 'valve_output_ids' in pump_group_dto.loaded_fields:
+
                     # FIXME: Workaround for mode on association
-                    current_valves = {x.output.number: x for x in pump.valves
-                                      if x.thermostat_associations[0].mode == mode}  # type: ignore
-                    # FIXME: Workaround to preserve valves with opposite mode
-                    valves = [x for x in pump.valves
-                              if x.thermostat_associations[0].mode != mode]  # type: ignore
+                    current_valves = {}
+                    valves = []
+                    for valve_p in pump.valves:
+                        for link in valve_p.thermostat_associations:
+                            if link.mode == mode:
+                                current_valves[valve_p.output.number] = valve_p
+                                break
+                        if valve_p.output.number not in current_valves:
+                            valves.append(valve_p)
+
                     for output_nr in pump_group_dto.valve_output_ids:
                         if output_nr in current_valves:
                             valve = current_valves.pop(output_nr)  # type: Valve

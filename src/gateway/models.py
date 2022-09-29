@@ -482,6 +482,8 @@ class Valve(Base):
 
     output = relationship('Output', lazy='joined', back_populates='valve')
     pump = relationship('Pump', secondary='pumptovalve')  # type: RelationshipProperty[Optional[Pump]]
+    # thermostat_associations = relationship('IndoorLinkValves', lazy='joined', back_populates='valve')
+    thermostat_associations = relationship('IndoorLinkValves', lazy='joined', back_populates='valve')  #type: RelationshipProperty[List[IndoorLinkValves]]
 
 
 class Thermostat(Base, MasterNumber):
@@ -543,7 +545,8 @@ class IndoorLinkValves(Base):
     valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), nullable=False)
     mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)  # temporary placed here, will move to PID
 
-    valve = relationship('Valve', lazy='joined', backref='thermostat_associations')
+    # valve = relationship('Valve', lazy='joined', backref='thermostat_associations')
+    valve = relationship('Valve', lazy='joined', back_populates='thermostat_associations')
     thermostat = relationship('Thermostat', backref='valve_associations')
 
 
