@@ -294,67 +294,66 @@ class ThermostatsMigrator(BaseMigrator):
 
             db.commit()
 
-            report_logger = Logs.get_update_logger('thermostat_migrations', prefix='migrations')
-            report_logger.info('Migrated thermostat structure:')
-            report_logger.info('Thermostats:')
+            logger.info('Migrated thermostat structure:')
+            logger.info('Thermostats:')
             for thermostat in db.query(Thermostat):
-                report_logger.info('  * {0} ({1})'.format(thermostat.name, thermostat.number))
-                report_logger.info('    * Sensor: {0} ({1})'.format(thermostat.sensor.name, thermostat.sensor.external_id))
+                logger.info('  * {0} ({1})'.format(thermostat.name, thermostat.number))
+                logger.info('    * Sensor: {0} ({1})'.format(thermostat.sensor.name, thermostat.sensor.external_id))
                 vas = thermostat.cooling_valve_associations
                 schedules = thermostat.cooling_schedules
                 if vas or schedules:
-                    report_logger.info('    * Cooling:')
+                    logger.info('    * Cooling:')
                     if vas:
-                        report_logger.info('      * Valves:')
+                        logger.info('      * Valves:')
                         for va in vas:
                             output = va.valve.output
-                            report_logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
+                            logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
                     if schedules:
-                        report_logger.info('      * Schedules:')
+                        logger.info('      * Schedules:')
                         for schedule in schedules:
-                            report_logger.info('        * {0}'.format(schedule))
+                            logger.info('        * {0}'.format(schedule))
                 vas = thermostat.heating_valve_associations
                 schedules = thermostat.heating_schedules
                 if vas or schedules:
-                    report_logger.info('    * Heating:')
+                    logger.info('    * Heating:')
                     if vas:
-                        report_logger.info('      * Valves:')
+                        logger.info('      * Valves:')
                         for va in vas:
                             output = va.valve.output
-                            report_logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
+                            logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
                     if schedules:
-                        report_logger.info('      * Schedules:')
+                        logger.info('      * Schedules:')
                         for schedule in schedules:
-                            report_logger.info('        * {0}'.format(schedule))
-                report_logger.info('    * Presets:')
+                            logger.info('        * {0}'.format(schedule))
+                logger.info('    * Presets:')
                 for preset in thermostat.presets:
-                    report_logger.info('      * {0}: heating {1}, cooling {2}{3}'.format(preset.type,
+                    logger.info('      * {0}: heating {1}, cooling {2}{3}'.format(preset.type,
                                                                                          preset.heating_setpoint, preset.cooling_setpoint,
                                                                                          ': active' if preset.active else ''))
-            report_logger.info('Pumps:')
+            logger.info('Pumps:')
             for pump in db.query(Pump):
-                report_logger.info('  * {0}'.format(pump.name))
-                report_logger.info('    * Output: {0} ({1})'.format(pump.output.name, pump.output.number))
-                report_logger.info('    * Valves:')
+                logger.info('  * {0}'.format(pump.name))
+                logger.info('    * Output: {0} ({1})'.format(pump.output.name, pump.output.number))
+                logger.info('    * Valves:')
                 for valve in pump.valves:
-                    report_logger.info('        * {0} -> {1} ({2}) with {3}s delay'.format(valve.name, valve.output.name, valve.output.number, valve.delay))
-            report_logger.info('Thermostat Groups:')
+                    logger.info('        * {0} -> {1} ({2}) with {3}s delay'.format(valve.name, valve.output.name, valve.output.number, valve.delay))
+            logger.info('Thermostat Groups:')
             for group in db.query(ThermostatGroup):
-                report_logger.info('  * {0}'.format(group.name))
-                report_logger.info('    * Sensor: {0} ({1})'.format(group.sensor.name, group.sensor.external_id))
-                report_logger.info('    * Threshold: {0}'.format(group.threshold_temperature))
-                report_logger.info('    * Current mode: {0}'.format(group.mode))
+                logger.info('  * {0}'.format(group.name))
+                logger.info('    * Sensor: {0} ({1})'.format(group.sensor.name, group.sensor.external_id))
+                logger.info('    * Threshold: {0}'.format(group.threshold_temperature))
+                logger.info('    * Current mode: {0}'.format(group.mode))
                 oas = group.heating_output_associations
                 if oas:
-                    report_logger.info('    * Heating outputs:')
+                    logger.info('    * Heating outputs:')
                     for oa in oas:
-                        report_logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
+                        logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
                 oas = group.cooling_output_associations
                 if oas:
-                    report_logger.info('    * Cooling outputs:')
+                    logger.info('    * Cooling outputs:')
                     for oa in oas:
-                        report_logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
-            report_logger.info('---')
+                        logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
+            logger.info('---')
 
     @classmethod
     def _migrate_thermostat(cls, db, thermostat_group, mode, eeprom_object):

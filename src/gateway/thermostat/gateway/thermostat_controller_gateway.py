@@ -30,7 +30,7 @@ from gateway.mappers import ThermostatMapper
 from gateway.models import Database, DaySchedule, Output, \
     OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
     Schedule, Sensor, Thermostat, ThermostatGroup, Valve, \
-    ValveToThermostatAssociation
+    IndoorLinkValves
 from gateway.pubsub import PubSub
 from gateway.valve_pump.valve_pump_controller import ValvePumpController
 from gateway.scheduling_controller import SchedulingController
