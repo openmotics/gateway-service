@@ -20,7 +20,7 @@ from datetime import timedelta
 from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import Database, DaySchedule, Feature, Output, \
     Preset, Pump, PumpToValveAssociation, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, IndoorLinkValves
+    Thermostat, ThermostatGroup, Valve, IndoorLinkValves, HvacOutputLink
 
 from ioc import INJECTED, Inject
 from master.classic import master_api
@@ -580,7 +580,7 @@ class ThermostatsMigrator(BaseMigrator):
                 if getattr(eeprom_object, output_field) not in (None, 255):
                     output = db.query(Output).where(Output.number == getattr(eeprom_object, output_field)).one()
                     value = 0 if getattr(eeprom_object, value_field) in (None, 255, 0) else 100
-                    o2tg = OutputToThermostatGroupAssociation(thermostat_group=thermostat_group, output=output, mode=mode, value=value, index=0)
+                    o2tg = HvacOutputLink(hvac=thermostat_group, output=output, mode=mode, value=value)
                     db.add(o2tg)
                     db.commit()
 
