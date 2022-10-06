@@ -398,7 +398,9 @@ class ThermostatsMigrator(BaseMigrator):
             thermostat = Thermostat(**kwargs)
             db.add(thermostat)
             db.commit()
-
+        elif thermostat.sensor != sensor:
+            raise ValueError('Cooling and heating thermostat do not share same sensor')
+            
         cls._migrate_pid_parameters(thermostat, mode, eeprom_object)
         has_valve = cls._migrate_output(db, thermostat, mode, eeprom_object.output0)
         has_valve |= cls._migrate_output(db, thermostat, mode, eeprom_object.output1)

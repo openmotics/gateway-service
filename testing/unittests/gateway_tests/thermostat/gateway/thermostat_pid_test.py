@@ -20,6 +20,10 @@ import unittest
 import mock
 from peewee import SqliteDatabase
 
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import scoped_session, sessionmaker
+
 import fakesleep
 from gateway.dto import SensorStatusDTO
 from gateway.enums import ThermostatState
@@ -56,7 +60,7 @@ class PumpValveControllerTest(unittest.TestCase):
         self.addCleanup(session_mock.stop)
 
         sensor_controller = mock.Mock(SensorController)
-        sensor_controller.get_sensor_status.side_effect = lambda x: SensorStateDTO(id=x, value=10.0)
+        sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self.valve_pump_controller = mock.Mock(ValvePumpController)
         SetUpTestInjections(sensor_controller=sensor_controller,
                             valve_pump_controller=self.valve_pump_controller)

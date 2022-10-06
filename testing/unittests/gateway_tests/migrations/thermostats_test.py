@@ -160,7 +160,7 @@ class ThermostatMigratorTest(unittest.TestCase):
             db.commit()
 
             with self.assertRaises(ValueError):
-                # here we expect a ValueError, but why?
+                # here we expect a ValueError, because "Cooling and heating thermostat do not share same sensor"
                 ThermostatsMigrator._migrate()
 
             rcc.return_value[0].sensor = 2
