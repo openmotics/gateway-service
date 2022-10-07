@@ -33,7 +33,7 @@ class BaseMigrator(object):
         logger.log(level=level, msg=log_message)
 
     @classmethod
-    def migrate(cls):  # type: () -> None
+    def migrate(cls, fatal=False):  # type: (bool) -> None
         try:
             if cls.MIGRATION_KEY is None:
                 return
@@ -59,6 +59,8 @@ class BaseMigrator(object):
                 db.commit()
         except Exception:
             logger.exception('Unexpected error in {0}'.format(cls.__name__))
+            if fatal:
+                raise
 
     @classmethod
     def _migrate(cls):

@@ -29,7 +29,7 @@ class DefaultsMigrator(BaseMigrator):
     MIGRATION_KEY = 'defaults'
 
     @classmethod
-    def migrate(cls):  # type: () -> None
+    def migrate(cls, fatal=False):  # type: (bool) -> None
         try:
             logger.info('Migrating ({0})...'.format(cls.__name__))
             with Database.get_session() as db:
@@ -38,6 +38,8 @@ class DefaultsMigrator(BaseMigrator):
             logger.info('Migrating ({0})... Done'.format(cls.__name__))
         except Exception:
             logger.exception('Unexpected error in {0}'.format(cls.__name__))
+            if fatal:
+                raise
 
     @classmethod
     def _seed_defaults(cls, db):  # type: (Any) -> None

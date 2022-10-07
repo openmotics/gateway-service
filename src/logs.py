@@ -75,15 +75,15 @@ class Logs(object):
         access_logger.propagate = False
 
     @staticmethod
-    def get_update_logger(name):  # type: (str) -> Logger
+    def get_update_logger(name, prefix='update'):  # type: (str, str) -> Logger
         """
         Sets up a logger for update logging;
-        * Logs to `{OPENMOTICS_PREFIX}/update/logs/{name}.log`
+        * Logs to `{OPENMOTICS_PREFIX}/update_logs/{name}.log`
         * Namespace is `update.{name}`
         """
         if not os.path.exists(Logs.UPDATE_LOGS_FOLDER):
             os.makedirs(Logs.UPDATE_LOGS_FOLDER)
-        namespace = 'update.{0}'.format(name)
+        namespace = '{0}.{1}'.format(prefix, name)
         filename = os.path.join(Logs.UPDATE_LOGS_FOLDER, '{0}.log'.format(name))
         update_handler = handlers.RotatingFileHandler(filename, maxBytes=3 * 1024 ** 2, backupCount=2)
         update_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))

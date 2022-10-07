@@ -28,6 +28,7 @@ from master.classic.eeprom_controller import CompositeDataType, EepromByte, \
     EepromCSV, EepromIBool, EepromId, EepromModel, EepromString, EepromTemp, \
     EepromTime, EextByte
 from platform_utils import Platform
+from logs import Logs
 
 if False:  # MYPY
     from typing import Any, List, Iterable, Tuple, Optional
@@ -270,6 +271,7 @@ class ThermostatsMigrator(BaseMigrator):
             # db.query(OutputToThermostatGroupAssociation).delete()
             db.query(Pump).delete()
             db.query(Valve).delete()
+            db.query(Preset).delete()
 
             thermostat_group = db.query(ThermostatGroup).one()
 
@@ -294,83 +296,94 @@ class ThermostatsMigrator(BaseMigrator):
 
             db.commit()
 
-            logger.info('Migrated thermostat structure:')
-            logger.info('Thermostats:')
+            report_logger = Logs.get_update_logger('thermostat_migrations', prefix='migrations')
+            report_logger.info('Migrated thermostat structure:')
+            report_logger.info('Thermostats:')
             for thermostat in db.query(Thermostat):
-                logger.info('  * {0} ({1})'.format(thermostat.name, thermostat.number))
-                logger.info('    * Sensor: {0} ({1})'.format(thermostat.sensor.name, thermostat.sensor.external_id))
+                report_logger.info('  * {0} ({1})'.format(thermostat.name, thermostat.number))
+                report_logger.info('    * Sensor: {0} ({1})'.format(thermostat.sensor.name, thermostat.sensor.external_id))
                 vas = thermostat.cooling_valve_associations
                 schedules = thermostat.cooling_schedules
                 if vas or schedules:
-                    logger.info('    * Cooling:')
+                    report_logger.info('    * Cooling:')
                     if vas:
-                        logger.info('      * Valves:')
+                        report_logger.info('      * Valves:')
                         for va in vas:
                             output = va.valve.output
-                            logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
+                            report_logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
                     if schedules:
-                        logger.info('      * Schedules:')
+                        report_logger.info('      * Schedules:')
                         for schedule in schedules:
-                            logger.info('        * {0}'.format(schedule))
+                            report_logger.info('        * {0}'.format(schedule))
                 vas = thermostat.heating_valve_associations
                 schedules = thermostat.heating_schedules
                 if vas or schedules:
-                    logger.info('    * Heating:')
+                    report_logger.info('    * Heating:')
                     if vas:
-                        logger.info('      * Valves:')
+                        report_logger.info('      * Valves:')
                         for va in vas:
                             output = va.valve.output
-                            logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
+                            report_logger.info('        * {0} -> {1} ({2})'.format(va.valve.name, output.name, output.number))
                     if schedules:
-                        logger.info('      * Schedules:')
+                        report_logger.info('      * Schedules:')
                         for schedule in schedules:
-                            logger.info('        * {0}'.format(schedule))
-                logger.info('    * Presets:')
+                            report_logger.info('        * {0}'.format(schedule))
+                report_logger.info('    * Presets:')
                 for preset in thermostat.presets:
-                    logger.info('      * {0}: heating {1}, cooling {2}{3}'.format(preset.type,
+                    report_logger.info('      * {0}: heating {1}, cooling {2}{3}'.format(preset.type,
                                                                                          preset.heating_setpoint, preset.cooling_setpoint,
                                                                                          ': active' if preset.active else ''))
-            logger.info('Pumps:')
+            report_logger.info('Pumps:')
             for pump in db.query(Pump):
-                logger.info('  * {0}'.format(pump.name))
-                logger.info('    * Output: {0} ({1})'.format(pump.output.name, pump.output.number))
-                logger.info('    * Valves:')
+                report_logger.info('  * {0}'.format(pump.name))
+                report_logger.info('    * Output: {0} ({1})'.format(pump.output.name, pump.output.number))
+                report_logger.info('    * Valves:')
                 for valve in pump.valves:
-                    logger.info('        * {0} -> {1} ({2}) with {3}s delay'.format(valve.name, valve.output.name, valve.output.number, valve.delay))
-            logger.info('Thermostat Groups:')
+                    report_logger.info('        * {0} -> {1} ({2}) with {3}s delay'.format(valve.name, valve.output.name, valve.output.number, valve.delay))
+            report_logger.info('Thermostat Groups:')
             for group in db.query(ThermostatGroup):
-                logger.info('  * {0}'.format(group.name))
-                logger.info('    * Sensor: {0} ({1})'.format(group.sensor.name, group.sensor.external_id))
-                logger.info('    * Threshold: {0}'.format(group.threshold_temperature))
-                logger.info('    * Current mode: {0}'.format(group.mode))
+                report_logger.info('  * {0}'.format(group.name))
+                report_logger.info('    * Sensor: {0} ({1})'.format(group.sensor.name, group.sensor.external_id))
+                report_logger.info('    * Threshold: {0}'.format(group.threshold_temperature))
+                report_logger.info('    * Current mode: {0}'.format(group.mode))
                 oas = group.heating_output_associations
                 if oas:
-                    logger.info('    * Heating outputs:')
+                    report_logger.info('    * Heating outputs:')
                     for oa in oas:
-                        logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
+                        report_logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
                 oas = group.cooling_output_associations
                 if oas:
-                    logger.info('    * Cooling outputs:')
+                    report_logger.info('    * Cooling outputs:')
                     for oa in oas:
-                        logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
-            logger.info('---')
+                        report_logger.info('      * {0} ({1}) set to {2}'.format(oa.output.name, oa.output.number, oa.value))
+            report_logger.info('---')
 
     @classmethod
     def _migrate_thermostat(cls, db, thermostat_group, mode, eeprom_object):
         # type: (Any, ThermostatGroup, str, Any) -> None
         if eeprom_object.sensor == 240:
-            raise RuntimeError('Thermostat {} with timer only configuration, this can\'t be migrated'.format(eeprom_object.id))
+            return  # TODO: Send an event
+            # gateway_event = GatewayEvent(event_type=GatewayEvent.Types.NOTIFICATION,
+            #                              data={'source': 'gateway',
+            #                                    'type': 'USER',
+            #                                    'topic': 'Time Based Thermostats',
+            #                                    'message': 'Time Based Thermostats are no longer supported in the current version of your gateway software. Please consult your OpenMotics manual for more info on how to configure schedule based thermostats.'})
+            # self._event_sender.enqueue_event(gateway_event)
         if eeprom_object.sensor in (None, 255):
-            return
+            return  # No sensor
+        if eeprom_object.output0 in (None, 255) and eeprom_object.output1 in (None, 255):
+            return  # No valve(s)
 
         temperature = Sensor.PhysicalQuantities.TEMPERATURE
         sensor = db.query(Sensor).where((Sensor.physical_quantity == temperature) &
                                         (Sensor.external_id == str(eeprom_object.sensor))).one_or_none()
         if sensor is None:
-            sensor = db.query(Sensor).where((Sensor.physical_quantity is None) &
+            sensor = db.query(Sensor).where((Sensor.physical_quantity == None) &
                                             (Sensor.external_id == str(eeprom_object.sensor))).one_or_none()
             if sensor is None:
                 sensor = Sensor(physical_quantity=temperature,
+                                source=Sensor.Sources.MASTER,
+                                name='Sensor {0}'.format(eeprom_object.sensor),
                                 unit=Sensor.Units.CELCIUS,
                                 external_id=str(eeprom_object.sensor))
                 db.add(sensor)
@@ -400,7 +413,7 @@ class ThermostatsMigrator(BaseMigrator):
             db.commit()
         elif thermostat.sensor != sensor:
             raise ValueError('Cooling and heating thermostat do not share same sensor')
-            
+
         cls._migrate_pid_parameters(thermostat, mode, eeprom_object)
         has_valve = cls._migrate_output(db, thermostat, mode, eeprom_object.output0)
         has_valve |= cls._migrate_output(db, thermostat, mode, eeprom_object.output1)
@@ -533,22 +546,23 @@ class ThermostatsMigrator(BaseMigrator):
         # type: (Any, Any) -> None
         if eeprom_object.output not in (None, 255):
             output = db.query(Output).where(Output.number == eeprom_object.output).one()
-            name = 'Pump (output {0})'.format(output.number)
-            pump = Pump(name=name, output=output)
-            db.add(pump)
-            db.commit()
+            pump = db.query(Pump).where(Pump.output == output).one_or_none()
+            if pump is None:
+                name = 'Pump (output {0})'.format(output.number)
+                pump = Pump(name=name, output=output)
+                db.add(pump)
+                db.commit()
+            current_outputs = [valve.output for valve in pump.valves]
             for output_nr in (int(x) for x in eeprom_object.outputs.split(',')):
                 linked_output = db.query(Output).where(Output.number == output_nr).one()
-                name = 'Valve (output {0})'.format(linked_output.number)
-                valve = db.query(Valve).where(Valve.output == linked_output).one_or_none()
-                if valve is None:
-                    valve = Valve(output=linked_output,
-                                  name=name)
-                    db.add(valve)
+                if linked_output not in current_outputs:
+                    valve = db.query(Valve).where(Valve.output == linked_output).one_or_none()
+                    if valve is None:
+                        continue  # Ignore valves that are not used
+                    pump_to_valve = PumpToValveAssociation(pump=pump, valve=valve)
+                    db.add(pump_to_valve)
                     db.commit()
-                pump_to_valve = PumpToValveAssociation(pump=pump, valve=valve)
-                db.add(pump_to_valve)
-                db.commit()
+                    current_outputs.append(linked_output)
 
     @classmethod
     def _migrate_thermostat_group(cls, db, thermostat_group, eeprom_object):
@@ -574,13 +588,15 @@ class ThermostatsMigrator(BaseMigrator):
             thermostat_group.threshold_temperature = eeprom_object.threshold_temp
 
         for mode in [ThermostatGroup.Modes.HEATING, ThermostatGroup.Modes.COOLING]:
+            index = 0
             for i in range(4):
                 output_field = 'switch_to_{0}_output_{1}'.format(mode, i)
                 value_field = 'switch_to_{0}_value_{1}'.format(mode, i)
                 if getattr(eeprom_object, output_field) not in (None, 255):
                     output = db.query(Output).where(Output.number == getattr(eeprom_object, output_field)).one()
-                    value = 0 if getattr(eeprom_object, value_field) in (None, 255, 0) else 100
+                    value = 0 if getattr(eeprom_object, value_field) == 0 else 100
                     o2tg = HvacOutputLink(hvac=thermostat_group, output=output, mode=mode, value=value)
+                    index += 1
                     db.add(o2tg)
                     db.commit()
 

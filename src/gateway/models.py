@@ -612,6 +612,14 @@ class DaySchedule(Base):
             last_value = data[key]
         return last_value
 
+    def __str__(self):
+        schedule = self.schedule_data
+        schedules = []
+        for offset in sorted(list(schedule.keys())):
+            minutes = offset // 60
+            schedules.append(('{0:02d}:{1:02d}'.format(minutes // 60, minutes % 60), schedule[offset]))
+        return ', '.join('{0}: {1}'.format(s[0], s[1]) for s in schedules)
+
 
 class Room(Base, MasterNumber):
     __tablename__ = 'room'

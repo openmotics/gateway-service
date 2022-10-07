@@ -181,7 +181,7 @@ class OpenmoticsService(object):
             stmt = select(Feature.enabled).filter_by(name=Feature.THERMOSTATS_GATEWAY)  # type: ignore
             thermostats_gateway_enabled = db.execute(stmt).scalar()
         if thermostats_gateway_enabled:
-            ThermostatsMigrator.migrate()
+            ThermostatsMigrator.migrate(fatal=True)
         NamesMigrator.migrate()
         InUseMigrator.migrate()
 
