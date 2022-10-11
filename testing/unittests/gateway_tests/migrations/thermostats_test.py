@@ -17,6 +17,8 @@ from __future__ import absolute_import
 import unittest
 
 import mock
+import shutil
+from tempfile import mkdtemp
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -27,6 +29,7 @@ from gateway.models import Base, Database, ThermostatGroup, Sensor, Output, \
 from gateway.migrations.thermostats import ThermostatsMigrator, \
     GlobalThermostatConfiguration, ThermostatConfiguration, CoolingConfiguration, PumpGroupConfiguration
 from ioc import SetTestMode
+from logs import Logs
 
 
 class ThermostatMigratorTest(unittest.TestCase):
@@ -45,6 +48,11 @@ class ThermostatMigratorTest(unittest.TestCase):
         session_mock = mock.patch.object(Database, 'get_session', return_value=self.session)
         session_mock.start()
         self.addCleanup(session_mock.stop)
+        self.temp_log_dir = mkdtemp()
+        Logs.UPDATE_LOGS_FOLDER = self.temp_log_dir
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_log_dir)
 
     @mock.patch.object(Platform, 'get_platform', return_value=Platform.Type.CLASSIC)
     @mock.patch.object(ThermostatsMigrator, '_read_global_configuration')
