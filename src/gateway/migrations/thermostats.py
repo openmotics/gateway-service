@@ -268,7 +268,7 @@ class ThermostatsMigrator(BaseMigrator):
         # Remove all existing gateway configuration
         with Database.get_session() as db:
             db.query(Thermostat).delete()
-            # db.query(OutputToThermostatGroupAssociation).delete()
+            db.query(HvacOutputLink).delete()
             db.query(Pump).delete()
             db.query(Valve).delete()
             db.query(Preset).delete()
