@@ -40,10 +40,17 @@ class ValvePumpController(object):
         self._pump_drivers = {}  # type: Dict[int, PumpDriver]
         self._pump_drivers_per_valve = {}  # type: Dict[int, Set[PumpDriver]]
         self._config_change_lock = Lock()
+
+
+    def start(self):
         self._update_pumps_thread = DaemonThread(name='thermostatpumps',
                                                  target=self.update_system,
                                                  interval=self.PUMP_UPDATE_INTERVAL)
         self._update_pumps_thread.start()
+
+    def stop(self):
+        if self._update_pumps_thread is not None:
+            self._update_pumps_thread.stop()
 
 
     def update_from_db(self):  # type: () -> None
