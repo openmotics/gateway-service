@@ -13,9 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+
 import logging
 from threading import Lock
 
+from gateway.daemon_thread import DaemonThread
 from gateway.models import Database, Pump, Valve, PumpToValveAssociation
 from gateway.valve_pump.pump_driver import PumpDriver
 from gateway.valve_pump.valve_driver import ValveDriver
@@ -26,16 +29,21 @@ if False:  # MYPY
 
 logger = logging.getLogger(__name__)
 
-
 @Injectable.named('valve_pump_controller')
+@Singleton
 class ValvePumpController(object):
+    PUMP_UPDATE_INTERVAL = 30
+
     def __init__(self, ):  # type: () -> None
         # list of valves linked to this specific driver, which is linked to a thermostat:
         self._valve_drivers = {}  # type: Dict[int, ValveDriver]
         self._pump_drivers = {}  # type: Dict[int, PumpDriver]
         self._pump_drivers_per_valve = {}  # type: Dict[int, Set[PumpDriver]]
         self._config_change_lock = Lock()
-
+        self._update_pumps_thread = DaemonThread(name='thermostatpumps',
+                                                 target=self.update_system,
+                                                 interval=self.PUMP_UPDATE_INTERVAL)
+        self._update_pumps_thread.start()
 
 
     def update_from_db(self):  # type: () -> None

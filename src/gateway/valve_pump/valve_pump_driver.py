@@ -21,7 +21,8 @@ class ValvePumpDriver(object):
 
 
     def steer(self, percentage):  # type: (int) -> None
-        self._valve_pump_controller.steer(percentage=percentage, valve_ids=self._valve_ids)
+        if len(self._valve_ids) > 0:
+            self._valve_pump_controller.steer(percentage=percentage, valve_ids=self._valve_ids)
 
 
 
