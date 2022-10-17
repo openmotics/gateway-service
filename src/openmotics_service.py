@@ -159,8 +159,7 @@ class OpenmoticsService(object):
               uart_controller=INJECTED,  # type: UARTController
               energy_module_controller=INJECTED,  # type: EnergyModuleController
               update_controller=INJECTED,  # type: UpdateController
-              valve_pump_controller=INJECTED,  # type: UpdateController
-              notification_controller=INJECTED  # type: NotificationController
+              valve_pump_controller=INJECTED  # type: UpdateController
               ):
         """ Main function. """
         logger.info('Starting OM core service (%s) [%s]... ', gateway.__version__, Platform.get_platform())
