@@ -94,6 +94,7 @@ class ThermostatControllerGateway(ThermostatController):
 
             super(ThermostatControllerGateway, self).start()
             logger.info('Starting gateway thermostatcontroller... Done')
+            self._valve_pump_controller.start()
         else:
             raise RuntimeError('GatewayThermostatController already running. Please stop it first.')
 

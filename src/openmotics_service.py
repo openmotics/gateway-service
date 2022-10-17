@@ -219,7 +219,6 @@ class OpenmoticsService(object):
         pubsub.start()
         system_controller.start()
         update_controller.start()
-        valve_pump_controller.start()
 
 
         web_interface.set_service_state(True)
