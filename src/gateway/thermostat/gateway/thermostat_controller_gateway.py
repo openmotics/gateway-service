@@ -87,6 +87,7 @@ class ThermostatControllerGateway(ThermostatController):
         logger.info('Starting gateway thermostatcontroller...')
         if not self._running:
             self._running = True
+            self._valve_pump_controller.start()
             self._pid_loop_thread = DaemonThread(name='thermostatpid',
                                                  target=self._pid_tick,
                                                  interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
@@ -94,7 +95,6 @@ class ThermostatControllerGateway(ThermostatController):
 
             super(ThermostatControllerGateway, self).start()
             logger.info('Starting gateway thermostatcontroller... Done')
-            self._valve_pump_controller.start()
         else:
             raise RuntimeError('GatewayThermostatController already running. Please stop it first.')
 
