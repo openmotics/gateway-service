@@ -105,6 +105,7 @@ class ThermostatControllerGateway(ThermostatController):
         if self._pid_loop_thread is not None:
             self._pid_loop_thread.stop()
         super(ThermostatControllerGateway, self).stop()
+        self._valve_pump_controller.stop()
 
     def _pid_tick(self):  # type: () -> None
         for thermostat_number, pid in self.thermostat_pids.items():

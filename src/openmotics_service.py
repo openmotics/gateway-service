@@ -47,7 +47,6 @@ if False:  # MYPY
     from gateway.authentication_controller import AuthenticationController
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.output_controller import OutputController
-    from gateway.valve_pump.valve_pump_controller import ValvePumpController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
     from gateway.maintenance_controller import MaintenanceController
@@ -71,7 +70,6 @@ if False:  # MYPY
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.uart_controller import UARTController
     from gateway.updates.update_controller import UpdateController
-    from gateway.valve_pump.valve_pump_controller import ValvePumpController
     from plugins.base import PluginController
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
@@ -159,7 +157,7 @@ class OpenmoticsService(object):
               uart_controller=INJECTED,  # type: UARTController
               energy_module_controller=INJECTED,  # type: EnergyModuleController
               update_controller=INJECTED,  # type: UpdateController
-              valve_pump_controller=INJECTED  # type: UpdateController
+              notification_controller=INJECTED  # type: NotificationController
               ):
         """ Main function. """
         logger.info('Starting OM core service (%s) [%s]... ', gateway.__version__, Platform.get_platform())
@@ -230,7 +228,6 @@ class OpenmoticsService(object):
             logger.info('Stopping OM core service...')
             watchdog.stop()
             update_controller.stop()
-            valve_pump_controller.stop()
             if uart_controller:
                 uart_controller.stop()
             energy_module_controller.stop()
