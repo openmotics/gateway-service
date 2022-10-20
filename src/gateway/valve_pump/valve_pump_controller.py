@@ -125,6 +125,7 @@ class ValvePumpController(object):
 
 
     def _set_valves(self, percentage, valve_ids, mode='equal'):  # type: (int, List[int], str) -> None
+        logger.debug("set valves with id: {} to percentage: {}".format(valve_ids, percentage))
         valve_drivers = [self.get_valve_driver(valve_id) for valve_id in valve_ids]
         if mode == 'cascade':
             self._open_valves_cascade(percentage, valve_drivers)
@@ -186,6 +187,7 @@ class ValvePumpController(object):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
         for valve_id, valve_driver in self._valve_drivers.items():
+            logger.debug("is valve with id {} open? {}".format(valve_id, valve_driver.is_open(percentage=10)))
             if valve_driver.is_open(percentage=10) is True:
                 active_pump_drivers |= self._pump_drivers_per_valve.get(valve_id, set())
             else:

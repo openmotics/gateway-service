@@ -139,11 +139,13 @@ class SetpointController(object):
         if heating_temperature is None:
             heating_temperature = temperature
         if heating_temperature is not None:
+            logger.debug("Setting heating setpoint to: {0}".format(heating_temperature))
             active_preset.heating_setpoint = float(heating_temperature)  # type: ignore
 
         if cooling_temperature is None:
             cooling_temperature = temperature
         if cooling_temperature is not None:
+            logger.debug("Setting cooling setpoint to: {0}".format(cooling_temperature))
             active_preset.cooling_setpoint = float(cooling_temperature)  # type: ignore
         return True
 
@@ -163,6 +165,7 @@ class SetpointController(object):
         if preset.type == Preset.Types.AUTO:
             self._update_auto_preset(thermostat)
 
+        logger.debug("Changing Preset from {0} to {1}".format(thermostat.active_preset, preset))
         self._set_preset_active(thermostat, preset)
 
 
@@ -205,7 +208,9 @@ class SetpointController(object):
         # type: (List[DaySchedule]) -> Tuple[datetime, float]
         now = datetime.now()
         transitions = sorted(self._calculate_transitions(day_schedules, now), reverse=True)
-        return next((t, v) for t, v in transitions if t <= now)
+        last_setpoint = next((t, v) for t, v in transitions if t <= now)
+        logger.debug("Last setpoint from schedule: {0}".format(last_setpoint))
+        return last_setpoint
 
 
 
