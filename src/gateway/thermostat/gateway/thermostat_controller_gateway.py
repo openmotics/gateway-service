@@ -524,12 +524,10 @@ class ThermostatControllerGateway(ThermostatController):
                                                           threshold_temperature=group.threshold_temperature,
                                                           pump_delay=pump_delay)
                 for mode, associations in [(ThermostatGroup.Modes.HEATING, group.heating_output_associations),
-                                           (ThermostatGroup.Modes.COOLING, group.cooling_output_associations)]:
-                    index = 0  # temporary fix to keep front-end happy while outfasing thermostat groups
-                    for output_to_thermostat_group in associations:
+                                           (ThermostatGroup.Modes.COOLING, group.cooling_output_associations)]:                    
+                    for index, output_to_thermostat_group in zip(range(4), associations):  # temporary fix to keep front-end happy while outfasing thermostat groups
                         field = 'switch_to_{0}_{1}'.format(mode, index)
                         setattr(thermostat_group_dto, field, (output_to_thermostat_group.output.number, output_to_thermostat_group.value))
-                        index += 1
                 config.append(thermostat_group_dto)
         return config
 
@@ -550,11 +548,9 @@ class ThermostatControllerGateway(ThermostatController):
                                                       pump_delay=pump_delay)
             for mode, associations in [(ThermostatGroup.Modes.HEATING, group.heating_output_associations),
                                        (ThermostatGroup.Modes.COOLING, group.cooling_output_associations)]:
-                index = 0  # temporary fix to keep front-end happy while outfasing thermostat groups
-                for output_to_thermostat_group in associations:
+                for index, output_to_thermostat_group in zip(range(4), associations):  # temporary fix to keep front-end happy while outfasing thermostat groups
                     field = 'switch_to_{0}_{1}'.format(mode, index)
                     setattr(thermostat_group_dto, field, (output_to_thermostat_group.output.number, output_to_thermostat_group.value))
-                    index += 1
             return thermostat_group_dto
 
 
