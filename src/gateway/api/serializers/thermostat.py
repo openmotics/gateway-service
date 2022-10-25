@@ -205,13 +205,17 @@ class PumpGroupSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> PumpGroupDTO
-        pump_group_dto = PumpGroupDTO(id=0)
+        pump_group_dto = PumpGroupDTO(id=api_data['id'])
         SerializerToolbox.deserialize(
             dto=pump_group_dto,  # Referenced
             api_data=api_data,
             mapping={'output': ('pump_output_id', PumpGroupSerializer.BYTE_MAX),
-                     'rooom': ('room_id', PumpGroupSerializer.BYTE_MAX)}
+                     'room': ('room_id', PumpGroupSerializer.BYTE_MAX)}
         )
+        if 'output' in api_data:
+            pump_group_dto.pump_output_id = api_data['output']
+        if 'room' in api_data:
+            pump_group_dto.room_id = api_data['room']
         if 'outputs' in api_data:
             if api_data['outputs'] == '':
                 pump_group_dto.valve_output_ids = []
