@@ -663,3 +663,29 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     accepted_terms = Column(Integer, default=0, nullable=False)
     email = Column(String(255), nullable=True, unique=False)
+
+
+class Screen(Base):
+    __tablename__ = 'screen'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    name = Column(String(255), default='', nullable=False)
+    in_use = Column(Boolean, nullable=False, default=True)
+    type = Column(String(255), nullable=False)
+
+    translational_steps = Column(Integer, nullable=True)
+    rotational_steps = Column(Integer, nullable=True)
+
+    source = Column(String(255), nullable=False)
+    external_id = Column(String(255), nullable=False)
+    plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
+
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
+
+    def __str__(self):
+        if self.name:
+            return '{0} ({1})'.format(self.name, self.id)
+        return str(self.id)
