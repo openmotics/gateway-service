@@ -212,10 +212,6 @@ class PumpGroupSerializer(object):
             mapping={'output': ('pump_output_id', PumpGroupSerializer.BYTE_MAX),
                      'room': ('room_id', PumpGroupSerializer.BYTE_MAX)}
         )
-        if 'output' in api_data:
-            pump_group_dto.pump_output_id = api_data['output']
-        if 'room' in api_data:
-            pump_group_dto.room_id = api_data['room']
         if 'outputs' in api_data:
             if api_data['outputs'] == '':
                 pump_group_dto.valve_output_ids = []

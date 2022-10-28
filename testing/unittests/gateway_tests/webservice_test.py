@@ -317,7 +317,7 @@ class WebInterfaceTest(unittest.TestCase):
             ])
             save.assert_called_with([
                 PumpGroupDTO(0, pump_output_id=1, valve_output_ids=[8, 9, 10]),
-                PumpGroupDTO(1, pump_output_id=255, valve_output_ids=[])
+                PumpGroupDTO(1, pump_output_id=None, valve_output_ids=[])
             ])
 
     def test_ventilation_configurations(self):
