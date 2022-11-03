@@ -343,7 +343,8 @@ class ThermostatsMigrator(BaseMigrator):
             report_logger.info('Thermostat Groups:')
             for group in db.query(ThermostatGroup):
                 report_logger.info('  * {0}'.format(group.name))
-                report_logger.info('    * Sensor: {0} ({1})'.format(group.sensor.name, group.sensor.external_id))
+                if group.sensor is not None:
+                    report_logger.info('    * Sensor: {0} ({1})'.format(group.sensor.name, group.sensor.external_id))
                 report_logger.info('    * Threshold: {0}'.format(group.threshold_temperature))
                 report_logger.info('    * Current mode: {0}'.format(group.mode))
                 oas = group.heating_output_associations
