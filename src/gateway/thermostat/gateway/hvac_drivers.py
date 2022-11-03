@@ -69,7 +69,7 @@ class HvacContactDriver(HvacDriverParent):
             return
 
         if len(self._output_list) < 1:
-            logger.error("outputs need to be linked to hvac unit with id: {} ".format(self._hvac_id))
+            logger.debug("outputs need to be linked to hvac unit with id: {} ".format(self._hvac_id))
             return
 
         for output in self._output_list:
