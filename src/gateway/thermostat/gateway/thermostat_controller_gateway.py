@@ -143,7 +143,7 @@ class ThermostatControllerGateway(ThermostatController):
                     stmt = select(ThermostatGroup.number)  # type: ignore
                     numbers = db.execute(stmt).scalars()  # type: List[int]
                 for group_nr in numbers:
-                    self.set_thermostat_group(thermostat_group_id=group_nr,
+                    self.set_thermostat_group(thermostat_group_number=group_nr,
                                               state=state, mode=mode)
                 logger.info('Changed the state/mode for all ThermostatGroups to {0}/{1} by master event'.format(state, mode))
             elif master_event.data['type'] == MasterEvent.APITypes.SET_THERMOSTAT_PRESET:
@@ -253,16 +253,16 @@ class ThermostatControllerGateway(ThermostatController):
                                             (ThermostatGroup.Modes.COOLING, thermostat.cooling_schedules)]:
                     self._setpoint_controller.update_thermostat_setpoints(thermostat_id, mode, day_schedules)
 
-    def set_current_setpoint(self, thermostat_id, temperature=None, heating_temperature=None, cooling_temperature=None):
+    def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
         # type: (int, Optional[float], Optional[float], Optional[float]) -> None
         with Database.get_session() as db:
-            thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()
+            thermostat = db.query(Thermostat).filter_by(number=thermostat_number).one()
             self._setpoint_controller._overrule_current_setpoint(thermostat,
                                        temperature=temperature,
                                        heating_temperature=heating_temperature,
                                        cooling_temperature=cooling_temperature)
             db.commit()
-        self.tick_thermostat(thermostat_id)
+        self.tick_thermostat(thermostat_number)
 
     def get_current_preset(self, thermostat_number):  # type: (int) -> str
         with Database.get_session() as db:
@@ -307,7 +307,7 @@ class ThermostatControllerGateway(ThermostatController):
         statuses = []
         with Database.get_session() as db:
             for thermostat_group in db.query(ThermostatGroup):  # type: ThermostatGroup
-                group_status = ThermostatGroupStatusDTO(id=thermostat_group.number,
+                group_status = ThermostatGroupStatusDTO(number=thermostat_group.number,
                                                         automatic=True,  # Default, will be updated below
                                                         setpoint=0,  # Default, will be updated below
                                                         cooling=thermostat_group.mode == ThermostatMode.COOLING,
@@ -367,21 +367,21 @@ class ThermostatControllerGateway(ThermostatController):
             stmt = select(ThermostatGroup.number)  # type: ignore
             groups = db.execute(stmt).scalars()
         for group_nr in groups:
-            self.set_thermostat_group(thermostat_group_id=group_nr,
+            self.set_thermostat_group(thermostat_group_number=group_nr,
                                       state=ThermostatState.ON if state else ThermostatState.OFF,
                                       mode=mode)
 
-    def set_thermostat_group(self, thermostat_group_id, state=None, mode=None):
+    def set_thermostat_group(self, thermostat_group_number, state=None, mode=None):
         # type: (int, Optional[str], Optional[str]) -> None
 
         # check if a driver already exists, create a driver if not
-        if thermostat_group_id not in self._drivers:
-            self._drivers[thermostat_group_id] = HvacContactDriver(thermostat_group_id)
+        if thermostat_group_number not in self._drivers:
+            self._drivers[thermostat_group_number] = HvacContactDriver(thermostat_group_number)
         # fetch the driver for this thermostat group
-        driver = self._drivers[thermostat_group_id]
+        driver = self._drivers[thermostat_group_number]
 
         with Database.get_session() as db:
-            thermostat_group = db.query(ThermostatGroup).filter_by(number=thermostat_group_id).one()  # type: ThermostatGroup
+            thermostat_group = db.query(ThermostatGroup).filter_by(number=thermostat_group_number).one()  # type: ThermostatGroup
             changed = False
             if mode is not None and thermostat_group.mode != mode:
                 thermostat_group.mode = mode
@@ -401,10 +401,10 @@ class ThermostatControllerGateway(ThermostatController):
                 for thermostat in thermostat_group.thermostats:
                     self.tick_thermostat(thermostat.number)
 
-    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+    def load_heating_thermostat(self, thermostat_number):  # type: (int) -> ThermostatDTO
         mode = ThermostatMode.HEATING
         with Database.get_session() as db:
-            thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()  # type: Thermostat
+            thermostat = db.query(Thermostat).filter_by(number=thermostat_number).one()  # type: Thermostat
             return ThermostatMapper(db).orm_to_dto(thermostat, mode)
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
@@ -416,10 +416,10 @@ class ThermostatControllerGateway(ThermostatController):
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         self._save_thermostat_configurations(thermostats, ThermostatMode.HEATING)
 
-    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+    def load_cooling_thermostat(self, thermostat_number):  # type: (int) -> ThermostatDTO
         mode = ThermostatMode.COOLING
         with Database.get_session() as db:
-            thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()
+            thermostat = db.query(Thermostat).filter_by(number=thermostat_number).one()
             return ThermostatMapper(db).orm_to_dto(thermostat, mode)
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
@@ -473,10 +473,10 @@ class ThermostatControllerGateway(ThermostatController):
         if self._sync_thread:
             self._sync_thread.request_single_run()
 
-    def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
+    def set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
         # type: (int, bool, int) -> None
         with Database.get_session() as db:
-            thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()  # type: Thermostat
+            thermostat = db.query(Thermostat).filter_by(number=thermostat_number).one()  # type: Thermostat
             thermostat.automatic = automatic
             if automatic:
                 preset_type = Preset.Types.AUTO  # type: str
@@ -486,12 +486,12 @@ class ThermostatControllerGateway(ThermostatController):
             change = bool(db.dirty)
             db.commit()
         if change:
-            self.tick_thermostat(thermostat_id)
+            self.tick_thermostat(thermostat_number)
 
-    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+    def set_thermostat(self, thermostat_number, preset=None, state=None, temperature=None):
         # type: (int, Optional[str], Optional[str], Optional[float]) -> None
         with Database.get_session() as db:
-            thermostat = db.query(Thermostat).filter_by(number=thermostat_id).one()
+            thermostat = db.query(Thermostat).filter_by(number=thermostat_number).one()
             change = False
             if preset is not None:
                 self._setpoint_controller._set_current_preset(thermostat,
@@ -505,7 +505,7 @@ class ThermostatControllerGateway(ThermostatController):
             change = bool(db.dirty)
             db.commit()
         if change:
-            self.tick_thermostat(thermostat_id)
+            self.tick_thermostat(thermostat_number)
 
     def load_thermostat_groups(self):
         # type: () -> List[ThermostatGroupDTO]
@@ -518,7 +518,7 @@ class ThermostatControllerGateway(ThermostatController):
                         pump_delay = valve.delay
                         break
                 sensor_id = None if group.sensor is None else group.sensor.id
-                thermostat_group_dto = ThermostatGroupDTO(id=group.number,
+                thermostat_group_dto = ThermostatGroupDTO(number=group.number,
                                                           name=group.name,
                                                           outside_sensor_id=sensor_id,
                                                           threshold_temperature=group.threshold_temperature,
@@ -531,17 +531,17 @@ class ThermostatControllerGateway(ThermostatController):
                 config.append(thermostat_group_dto)
         return config
 
-    def load_thermostat_group(self, thermostat_group_id):
+    def load_thermostat_group(self, thermostat_group_number):
         # type: (int) -> ThermostatGroupDTO
         with Database.get_session() as db:
-            group = db.query(ThermostatGroup).filter_by(number=thermostat_group_id).one()  # type: ThermostatGroup
+            group = db.query(ThermostatGroup).filter_by(number=thermostat_group_number).one()  # type: ThermostatGroup
             pump_delay = None
             for thermostat in group.thermostats:
                 for valve in thermostat.valves:
                     pump_delay = valve.delay
                     break
             sensor_id = None if group.sensor is None else group.sensor.id
-            thermostat_group_dto = ThermostatGroupDTO(id=group.number,
+            thermostat_group_dto = ThermostatGroupDTO(number=group.number,
                                                       name=group.name,
                                                       outside_sensor_id=sensor_id,
                                                       threshold_temperature=group.threshold_temperature,
@@ -567,10 +567,10 @@ class ThermostatControllerGateway(ThermostatController):
             for thermostat_group_dto in thermostat_groups:
 
                 # get the group database object & update information
-                thermostat_group = groups.get(thermostat_group_dto.id)
+                thermostat_group = groups.get(thermostat_group_dto.number)
                 if thermostat_group is None:
-                    logger.info('creating <ThermostatGroup %s>', thermostat_group_dto.id)
-                    thermostat_group = ThermostatGroup(number=thermostat_group_dto.id)
+                    logger.info('creating <ThermostatGroup %s>', thermostat_group_dto.number)
+                    thermostat_group = ThermostatGroup(number=thermostat_group_dto.number)
                     db.add(thermostat_group)
                 if 'name' in thermostat_group_dto.loaded_fields:
                     thermostat_group.name = thermostat_group_dto.name
@@ -644,10 +644,10 @@ class ThermostatControllerGateway(ThermostatController):
 
 
 
-    def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
+    def remove_thermostat_groups(self, thermostat_group_numbers):  # type: (List[int]) -> None
         with Database.get_session() as db:
-            for group_id in thermostat_group_ids:
-                group = db.query(ThermostatGroup).join(Thermostat).filter_by(number=group_id).one_or_none()  # type: Optional[ThermostatGroup]
+            for group_number in thermostat_group_numbers:
+                group = db.query(ThermostatGroup).join(Thermostat).filter_by(number=group_number).one_or_none()  # type: Optional[ThermostatGroup]
                 if group is None:
                     continue
                 if group.thermostats:
@@ -683,7 +683,7 @@ class ThermostatControllerGateway(ThermostatController):
                         if link.mode == ThermostatGroup.Modes.HEATING:
                             heating_valves.append(valve)
                             break
-
+# BE-304 Pumps don't have numbers, only ids. therefor we assign the id to the number in the dto
                 pump_groups.append(PumpGroupDTO(id=pump.id,
                                                 pump_output_id=pump.output.number,
                                                 valve_output_ids=[valve.output.number for valve in heating_valves]))
@@ -719,7 +719,7 @@ class ThermostatControllerGateway(ThermostatController):
                         if link.mode == ThermostatGroup.Modes.COOLING:
                             cooling_valves.append(valve)
                             break
-
+                # BE-304 Pumps don't have numbers, only ids. therefor we assign the id to the number in the dto
                 pump_groups.append(PumpGroupDTO(id=pump.id,
                                                 pump_output_id=pump.output.number,
                                                 valve_output_ids=[valve.output.number for valve in cooling_valves]))

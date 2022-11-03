@@ -277,7 +277,7 @@ class WebInterfaceTest(unittest.TestCase):
             }
             self.web.set_global_thermostat_configuration(config=config)
             save.assert_called_with([
-                ThermostatGroupDTO(id=0,
+                ThermostatGroupDTO(number=0,
                                    name='Foo',
                                    pump_delay=120,
                                    switch_to_heating_0=[8, 100],

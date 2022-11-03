@@ -135,7 +135,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                 patch.assert_has_calls([mock.call(mode=mode, ref_thermostat=dto3)])
 
     @staticmethod
-    def _build_thermostat_dto(id, defaults=True, mode='heating'):
+    def _build_thermostat_dto(number, defaults=True, mode='heating'):
         kwargs = {'auto_mon': None, 'auto_tue': None, 'auto_wed': None, 'auto_thu': None, 'auto_fri': None,
                   'auto_sat': None, 'auto_sun': None}
         if defaults:
@@ -148,7 +148,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                 kwargs['auto_{0}'.format(day)] = ThermostatScheduleDTO(temp_day_1=temps[0], temp_day_2=temps[1], temp_night=temps[2],
                                                                        start_day_1=times[0], end_day_1=times[1],
                                                                        start_day_2=times[2], end_day_2=times[3])
-        return ThermostatDTO(id=id, name='test', permanent_manual=False,
+        return ThermostatDTO(number=number, name='test', permanent_manual=False,
                              setp0=0.0, setp1=1.0, setp2=2.0, setp3=3.0, setp4=4.0, setp5=5.0,
                              sensor=240, output0=0, output1=1, pid_p=10.0, pid_i=20.0, pid_d=30.0, pid_int=40.0,
                              room=None, **kwargs)

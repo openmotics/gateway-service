@@ -132,7 +132,7 @@ class ThermostatControllerTest(unittest.TestCase):
             db.commit()
 
         self.thermostat_controller.save_heating_thermostats([
-            ThermostatDTO(id=0, sensor=None, output0=None)
+            ThermostatDTO(number=0, sensor=None, output0=None)
         ])
         thermostats = self.thermostat_controller.load_heating_thermostats()
         self.assertEqual(len(thermostats), 0)
@@ -178,7 +178,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                              end_day_2='23:00',
                                              temp_night=16.5)
         self.thermostat_controller.save_heating_thermostats([
-            ThermostatDTO(id=0,
+            ThermostatDTO(number=0,
                           auto_mon=schedule_dto,
                           auto_tue=schedule_dto,
                           auto_wed=schedule_dto,
@@ -330,7 +330,7 @@ class ThermostatControllerTest(unittest.TestCase):
             self.assertEqual(0, len(group.outputs))
 
         self.thermostat_controller.save_thermostat_groups([
-            ThermostatGroupDTO(id=0,
+            ThermostatGroupDTO(number=0,
                                outside_sensor_id=1,
                                pump_delay=30,
                                threshold_temperature=15,
@@ -353,7 +353,7 @@ class ThermostatControllerTest(unittest.TestCase):
             self.assertEqual(1, len(associations), associations)
             self.assertIn({'value': 100, 'mode': 'cooling', 'output': 2}, associations)
 
-        new_thermostat_group_dto = ThermostatGroupDTO(id=0,
+        new_thermostat_group_dto = ThermostatGroupDTO(number=0,
                                                       name='Default',
                                                       pump_delay=60,
                                                       outside_sensor_id=None,
@@ -436,7 +436,7 @@ class ThermostatControllerTest(unittest.TestCase):
             # Apply last auto scheduled setpoints
             self.thermostat_controller._sync_auto_setpoints = True
             self.thermostat_controller.refresh_config_from_db()
-            expected = ThermostatGroupStatusDTO(id=0,
+            expected = ThermostatGroupStatusDTO(number=0,
                                                 setpoint=0,
                                                 cooling=False,
                                                 automatic=True,
@@ -541,7 +541,7 @@ class ThermostatControllerTest(unittest.TestCase):
             ])
             db.commit()
 
-        thermostat_dto = self.thermostat_controller.load_heating_thermostat(thermostat_id=0)
+        thermostat_dto = self.thermostat_controller.load_heating_thermostat(thermostat_number=0)
         self.thermostat_controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
 
         with self.session as db:
@@ -554,7 +554,7 @@ class ThermostatControllerTest(unittest.TestCase):
                         Preset.Types.PARTY: 22.0}
             self.assertEqual(expected, {x.type: x.heating_setpoint for x in thermostat.presets})
 
-        source_dto = ThermostatDTO(id=8)
+        source_dto = ThermostatDTO(number=8)
         source_dto.auto_mon = ThermostatScheduleDTO(temp_night=1.0, temp_day_1=2.0, temp_day_2=3.0,
                                                     start_day_1='04:00', end_day_1='05:00',
                                                     start_day_2='06:00', end_day_2='07:00')
@@ -597,7 +597,7 @@ class ThermostatControllerTest(unittest.TestCase):
             ])
             db.commit()
 
-        thermostat_dto = self.thermostat_controller.load_heating_thermostat(thermostat_id=0)
+        thermostat_dto = self.thermostat_controller.load_heating_thermostat(thermostat_number=0)
         self.thermostat_controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
 
         now = datetime.now()

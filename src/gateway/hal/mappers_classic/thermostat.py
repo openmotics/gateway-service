@@ -48,12 +48,12 @@ class ThermostatMapper(object):
                                                   start_day_2=data[field][4],
                                                   end_day_2=data[field][5],
                                                   temp_day_2=data[field][6])
-        return ThermostatDTO(id=data['id'],
+        return ThermostatDTO(number=data['id'],
                              **kwargs)
 
     @staticmethod
     def dto_to_orm(model_type, thermostat_dto):  # type: (Type[EepromModel], ThermostatDTO) -> EepromModel
-        data = {'id': thermostat_dto.id}  # type: Dict[str, Any]
+        data = {'id': thermostat_dto.number}  # type: Dict[str, Any]
         for field in ['name', 'permanent_manual'] + ['setp{0}'.format(i) for i in range(6)]:
             if field in thermostat_dto.loaded_fields:
                 data[field] = getattr(thermostat_dto, field)
@@ -97,7 +97,7 @@ class ThermostatGroupMapper(object):
                 value = Toolbox.nonify(data[value_field], ThermostatGroupMapper.BYTE_MAX)
                 if output is not None:
                     kwargs[dto_field] = [output, value]
-        return ThermostatGroupDTO(id=0, **kwargs)
+        return ThermostatGroupDTO(number=0, **kwargs)
 
     @staticmethod
     def dto_to_orm(thermostat_group_dto):  # type: (ThermostatGroupDTO) -> EepromModel
