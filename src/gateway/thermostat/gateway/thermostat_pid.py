@@ -50,6 +50,7 @@ class ThermostatPid(object):
         self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[int], int, str, str], None]]
         self._number = thermostat.number
         self._mode = thermostat.group.mode
+        self._previous_mode = thermostat.group.mode
         self._state = thermostat.state
         self._valve_config = thermostat.valve_config
         self._active_preset_type = thermostat.active_preset.type
@@ -191,7 +192,7 @@ class ThermostatPid(object):
                 output_power = 0
 
             # Heating needed while in cooling mode OR cooling needed while in heating mode
-            # -> no active airon required, rely on losses/gains of system to reach equilibrium
+            # -> no active action required, rely on losses/gains of system to reach equilibrium
             if ((self._mode == ThermostatGroup.Modes.COOLING and output_power > 0) or
                     (self._mode == ThermostatGroup.Modes.HEATING and output_power < 0)):
                 output_power = 0
@@ -211,23 +212,42 @@ class ThermostatPid(object):
     def setpoint(self):  # type: () -> float
         return self._pid.setpoint
 
+
+        '''
+        We need to make sure that we always steer the current_mode to the correct value.
+        The opposit mode has to be turned off.
+        If we steer the opposite_mode to power 0 and the same valve is used for heating and cooling,
+        the valve will first be opened for current_mode and then closed for opposite_mode -> fighting over valve
+        Thus we need to steer the opposite_mode once to off and the current_mode continiously
+        '''
     def steer(self, power):  # type: (int) -> None
+        # if power is unchanged, do not steer
         if self._current_steering_power != power:
             logger.info('Thermostat {0}: Steer to {1} '.format(self._number, power))
             self._current_steering_power = power
         else:
             return
 
-        # Steer drivers
+        # if no steer drivers, do nothing
         if self._driver_heating is None or self._driver_cooling is None:
+            logger.error('no driver for heating or cooling')
             return
 
-        if power > 0:
+        # if current mode is not the same as the previous mode, turn off the previous mode
+        if self._mode != self._previous_mode:
+            if self._previous_mode == ThermostatGroup.Modes.HEATING:
+                self._driver_heating.steer(0)
+            elif self._previous_mode == ThermostatGroup.Modes.COOLING:
+                self._driver_cooling.steer(0)
+
+        # set current mode as previous mode
+        self._previous_mode = self._mode
+
+        # send power to the driver of the current mode
+        power = abs(power)
+        if self._mode == ThermostatGroup.Modes.HEATING:
             self._driver_heating.steer(power)
-            self._driver_cooling.steer(0)
-        else:
-            power = abs(power)
-            self._driver_heating.steer(0)
+        elif self._mode == ThermostatGroup.Modes.COOLING:
             self._driver_cooling.steer(power)
 
 
