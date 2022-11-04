@@ -174,13 +174,15 @@ class PumpValveControllerTest(unittest.TestCase):
         self.valve_pump_controller._set_valves.call_count = 0
         self.assertFalse(thermostat_pid.tick())
         self.valve_pump_controller.steer.assert_called()
-        self.assertEqual(2, self.valve_pump_controller.steer.call_count)
+        self.assertEqual(1, self.valve_pump_controller.steer.call_count)
 
         with self.session as db:
             thermostat = db.query(Thermostat).filter_by(number=0).one()
             thermostat.state = ThermostatState.ON
             db.commit()
         thermostat_pid.update_thermostat()
+
+        self.prev_mode = ThermostatGroup.Modes.HEATING
         # values below must be in random order, if sorted the same power is expected twice, no driver steering will be executed (expected behaviour)
         for mode, output_power, heating_power, cooling_power in [(ThermostatGroup.Modes.HEATING, 100, 100, 0),
                                                                  (ThermostatGroup.Modes.HEATING, -50, 0, 0),
@@ -190,13 +192,20 @@ class PumpValveControllerTest(unittest.TestCase):
                                                                  (ThermostatGroup.Modes.COOLING, 50, 0, 0),
                                                                  (ThermostatGroup.Modes.COOLING, -50, 0, 50),
                                                                  (ThermostatGroup.Modes.COOLING, 0, 0, 0)]:
+            print('mode {}, output_power {}, heating_power {}, cooling_power {}'.format(mode, output_power, heating_power, cooling_power))
             thermostat_pid._mode = mode
             thermostat_pid._pid.return_value = output_power
             self.valve_pump_controller.steer.call_count = 0
             self.valve_pump_controller.steer.mock_calls = []
             self.assertTrue(thermostat_pid.tick())
             self.valve_pump_controller.steer.assert_called()
-            self.assertEqual([mock.call(percentage=heating_power, valve_ids=[1]),
-                                     mock.call(percentage=cooling_power, valve_ids=[2])],
-                             self.valve_pump_controller.steer.mock_calls)
-            self.assertEqual(2, self.valve_pump_controller.steer.call_count)
+            if self.prev_mode != mode:
+                self.assertEqual([mock.call(percentage=heating_power, valve_ids=[1]), mock.call(percentage=cooling_power, valve_ids=[2])], self.valve_pump_controller.steer.mock_calls)
+                self.assertEqual(2, self.valve_pump_controller.steer.call_count)
+            elif mode == ThermostatGroup.Modes.HEATING:
+                self.assertEqual([mock.call(percentage=heating_power, valve_ids=[1])], self.valve_pump_controller.steer.mock_calls)
+                self.assertEqual(1, self.valve_pump_controller.steer.call_count)
+            elif mode == ThermostatGroup.Modes.COOLING:
+                self.assertEqual([mock.call(percentage=cooling_power, valve_ids=[2])], self.valve_pump_controller.steer.mock_calls)
+                self.assertEqual(1, self.valve_pump_controller.steer.call_count)
+            self.prev_mode = mode
