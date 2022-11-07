@@ -77,9 +77,11 @@ class HvacContactDriver(HvacDriverParent):
                 continue
 
             value = output.value
-            value = max(0, min(value, 100))  # clampling on 0-100
+            value = max(0, min(value, 100))  # clamping on 0-100
+            with Database.get_session() as db:
+                output_nr = db.query(Output).filter_by(id=output.output_id).one().number
             self._output_controller.set_output_status(
-                                                        output_id=output.output_id, 
+                                                        output_id=output_nr, 
                                                         is_on=value>0, 
                                                         dimmer=value
                                                     )
