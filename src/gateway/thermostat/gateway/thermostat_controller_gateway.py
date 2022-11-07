@@ -373,12 +373,15 @@ class ThermostatControllerGateway(ThermostatController):
 
     def set_thermostat_group(self, thermostat_group_number, state=None, mode=None):
         # type: (int, Optional[str], Optional[str]) -> None
-
+        
+        with Database.get_session() as db:
+            thermostat_group_id = db.query(ThermostatGroup).filter_by(number=thermostat_group_number).one().id
         # check if a driver already exists, create a driver if not
-        if thermostat_group_number not in self._drivers:
-            self._drivers[thermostat_group_number] = HvacContactDriver(thermostat_group_number)
-        # fetch the driver for this thermostat group
-        driver = self._drivers[thermostat_group_number]
+        if thermostat_group_id not in self._drivers:
+            self._drivers[thermostat_group_id] = HvacContactDriver(thermostat_group_id)
+        # fetch the driver for this thermostat group & update
+        driver = self._drivers[thermostat_group_id]
+        driver._update_from_database()
 
         with Database.get_session() as db:
             thermostat_group = db.query(ThermostatGroup).filter_by(number=thermostat_group_number).one()  # type: ThermostatGroup
