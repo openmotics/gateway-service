@@ -53,8 +53,11 @@ class HvacContactDriver(HvacDriverParent):
             return
         new_output_list = []
         for hvac_output_link in hvac_output_links:
+            with Database.get_session() as db:
+                output_nr = db.query(Output).filter_by(id=hvac_output_link.output_id).one().number
             new_output = HvacContactDTO(
                     output_id = hvac_output_link.output_id,
+                    output_nr = output_nr,
                     mode      = hvac_output_link.mode,
                     value     = hvac_output_link.value
                 )
@@ -78,10 +81,8 @@ class HvacContactDriver(HvacDriverParent):
 
             value = output.value
             value = max(0, min(value, 100))  # clamping on 0-100
-            with Database.get_session() as db:
-                output_nr = db.query(Output).filter_by(id=output.output_id).one().number
             self._output_controller.set_output_status(
-                                                        output_id=output_nr, 
+                                                        output_id=output.output_nr, 
                                                         is_on=value>0, 
                                                         dimmer=value
                                                     )
