@@ -94,7 +94,15 @@ class ThermostatGroupMapper(object):
                 value_field = 'switch_to_{0}_value_{1}'.format(mode, i)
                 dto_field = 'switch_to_{0}_{1}'.format(mode, i)
                 output = Toolbox.nonify(data[output_field], ThermostatGroupMapper.BYTE_MAX)
-                value = Toolbox.nonify(data[value_field], ThermostatGroupMapper.BYTE_MAX)
+
+                # remap 0-63,255 (master) value to 0-100,None (front-end)
+                temp_value = data[value_field]
+                if temp_value == ThermostatGroupMapper.BYTE_MAX :
+                    temp_value = None
+                else:
+                    temp_value = round(temp_value/63*100)
+                value = temp_value
+
                 if output is not None:
                     kwargs[dto_field] = [output, value]
         return ThermostatGroupDTO(number=0, **kwargs)
@@ -115,7 +123,15 @@ class ThermostatGroupMapper(object):
                 if field in thermostat_group_dto.loaded_fields:
                     dto_value = getattr(thermostat_group_dto, field)  # type: Optional[Tuple[int, int]]
                     data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupMapper.BYTE_MAX)
-                    data[value] = Toolbox.denonify(None if dto_value is None else dto_value[1], ThermostatGroupMapper.BYTE_MAX)
+
+                    # remap 0-100,None (front-end) value to 0-63,255 (master)
+                    temp_value = None if dto_value is None else dto_value[1] # None, 0-100
+                    if temp_value is not None:
+                        temp_value = round(temp_value/100*63) # 0-63
+                    else:
+                        temp_value = ThermostatGroupMapper.BYTE_MAX # 255
+                    data[value] = temp_value  # value = 0-63, 255
+
         return GlobalThermostatConfiguration.deserialize(data)
 
 
