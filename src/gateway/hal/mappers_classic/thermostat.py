@@ -100,7 +100,7 @@ class ThermostatGroupMapper(object):
                 if temp_value == ThermostatGroupMapper.BYTE_MAX :
                     temp_value = None
                 else:
-                    temp_value = round(temp_value/63*100)
+                    temp_value = int(round(temp_value/63.0*100))
                 value = temp_value
 
                 if output is not None:
@@ -126,8 +126,8 @@ class ThermostatGroupMapper(object):
 
                     # remap 0-100,None (front-end) value to 0-63,255 (master)
                     temp_value = None if dto_value is None else dto_value[1] # None, 0-100
-                    if temp_value is not None:
-                        temp_value = round(temp_value/100*63) # 0-63
+                    if temp_value is not None or temp_value != 255:
+                        temp_value = int(round(temp_value/100.0*63)) # 0-63
                     else:
                         temp_value = ThermostatGroupMapper.BYTE_MAX # 255
                     data[value] = temp_value  # value = 0-63, 255
