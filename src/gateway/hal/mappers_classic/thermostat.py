@@ -125,14 +125,13 @@ class ThermostatGroupMapper(object):
                     data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupMapper.BYTE_MAX)
 
                     # remap 0-100,None (front-end) value to 0-63,255 (master)
-                    temp_value = None if dto_value is None else dto_value[1] # None, 0-100
-                    if temp_value is not None or temp_value != 255:
+                    temp_value = ThermostatGroupMapper.BYTE_MAX if dto_value is None else dto_value[1] # 0-100, 255
+                    if temp_value != 255:
                         temp_value = int(round(temp_value/100.0*63)) # 0-63
-                    else:
-                        temp_value = ThermostatGroupMapper.BYTE_MAX # 255
                     data[value] = temp_value  # value = 0-63, 255
 
-        return GlobalThermostatConfiguration.deserialize(data)
+        finalOut = GlobalThermostatConfiguration.deserialize(data)
+        return finalOut
 
 
 class PumpGroupMapper(object):
