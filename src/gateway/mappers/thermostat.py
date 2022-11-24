@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.models import DaySchedule, Output, Preset, Room, Sensor, \
-    Thermostat, ThermostatGroup, Valve, ValveToThermostatAssociation
+    Thermostat, ThermostatGroup, Valve, IndoorLinkValves
 
 if False:  # MYPY
     from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple
@@ -38,7 +38,7 @@ class ThermostatMapper(object):
 
     def orm_to_dto(self, orm_object, mode):  # type: (Thermostat, Literal['cooling', 'heating']) -> ThermostatDTO
         sensor_id = None if orm_object.sensor is None else orm_object.sensor.id
-        dto = ThermostatDTO(id=orm_object.number,
+        dto = ThermostatDTO(number=orm_object.number,
                             name=orm_object.name,
                             sensor=sensor_id,
                             pid_p=getattr(orm_object, 'pid_{0}_p'.format(mode)),
@@ -88,11 +88,11 @@ class ThermostatMapper(object):
 
     def dto_to_orm(self, thermostat_dto):  # type: (ThermostatDTO) -> Thermostat
         thermostat = self._db.query(Thermostat) \
-            .where(Thermostat.number == thermostat_dto.id) \
+            .where(Thermostat.number == thermostat_dto.number) \
             .join(ThermostatGroup, isouter=True) \
             .one_or_none()  # type: Optional[Thermostat]
         if thermostat is None:
-            thermostat = Thermostat(number=thermostat_dto.id,
+            thermostat = Thermostat(number=thermostat_dto.number,
                                     start=0)
         if thermostat.group is None:
             thermostat.group = self._db.query(ThermostatGroup).limit(1).one()
@@ -116,13 +116,14 @@ class ThermostatMapper(object):
             raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(thermostat.sensor.id, thermostat.sensor.physical_quantity))
         return thermostat
 
-    def get_valve_links(self, thermostat_dto, mode):  # type: (ThermostatDTO, str) -> Tuple[List[ValveToThermostatAssociation], List[ValveToThermostatAssociation]]
+    def get_valve_links(self, thermostat_dto, mode):  # type: (ThermostatDTO, str) -> Tuple[List[IndoorLinkValves], List[IndoorLinkValves]]
+        # in the return tuple, the first List contains updated IndoorLinkValves and the second List contains removed IndoorLinkValves
         thermostat = self._db.query(Thermostat) \
-            .where(Thermostat.number == thermostat_dto.id) \
+            .where(Thermostat.number == thermostat_dto.number) \
             .one()  # type: Thermostat
 
         outputs = {x.number: x for x in self._db.query(Output).join(Valve, isouter=True)}  # type: Dict[int,Output]
-        valve_associations = iter(getattr(thermostat, '{0}_valve_associations'.format(mode))) # type: Iterator[ValveToThermostatAssociation]
+        valve_associations = iter(getattr(thermostat, '{0}_valve_associations'.format(mode))) # type: Iterator[IndoorLinkValves]
 
         links = []
         for field, priority in [('output0', 0),
@@ -135,23 +136,22 @@ class ThermostatMapper(object):
                         valve = Valve(output=output, name='Valve (output {0})'.format(output.number))
                     association = next(valve_associations, None)
                     if association is None:
-                        links.append(ValveToThermostatAssociation(
-                            thermostat=thermostat,
+                        links.append(IndoorLinkValves(
+                            thermostat_link_id=thermostat.id,
                             valve=valve,
-                            priority=priority,
                             mode=mode,
                         ))
                     else:
-                        if association.valve_id != valve.id or association.priority != priority:
+                        # if association.valve_id != valve.id or association.priority != priority: (this is the old if)
+                        if association.valve_id != valve.id:
                             association.valve = valve
-                            association.priority = priority
                             links.append(association)
         return links, list(valve_associations)
 
     def get_schedule_links(self, thermostat_dto, mode):  # type: (ThermostatDTO, str) -> Tuple[List[DaySchedule],List[DaySchedule]]
         thermostat = self._db.query(Thermostat) \
             .join(DaySchedule, isouter=True) \
-            .where(Thermostat.number == thermostat_dto.id) \
+            .where(Thermostat.number == thermostat_dto.number) \
             .one()  # type: Thermostat
         day_schedules = {x.index: x for x in thermostat.schedules if x.mode == mode}
 
@@ -181,7 +181,7 @@ class ThermostatMapper(object):
     def get_preset_links(self, thermostat_dto, mode):  # type: (ThermostatDTO, str) -> Tuple[List[Preset], List[Preset]]
         thermostat = self._db.query(Thermostat) \
             .join(Preset, isouter=True) \
-            .where(Thermostat.number == thermostat_dto.id) \
+            .where(Thermostat.number == thermostat_dto.number) \
             .one()  # type: Thermostat
         if not thermostat.presets:
             thermostat.presets = [
@@ -209,8 +209,8 @@ class ThermostatMapper(object):
         return links, []
 
     @staticmethod
-    def get_default_dto(thermostat_id, mode):  # type: (int, Literal['cooling', 'heating']) -> ThermostatDTO
-        dto = ThermostatDTO(id=thermostat_id)
+    def get_default_dto(thermostat_number, mode):  # type: (int, Literal['cooling', 'heating']) -> ThermostatDTO
+        dto = ThermostatDTO(number=thermostat_number)
 
         # Presets
         dto.setp3 = Preset.DEFAULT_PRESETS[mode][Preset.Types.AWAY]

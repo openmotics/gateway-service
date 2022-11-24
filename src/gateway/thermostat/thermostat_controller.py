@@ -60,7 +60,7 @@ class ThermostatController(object):
     def set_current_preset(self, thermostat_number, preset_type):
         raise NotImplementedError()
 
-    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+    def load_heating_thermostat(self, thermostat_number):  # type: (int) -> ThermostatDTO
         raise NotImplementedError()
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
@@ -82,7 +82,7 @@ class ThermostatController(object):
         destination_dto.setp5 = source_dto.setp5
         self.save_heating_thermostats([destination_dto])
 
-    def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+    def load_heating_pump_group(self, pump_group_number):  # type: (int) -> PumpGroupDTO
         raise NotImplementedError()
 
     def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
@@ -95,7 +95,7 @@ class ThermostatController(object):
         # type: (int, bool, int) -> None
         raise NotImplementedError()
 
-    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+    def set_thermostat(self, thermostat_number, preset=None, state=None, temperature=None):
         # type: (int, Optional[str], Optional[str], Optional[float]) -> None
         raise NotImplementedError()
 
@@ -122,7 +122,7 @@ class ThermostatController(object):
         # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
         raise NotImplementedError()
 
-    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+    def load_cooling_thermostat(self, thermostat_number):  # type: (int) -> ThermostatDTO
         raise NotImplementedError()
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
@@ -144,7 +144,7 @@ class ThermostatController(object):
         destination_dto.setp5 = source_dto.setp5
         self.save_cooling_thermostats([destination_dto])
 
-    def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+    def load_cooling_pump_group(self, pump_group_number):  # type: (int) -> PumpGroupDTO
         raise NotImplementedError()
 
     def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]

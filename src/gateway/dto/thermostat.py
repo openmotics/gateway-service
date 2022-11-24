@@ -25,14 +25,14 @@ if False:
 
 
 class ThermostatDTO(BaseDTO):
-    def __init__(self, id,
+    def __init__(self, number,
                  name='', permanent_manual=False,
                  setp0=None, setp1=None, setp2=None, setp3=None, setp4=None, setp5=None,
                  sensor=None, output0=None, output1=None,
                  pid_p=None, pid_i=None, pid_d=None, pid_int=None,
                  room=None, thermostat_group=None,
                  auto_mon=None, auto_tue=None, auto_wed=None, auto_thu=None, auto_fri=None, auto_sat=None, auto_sun=None):
-        self.id = id  # type: int
+        self.number = number  # type: int
         self.name = name  # type: str
         self.setp0 = setp0  # type: Optional[float]
         self.setp1 = setp1  # type: Optional[float]
@@ -67,10 +67,10 @@ class ThermostatDTO(BaseDTO):
 
 
 class ThermostatGroupDTO(BaseDTO):
-    def __init__(self, id, name=None, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
+    def __init__(self, number=None, name=None, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
                  switch_to_heating_0=None, switch_to_heating_1=None, switch_to_heating_2=None, switch_to_heating_3=None,
                  switch_to_cooling_0=None, switch_to_cooling_1=None, switch_to_cooling_2=None, switch_to_cooling_3=None):
-        self.id = id  # type: int
+        self.number = number  # type: int
         self.name = name  # type: str
         self.outside_sensor_id = outside_sensor_id  # type: Optional[int]
         self.pump_delay = 60 if pump_delay in (None, 255) else pump_delay  # type: int
@@ -104,9 +104,9 @@ class ThermostatStatusDTO(BaseDTO):
 
 
 class ThermostatGroupStatusDTO(BaseDTO):
-    def __init__(self, id, mode, automatic, cooling, setpoint=None, statusses=None):
+    def __init__(self, number, mode, automatic, cooling, setpoint=None, statusses=None):
         # type: (int, str, bool, bool, Optional[int], Optional[List[ThermostatStatusDTO]]) -> None
-        self.id = id
+        self.number = number
         self.mode = mode
         self.automatic = automatic
         self.cooling = cooling

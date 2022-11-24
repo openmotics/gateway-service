@@ -31,7 +31,7 @@ class ThermostatSerializer(object):
 
     @staticmethod
     def serialize(thermostat_dto, fields):  # type: (ThermostatDTO, Optional[List[str]]) -> Dict
-        data = {'id': thermostat_dto.id,
+        data = {'id': thermostat_dto.number,
                 'name': thermostat_dto.name,
                 'room': Toolbox.denonify(thermostat_dto.room, ThermostatSerializer.BYTE_MAX),
                 'thermostat_group': Toolbox.denonify(thermostat_dto.thermostat_group, 0),
@@ -107,7 +107,7 @@ class ThermostatGroupSerializer(object):
 
     @staticmethod
     def serialize(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, Optional[List[str]]) -> Dict
-        data = {'id': thermostat_group_dto.id,
+        data = {'id': thermostat_group_dto.number,
                 'name': thermostat_group_dto.name,
                 'pump_delay': Toolbox.denonify(thermostat_group_dto.pump_delay, ThermostatGroupSerializer.BYTE_MAX)}
         for mode in ['heating', 'cooling']:
@@ -122,7 +122,7 @@ class ThermostatGroupSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> ThermostatGroupDTO
-        thermostat_group_dto = ThermostatGroupDTO(id=api_data.get('id', 0))
+        thermostat_group_dto = ThermostatGroupDTO(number=api_data.get('id', 0))
         SerializerToolbox.deserialize(
             dto=thermostat_group_dto,  # Referenced
             api_data=api_data,
@@ -170,7 +170,7 @@ class LegacyThermostatGroupStatusSerializer(object):
 class ThermostatGroupStatusSerializer(object):
     @staticmethod
     def serialize(thermostat_group_status_dto):  # type: (ThermostatGroupStatusDTO) -> Dict[str, Any]
-        data = {'id': thermostat_group_status_dto.id,
+        data = {'id': thermostat_group_status_dto.number,
                 'mode': thermostat_group_status_dto.mode,
                 'thermostats': []}  # type: Dict[str, Any]
         for status in thermostat_group_status_dto.statusses:
@@ -205,12 +205,12 @@ class PumpGroupSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> PumpGroupDTO
-        pump_group_dto = PumpGroupDTO(id=0)
+        pump_group_dto = PumpGroupDTO(id=api_data['id'])
         SerializerToolbox.deserialize(
             dto=pump_group_dto,  # Referenced
             api_data=api_data,
             mapping={'output': ('pump_output_id', PumpGroupSerializer.BYTE_MAX),
-                     'rooom': ('room_id', PumpGroupSerializer.BYTE_MAX)}
+                     'room': ('room_id', PumpGroupSerializer.BYTE_MAX)}
         )
         if 'outputs' in api_data:
             if api_data['outputs'] == '':

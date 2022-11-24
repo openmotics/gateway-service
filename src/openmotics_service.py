@@ -55,6 +55,7 @@ if False:  # MYPY
     from gateway.metrics_controller import MetricsController
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.scheduling_controller import SchedulingController
+    from gateway.setpoint_controller import SetpointController
     from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
     from gateway.system_controller import SystemController
@@ -68,7 +69,7 @@ if False:  # MYPY
     from gateway.hal.master_controller import MasterController
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.uart_controller import UARTController
-    from gateway.update_controller import UpdateController
+    from gateway.updates.update_controller import UpdateController
     from plugins.base import PluginController
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
@@ -132,6 +133,7 @@ class OpenmoticsService(object):
               metrics_controller=INJECTED,  # type: MetricsController
               passthrough_service=INJECTED,  # type: PassthroughService
               scheduling_controller=INJECTED,  # type: SchedulingController
+              setpoint_controller=INJECTED,  # type: SetpointController
               metrics_collector=INJECTED,  # type: MetricsCollector
               web_service=INJECTED,  # type: WebService
               web_interface=INJECTED,  # type: WebInterface
@@ -178,7 +180,7 @@ class OpenmoticsService(object):
             stmt = select(Feature.enabled).filter_by(name=Feature.THERMOSTATS_GATEWAY)  # type: ignore
             thermostats_gateway_enabled = db.execute(stmt).scalar()
         if thermostats_gateway_enabled:
-            ThermostatsMigrator.migrate()
+            ThermostatsMigrator.migrate(fatal=True)
         NamesMigrator.migrate()
         InUseMigrator.migrate()
 
@@ -214,6 +216,7 @@ class OpenmoticsService(object):
         pubsub.start()
         system_controller.start()
         update_controller.start()
+
 
         web_interface.set_service_state(True)
         signal_request = {'stop': False}

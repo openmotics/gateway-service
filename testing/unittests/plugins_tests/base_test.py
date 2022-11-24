@@ -487,8 +487,10 @@ class ShutterPlugin(OMPluginBase):
 
     @mark.slow
     def test_update_plugin(self):
-        """ Validates whether a plugin can be updated """
-        test_1_md5, test_1_data = PluginControllerTest._create_plugin_package('Test', """
+        controller = None
+        try:
+            """ Validates whether a plugin can be updated """
+            test_1_md5, test_1_data = PluginControllerTest._create_plugin_package('Test', """
 from plugins.base import *
 
 class Test(OMPluginBase):
@@ -496,7 +498,7 @@ class Test(OMPluginBase):
     version = '0.0.1'
     interfaces = []
 """)
-        test_2_md5, test_2_data = PluginControllerTest._create_plugin_package('Test', """
+            test_2_md5, test_2_data = PluginControllerTest._create_plugin_package('Test', """
 from plugins.base import *
 
 class Test(OMPluginBase):
@@ -505,25 +507,28 @@ class Test(OMPluginBase):
     interfaces = []
 """)
 
-        controller = PluginControllerTest._get_controller()
-        controller.start()
+            controller = PluginControllerTest._get_controller()
+            controller.start()
 
-        # Install first version
-        result = controller.install_plugin(test_1_md5, test_1_data)
-        self.assertEqual(result, 'Plugin successfully installed')
-        controller.start_plugin('Test')
-        self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
-        with Database.get_session() as db:
-            plugin = db.query(Plugin).filter_by(name='Test').one()
-            self.assertEqual('0.0.1', plugin.version)
+            # Install first version
+            result = controller.install_plugin(test_1_md5, test_1_data)
+            self.assertEqual(result, 'Plugin successfully installed')
+            controller.start_plugin('Test')
+            self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
+            with Database.get_session() as db:
+                plugin = db.query(Plugin).filter_by(name='Test').one()
+                self.assertEqual('0.0.1', plugin.version)
 
-        # Update to version 2
-        result = controller.install_plugin(test_2_md5, test_2_data)
-        self.assertEqual(result, 'Plugin successfully installed')
-        self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
-        with Database.get_session() as db:
-            plugin = db.query(Plugin).filter_by(name='Test').one()
-            self.assertEqual('0.0.2', plugin.version)
+            # Update to version 2
+            result = controller.install_plugin(test_2_md5, test_2_data)
+            self.assertEqual(result, 'Plugin successfully installed')
+            self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
+            with Database.get_session() as db:
+                plugin = db.query(Plugin).filter_by(name='Test').one()
+                self.assertEqual('0.0.2', plugin.version)
+        finally:
+            if controller is not None:
+                controller.stop()
 
     @mark.slow
     def test_plugin_metric_reference(self):

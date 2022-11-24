@@ -23,7 +23,7 @@ from sqlalchemy.pool import StaticPool
 
 from gateway.models import Base, Database, Output, Pump
 from gateway.output_controller import OutputController
-from gateway.thermostat.gateway.pump_driver import PumpDriver
+from gateway.valve_pump.pump_driver import PumpDriver
 from ioc import SetTestMode, SetUpTestInjections
 
 

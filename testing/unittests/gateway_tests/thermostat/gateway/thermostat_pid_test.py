@@ -20,17 +20,17 @@ import unittest
 import mock
 from peewee import SqliteDatabase
 
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import scoped_session, sessionmaker
+
 import fakesleep
 from gateway.dto import SensorStatusDTO
 from gateway.enums import ThermostatState
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.pool import StaticPool
-from gateway.models import Base, Database, DaySchedule, Output, Preset, Sensor, Thermostat, \
-    ThermostatGroup, Valve, ValveToThermostatAssociation
+from gateway.models import Base, Database, DaySchedule, Output, Preset, \
+    Sensor, Thermostat, ThermostatGroup, Valve, IndoorLinkValves
 from gateway.sensor_controller import SensorController
-from gateway.thermostat.gateway.pump_valve_controller import \
-    PumpValveController
+from gateway.valve_pump.valve_pump_controller import ValvePumpController
 from gateway.thermostat.gateway.thermostat_pid import PID, ThermostatPid
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
@@ -61,8 +61,9 @@ class PumpValveControllerTest(unittest.TestCase):
 
         sensor_controller = mock.Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
-        self._pump_valve_controller = mock.Mock(PumpValveController)
-        SetUpTestInjections(sensor_controller=sensor_controller)
+        self.valve_pump_controller = mock.Mock(ValvePumpController)
+        SetUpTestInjections(sensor_controller=sensor_controller,
+                            valve_pump_controller=self.valve_pump_controller)
 
     def _get_thermostat_pid(self):
         with self.session as db:
@@ -88,20 +89,18 @@ class PumpValveControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(thermostat_id=1,
-                                             priority=0,
-                                             mode=ThermostatGroup.Modes.HEATING,
-                                             valve=Valve(name='valve 1',
-                                                         output=Output(number=1))),
-                ValveToThermostatAssociation(thermostat_id=1,
-                                             priority=0,
-                                             mode=ThermostatGroup.Modes.COOLING,
-                                             valve=Valve(name='valve 2',
-                                                         output=Output(number=2)))
+                IndoorLinkValves(thermostat_link_id=1,
+                                 mode=ThermostatGroup.Modes.HEATING,
+                                 valve=Valve(name='valve 1',
+                                             output=Output(number=1))),
+                IndoorLinkValves(thermostat_link_id=1,
+                                 mode=ThermostatGroup.Modes.COOLING,
+                                 valve=Valve(name='valve 2',
+                                             output=Output(number=2)))
             ])
             db.commit()
             thermostat = db.query(Thermostat).filter_by(number=0).one()
-            pid = ThermostatPid(thermostat, pump_valve_controller=self._pump_valve_controller)
+            pid = ThermostatPid(thermostat)
             pid.update_thermostat()
             return pid
 
@@ -172,36 +171,41 @@ class PumpValveControllerTest(unittest.TestCase):
             thermostat.state = ThermostatState.OFF
             db.commit()
         thermostat_pid.update_thermostat()
-        self._pump_valve_controller.set_valves.call_count = 0
-        self._pump_valve_controller.set_valves.mock_calls = []
+        self.valve_pump_controller._set_valves.call_count = 0
         self.assertFalse(thermostat_pid.tick())
-        self._pump_valve_controller.steer.assert_called_once()
-        self.assertEqual(sorted([mock.call(0, [1], mode='equal'),
-                                 mock.call(0, [2], mode='equal')]),
-                         sorted(self._pump_valve_controller.set_valves.mock_calls))
-        self.assertEqual(2, self._pump_valve_controller.set_valves.call_count)
+        self.valve_pump_controller.steer.assert_called()
+        self.assertEqual(1, self.valve_pump_controller.steer.call_count)
 
         with self.session as db:
             thermostat = db.query(Thermostat).filter_by(number=0).one()
             thermostat.state = ThermostatState.ON
             db.commit()
         thermostat_pid.update_thermostat()
+
+        self.prev_mode = ThermostatGroup.Modes.HEATING
+        # values below must be in random order, if sorted the same power is expected twice, no driver steering will be executed (expected behaviour)
         for mode, output_power, heating_power, cooling_power in [(ThermostatGroup.Modes.HEATING, 100, 100, 0),
+                                                                 (ThermostatGroup.Modes.HEATING, -50, 0, 0),
                                                                  (ThermostatGroup.Modes.HEATING, 50, 50, 0),
                                                                  (ThermostatGroup.Modes.HEATING, 0, 0, 0),
-                                                                 (ThermostatGroup.Modes.HEATING, -50, 0, 0),
                                                                  (ThermostatGroup.Modes.COOLING, -100, 0, 100),
+                                                                 (ThermostatGroup.Modes.COOLING, 50, 0, 0),
                                                                  (ThermostatGroup.Modes.COOLING, -50, 0, 50),
-                                                                 (ThermostatGroup.Modes.COOLING, 0, 0, 0),
-                                                                 (ThermostatGroup.Modes.COOLING, 50, 0, 0)]:
+                                                                 (ThermostatGroup.Modes.COOLING, 0, 0, 0)]:
+            print('mode {}, output_power {}, heating_power {}, cooling_power {}'.format(mode, output_power, heating_power, cooling_power))
             thermostat_pid._mode = mode
             thermostat_pid._pid.return_value = output_power
-            self._pump_valve_controller.steer.call_count = 0
-            self._pump_valve_controller.set_valves.call_count = 0
-            self._pump_valve_controller.set_valves.mock_calls = []
+            self.valve_pump_controller.steer.call_count = 0
+            self.valve_pump_controller.steer.mock_calls = []
             self.assertTrue(thermostat_pid.tick())
-            self._pump_valve_controller.steer.assert_called_once()
-            self.assertEqual(sorted([mock.call(heating_power, [1], mode='equal'),
-                                     mock.call(cooling_power, [2], mode='equal')]),
-                             sorted(self._pump_valve_controller.set_valves.mock_calls))
-            self.assertEqual(2, self._pump_valve_controller.set_valves.call_count)
+            self.valve_pump_controller.steer.assert_called()
+            if self.prev_mode != mode:
+                self.assertEqual([mock.call(percentage=heating_power, valve_ids=[1]), mock.call(percentage=cooling_power, valve_ids=[2])], self.valve_pump_controller.steer.mock_calls)
+                self.assertEqual(2, self.valve_pump_controller.steer.call_count)
+            elif mode == ThermostatGroup.Modes.HEATING:
+                self.assertEqual([mock.call(percentage=heating_power, valve_ids=[1])], self.valve_pump_controller.steer.mock_calls)
+                self.assertEqual(1, self.valve_pump_controller.steer.call_count)
+            elif mode == ThermostatGroup.Modes.COOLING:
+                self.assertEqual([mock.call(percentage=cooling_power, valve_ids=[2])], self.valve_pump_controller.steer.mock_calls)
+                self.assertEqual(1, self.valve_pump_controller.steer.call_count)
+            self.prev_mode = mode

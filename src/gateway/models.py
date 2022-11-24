@@ -26,8 +26,10 @@ from sqlalchemy.orm import RelationshipProperty, relationship, \
     scoped_session, sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import MetaData
+# from sqlalchemy_utils import ChoiceType
 from sqlite3 import Connection as SQLite3Connection
 from sqlalchemy import event
+
 import constants
 
 
@@ -378,31 +380,47 @@ class ThermostatGroup(Base, MasterNumber):
 
     sensor = relationship('Sensor')  # type: RelationshipProperty[Optional[Sensor]]
     thermostats = relationship('Thermostat', back_populates='group')  # type: RelationshipProperty[List[Thermostat]]
-    outputs = relationship('Output', secondary='outputtothermostatgroup')  # type: RelationshipProperty[List[Output]]
+    outputs = relationship('Output', secondary='hvac_output_link')  # type: RelationshipProperty[List[Output]]
 
-    heating_output_associations = relationship('OutputToThermostatGroupAssociation',
-                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "heating")',
-                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
-                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
-    cooling_output_associations = relationship('OutputToThermostatGroupAssociation',
-                                               primaryjoin='and_(ThermostatGroup.id == OutputToThermostatGroupAssociation.thermostat_group_id, OutputToThermostatGroupAssociation.mode == "cooling")',
-                                               order_by='asc(OutputToThermostatGroupAssociation.index)',
-                                               back_populates='thermostat_group')  # type: RelationshipProperty[List[OutputToThermostatGroupAssociation]]
+    heating_output_associations = relationship('HvacOutputLink',
+                                               primaryjoin='and_(ThermostatGroup.id == HvacOutputLink.hvac_id, HvacOutputLink.mode == "heating")',
+                                               order_by='asc(HvacOutputLink.id)',
+                                               back_populates='hvac')  # type: RelationshipProperty[List[HvacOutputLink]]
+    cooling_output_associations = relationship('HvacOutputLink',
+                                               primaryjoin='and_(ThermostatGroup.id == HvacOutputLink.hvac_id, HvacOutputLink.mode == "cooling")',
+                                               order_by='asc(HvacOutputLink.id)',
+                                               back_populates='hvac')  # type: RelationshipProperty[List[HvacOutputLink]]
 
 
-class OutputToThermostatGroupAssociation(Base):
-    __tablename__ = 'outputtothermostatgroup'
-    __table_args__ = {'sqlite_autoincrement': True}
 
-    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), primary_key=True)
-    thermostat_group_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), primary_key=True)
-    mode = Column(String(255), nullable=False, primary_key=True)  # The mode this config is used for. Options: 'heating' or 'cooling'
 
-    index = Column(Integer, nullable=False)  # The index of this output in the config 0-3
-    value = Column(Integer, nullable=False)  # The value that needs to be set on the output when in this mode (0-100)
+# thermostatsV2
+class HvacOutputLink(Base):
+    class Modes(object):
+        HEATING = 'heating'
+        COOLING = 'cooling'
+        OFF = 'off'
+        
+
+    __tablename__ = "hvac_output_link"
+    __table_args__ = (
+        UniqueConstraint('hvac_id', 'output_id', 'mode'),
+        {'sqlite_autoincrement': True},
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # hvac_id = Column(Integer, ForeignKey('hvac.id', ondelete='CASCADE'), nullable=False)
+    hvac_id = Column(Integer, ForeignKey('thermostatgroup.id', ondelete='CASCADE'), nullable=False)  # todo: currently this is the id of thermostat_group_id but setting name for future changes
+    output_id = Column(Integer, ForeignKey('output.id', ondelete='CASCADE'), nullable=False)
+    mode = Column(String, nullable=False, default='heating')  # The mode this config is used for
+
+    value = Column(Integer, nullable=False, default=100)  # The value that needs to be set on the output when in this mode (0-100)
 
     output = relationship('Output')
-    thermostat_group = relationship('ThermostatGroup')
+    hvac = relationship('ThermostatGroup')
+
+
 
 
 class PumpToValveAssociation(Base):
@@ -464,7 +482,8 @@ class Valve(Base):
 
     output = relationship('Output', lazy='joined', back_populates='valve')
     pump = relationship('Pump', secondary='pumptovalve')  # type: RelationshipProperty[Optional[Pump]]
-    # associations = relationship('ValveToThermostatAssociation', lazy='joined')
+    # thermostat_associations = relationship('IndoorLinkValves', lazy='joined', back_populates='valve')
+    thermostat_associations = relationship('IndoorLinkValves', lazy='joined', back_populates='valve')  #type: RelationshipProperty[List[IndoorLinkValves]]
 
 
 class Thermostat(Base, MasterNumber):
@@ -500,14 +519,11 @@ class Thermostat(Base, MasterNumber):
                                  primaryjoin='and_(Thermostat.id == Preset.thermostat_id, Preset.active == True)',
                                  back_populates='thermostat', uselist=False)  # type: RelationshipProperty[Preset]
 
-    valves = relationship('Valve', secondary='valvetothermostat',
-                          order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[Valve]]
-    heating_valve_associations = relationship('ValveToThermostatAssociation',
-                                              primaryjoin='and_(Thermostat.id == ValveToThermostatAssociation.thermostat_id, ValveToThermostatAssociation.mode == "heating")',
-                                              order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[ValveToThermostatAssociation]]
-    cooling_valve_associations = relationship('ValveToThermostatAssociation',
-                                              primaryjoin='and_(Thermostat.id == ValveToThermostatAssociation.thermostat_id, ValveToThermostatAssociation.mode == "cooling")',
-                                              order_by='asc(ValveToThermostatAssociation.priority)')  # type: RelationshipProperty[List[ValveToThermostatAssociation]]
+    valves = relationship('Valve', secondary='indoor_link_valves')  # type: RelationshipProperty[List[Valve]]
+    heating_valve_associations = relationship('IndoorLinkValves',
+                                              primaryjoin='and_(Thermostat.id == IndoorLinkValves.thermostat_link_id, IndoorLinkValves.mode == "heating")')  # type: RelationshipProperty[List[IndoorLinkValves]]
+    cooling_valve_associations = relationship('IndoorLinkValves',
+                                              primaryjoin='and_(Thermostat.id == IndoorLinkValves.thermostat_link_id, IndoorLinkValves.mode == "cooling")')  # type: RelationshipProperty[List[IndoorLinkValves]]
 
     schedules = relationship('DaySchedule', back_populates='thermostat')  # type: RelationshipProperty[List[DaySchedule]]
     heating_schedules = relationship('DaySchedule',
@@ -517,99 +533,21 @@ class Thermostat(Base, MasterNumber):
                                      primaryjoin='and_(Thermostat.id == DaySchedule.thermostat_id, DaySchedule.mode == "cooling")',
                                      order_by='asc(DaySchedule.index)')  # type: RelationshipProperty[List[DaySchedule]]
 
-    # def get_preset(self, preset_type):  # type: (str) -> Preset
-    #     if preset_type not in Preset.ALL_TYPES:
-    #         raise ValueError('Preset type `{0}` unknown'.format(preset_type))
-    #     preset = Preset.get_or_none((Preset.type == preset_type) &
-    #                                 (Preset.thermostat_id == self.id))
-    #     if preset is None:
-    #         preset = Preset(thermostat=self, type=preset_type)
-    #         if preset_type in Preset.DEFAULT_PRESET_TYPES:
-    #             preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
-    #             preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
-    #         preset.save()
-    #     return preset
-    #
-    # @property
-    # def setpoint(self):
-    #     return self.active_preset.heating_setpoint if self.mode == ThermostatGroup.Modes.HEATING else self.active_preset.cooling_setpoint
-    #
-    # @property
-    # def active_preset(self):
-    #     preset = Preset.get_or_none(thermostat=self.id, active=True)
-    #     if preset is None:
-    #         preset = self.get_preset(Preset.Types.AUTO)
-    #         preset.active = True
-    #         preset.save()
-    #     return preset
-    #
-    # @active_preset.setter
-    # def active_preset(self, value):
-    #     if value is None or value.thermostat_id != self.id:
-    #         raise ValueError('The given Preset does not belong to this Thermostat')
-    #     if value != self.active_preset:
-    #         if self.active_preset is not None:
-    #             current_active_preset = self.active_preset
-    #             current_active_preset.active = False
-    #             current_active_preset.save()
-    #         value.active = True
-    #         value.save()
-    #
-    # @property
-    # def valves(self):  # type: () -> List[Valve]
-    #     return [valve for valve in Valve.select(Valve)
-    #                                     .join(ValveToThermostat)
-    #                                     .where(ValveToThermostat.thermostat_id == self.id)
-    #                                     .order_by(ValveToThermostat.priority)]
-    #
-    # @property
-    # def active_valves(self):  # type: () -> List[Valve]
-    #     return self._valves(mode=self.thermostat_group.mode)
-    #
-    # @property
-    # def heating_valves(self):  # type: () -> List[Valve]
-    #     return self._valves(mode=ThermostatGroup.Modes.HEATING)
-    #
-    # @property
-    # def cooling_valves(self):  # type: () -> List[Valve]
-    #     return self._valves(mode=ThermostatGroup.Modes.COOLING)
-    #
-    # def _valves(self, mode):  # type: (str) -> List[Valve]
-    #     return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
-    #                                     .join(ValveToThermostat)
-    #                                     .where((ValveToThermostat.thermostat_id == self.id) &
-    #                                            (ValveToThermostat.mode == mode))
-    #                                     .order_by(ValveToThermostat.priority)]
-    #
-    # @property
-    # def heating_schedules(self):  # type: () -> List[DaySchedule]
-    #     return [schedule for schedule in
-    #             DaySchedule.select()
-    #                        .where((DaySchedule.thermostat == self.id) &
-    #                               (DaySchedule.mode == ThermostatGroup.Modes.HEATING))
-    #                        .order_by(DaySchedule.index)]
-    #
-    # @property
-    # def cooling_schedules(self):  # type: () -> List[DaySchedule]
-    #     return [x for x in
-    #             DaySchedule.select()
-    #                        .where((DaySchedule.thermostat == self.id) &
-    #                               (DaySchedule.mode == ThermostatGroup.Modes.COOLING))
-    #                        .order_by(DaySchedule.index)]
 
 
-class ValveToThermostatAssociation(Base):
-    __tablename__ = 'valvetothermostat'
+class IndoorLinkValves(Base):
+    __tablename__ = 'indoor_link_valves'
     __table_args__ = {'sqlite_autoincrement': True}
 
-    thermostat_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'), primary_key=True)
-    valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), primary_key=True)
-    mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # thermostat_link_id = Column(Integer, ForeignKey('indoor_thermostat_pid.id', ondelete='CASCADE'), nullable=False)
+    thermostat_link_id = Column(Integer, ForeignKey('thermostat.id', ondelete='CASCADE'))  # currently linked directly to the thermostat, in thermostat V2 it will be linked to indoor controller (pid controller)
+    valve_id = Column(Integer, ForeignKey('valve.id', ondelete='CASCADE'), nullable=False)
+    mode = Column(String(255), default=ThermostatGroup.Modes.HEATING, nullable=False)  # temporary placed here, will move to PID
 
-    priority = Column(Integer, default=0, nullable=False)
-
+    # valve = relationship('Valve', lazy='joined', backref='thermostat_associations')
+    valve = relationship('Valve', lazy='joined', back_populates='thermostat_associations')
     thermostat = relationship('Thermostat', backref='valve_associations')
-    valve = relationship('Valve', lazy='joined', backref='thermostat_associations')
 
 
 class Preset(Base):
@@ -677,6 +615,14 @@ class DaySchedule(Base):
             last_value = data[key]
         return last_value
 
+    def __str__(self):
+        schedule = self.schedule_data
+        schedules = []
+        for offset in sorted(list(schedule.keys())):
+            minutes = offset // 60
+            schedules.append(('{0:02d}:{1:02d}'.format(minutes // 60, minutes % 60), schedule[offset]))
+        return ', '.join('{0}: {1}'.format(s[0], s[1]) for s in schedules)
+
 
 class Room(Base, MasterNumber):
     __tablename__ = 'room'
@@ -717,3 +663,29 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     accepted_terms = Column(Integer, default=0, nullable=False)
     email = Column(String(255), nullable=True, unique=False)
+
+
+class Screen(Base):
+    __tablename__ = 'screen'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    room_id = Column(Integer, ForeignKey('room.id', ondelete='SET NULL'), nullable=True)
+    name = Column(String(255), default='', nullable=False)
+    in_use = Column(Boolean, nullable=False, default=True)
+    type = Column(String(255), nullable=False)
+
+    translational_steps = Column(Integer, nullable=True)
+    rotational_steps = Column(Integer, nullable=True)
+
+    source = Column(String(255), nullable=False)
+    external_id = Column(String(255), nullable=False)
+    plugin_id = Column(Integer, ForeignKey('plugin.id', ondelete='CASCADE'), nullable=True)
+
+    room = relationship('Room', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Room]]
+    plugin = relationship('Plugin', lazy='joined', innerjoin=False)  # type: RelationshipProperty[Optional[Plugin]]
+
+    def __str__(self):
+        if self.name:
+            return '{0} ({1})'.format(self.name, self.id)
+        return str(self.id)

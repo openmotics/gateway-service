@@ -277,7 +277,7 @@ class WebInterfaceTest(unittest.TestCase):
             }
             self.web.set_global_thermostat_configuration(config=config)
             save.assert_called_with([
-                ThermostatGroupDTO(id=0,
+                ThermostatGroupDTO(number=0,
                                    name='Foo',
                                    pump_delay=120,
                                    switch_to_heating_0=[8, 100],
@@ -317,7 +317,7 @@ class WebInterfaceTest(unittest.TestCase):
             ])
             save.assert_called_with([
                 PumpGroupDTO(0, pump_output_id=1, valve_output_ids=[8, 9, 10]),
-                PumpGroupDTO(0, pump_output_id=None, valve_output_ids=[])
+                PumpGroupDTO(1, pump_output_id=None, valve_output_ids=[])
             ])
 
     def test_ventilation_configurations(self):

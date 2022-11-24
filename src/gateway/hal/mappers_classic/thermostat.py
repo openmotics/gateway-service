@@ -48,12 +48,12 @@ class ThermostatMapper(object):
                                                   start_day_2=data[field][4],
                                                   end_day_2=data[field][5],
                                                   temp_day_2=data[field][6])
-        return ThermostatDTO(id=data['id'],
+        return ThermostatDTO(number=data['id'],
                              **kwargs)
 
     @staticmethod
     def dto_to_orm(model_type, thermostat_dto):  # type: (Type[EepromModel], ThermostatDTO) -> EepromModel
-        data = {'id': thermostat_dto.id}  # type: Dict[str, Any]
+        data = {'id': thermostat_dto.number}  # type: Dict[str, Any]
         for field in ['name', 'permanent_manual'] + ['setp{0}'.format(i) for i in range(6)]:
             if field in thermostat_dto.loaded_fields:
                 data[field] = getattr(thermostat_dto, field)
@@ -94,10 +94,18 @@ class ThermostatGroupMapper(object):
                 value_field = 'switch_to_{0}_value_{1}'.format(mode, i)
                 dto_field = 'switch_to_{0}_{1}'.format(mode, i)
                 output = Toolbox.nonify(data[output_field], ThermostatGroupMapper.BYTE_MAX)
-                value = Toolbox.nonify(data[value_field], ThermostatGroupMapper.BYTE_MAX)
+
+                # remap 0-63,255 (master) value to 0-100,None (front-end)
+                temp_value = data[value_field]
+                if temp_value == ThermostatGroupMapper.BYTE_MAX :
+                    temp_value = None
+                else:
+                    temp_value = int(round(temp_value/63.0*100))
+                value = temp_value
+
                 if output is not None:
                     kwargs[dto_field] = [output, value]
-        return ThermostatGroupDTO(id=0, **kwargs)
+        return ThermostatGroupDTO(number=0, **kwargs)
 
     @staticmethod
     def dto_to_orm(thermostat_group_dto):  # type: (ThermostatGroupDTO) -> EepromModel
@@ -115,8 +123,15 @@ class ThermostatGroupMapper(object):
                 if field in thermostat_group_dto.loaded_fields:
                     dto_value = getattr(thermostat_group_dto, field)  # type: Optional[Tuple[int, int]]
                     data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupMapper.BYTE_MAX)
-                    data[value] = Toolbox.denonify(None if dto_value is None else dto_value[1], ThermostatGroupMapper.BYTE_MAX)
-        return GlobalThermostatConfiguration.deserialize(data)
+
+                    # remap 0-100,None (front-end) value to 0-63,255 (master)
+                    temp_value = ThermostatGroupMapper.BYTE_MAX if dto_value is None else dto_value[1] # 0-100, 255
+                    if temp_value != 255:
+                        temp_value = int(round(temp_value/100.0*63)) # 0-63
+                    data[value] = temp_value  # value = 0-63, 255
+
+        finalOut = GlobalThermostatConfiguration.deserialize(data)
+        return finalOut
 
 
 class PumpGroupMapper(object):

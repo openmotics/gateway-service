@@ -20,7 +20,8 @@ from simple_pid import PID
 
 from gateway.dto import ThermostatStatusDTO
 from gateway.enums import ThermostatState
-from gateway.models import Database, Thermostat, ThermostatGroup
+from gateway.models import Database, Thermostat, ThermostatGroup, IndoorLinkValves
+from gateway.valve_pump.valve_pump_driver import ValvePumpDriver
 from ioc import INJECTED, Inject
 from serial_utils import CommunicationTimedOutException
 
@@ -38,10 +39,10 @@ class ThermostatPid(object):
     DEFAULT_KI = 0.0
     DEFAULT_KD = 2.0
 
-    def __init__(self, thermostat, pump_valve_controller, sensor_controller=INJECTED):
+    def __init__(self, thermostat, valve_pump_controller=INJECTED, sensor_controller=INJECTED):
         # type: (Thermostat, PumpValveController, SensorController) -> None
         self._sensor_controller = sensor_controller
-        self._pump_valve_controller = pump_valve_controller
+        self._pump_valve_controller = valve_pump_controller  # todo: this is only here to update the status of valve positions, will be changed further down the line
         self._thermostat_change_lock = Lock()
         self._sensor_id = None  # type: Optional[int]
         self._heating_valve_ids = []  # type: List[int]
@@ -49,6 +50,7 @@ class ThermostatPid(object):
         self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[int], int, str, str], None]]
         self._number = thermostat.number
         self._mode = thermostat.group.mode
+        self._previous_mode = thermostat.group.mode
         self._state = thermostat.state
         self._valve_config = thermostat.valve_config
         self._active_preset_type = thermostat.active_preset.type
@@ -60,6 +62,8 @@ class ThermostatPid(object):
         self._current_steering_power = None  # type: Optional[int]
         self._current_enabled = None  # type: Optional[bool]
         self._current_setpoint = None  # type: Optional[float]
+        self._driver_heating = None  # type: Optional[ValvePumpDriver]
+        self._driver_cooling = None  # type: Optional[ValvePumpDriver]
 
     @property
     def enabled(self):  # type: () -> bool
@@ -95,8 +99,8 @@ class ThermostatPid(object):
                 self._active_preset_type = thermostat.active_preset.type
 
                 self._sensor_id = thermostat.sensor.id if thermostat.sensor else None
-                self._heating_valve_ids = [x.valve.id for x in thermostat.heating_valve_associations]
-                self._cooling_valve_ids = [x.valve.id for x in thermostat.cooling_valve_associations]
+                self._heating_valve_ids = [x.valve_id for x in thermostat.heating_valve_associations]
+                self._cooling_valve_ids = [x.valve_id for x in thermostat.cooling_valve_associations]
 
                 if thermostat.group.mode == ThermostatGroup.Modes.HEATING:
                     pid_p = thermostat.pid_heating_p if thermostat.pid_heating_p is not None else self.DEFAULT_KP
@@ -109,10 +113,23 @@ class ThermostatPid(object):
                     pid_d = thermostat.pid_cooling_d if thermostat.pid_cooling_d is not None else self.DEFAULT_KD
                     setpoint = thermostat.active_preset.cooling_setpoint
 
+                # create the driver if not exist
+                if self._driver_heating is None:
+                    self._driver_heating = ValvePumpDriver(thermostat.id, 'heating')
+                if self._driver_cooling is None:
+                    self._driver_cooling = ValvePumpDriver(thermostat.id, 'cooling')
+
+                # update the driver if exist
+                if self._driver_heating is not None:
+                    self._driver_heating.update_from_db()
+                if self._driver_cooling is not None:
+                    self._driver_cooling.update_from_db()
+
             self._pid.tunings = (pid_p, pid_i, pid_d)
             self._pid.setpoint = setpoint
             self._pid.output_limits = (-100, 100)
             self._errors = 0
+
 
     @property
     def steering_power(self):  # type: () -> Optional[int]
@@ -175,7 +192,7 @@ class ThermostatPid(object):
                 output_power = 0
 
             # Heating needed while in cooling mode OR cooling needed while in heating mode
-            # -> no active airon required, rely on losses/gains of system to reach equilibrium
+            # -> no active action required, rely on losses/gains of system to reach equilibrium
             if ((self._mode == ThermostatGroup.Modes.COOLING and output_power > 0) or
                     (self._mode == ThermostatGroup.Modes.HEATING and output_power < 0)):
                 output_power = 0
@@ -195,23 +212,44 @@ class ThermostatPid(object):
     def setpoint(self):  # type: () -> float
         return self._pid.setpoint
 
+
+        '''
+        We need to make sure that we always steer the current_mode to the correct value.
+        The opposit mode has to be turned off.
+        If we steer the opposite_mode to power 0 and the same valve is used for heating and cooling,
+        the valve will first be opened for current_mode and then closed for opposite_mode -> fighting over valve
+        Thus we need to steer the opposite_mode once to off and the current_mode continiously
+        '''
     def steer(self, power):  # type: (int) -> None
+        # if power is unchanged, do not steer
         if self._current_steering_power != power:
             logger.info('Thermostat {0}: Steer to {1} '.format(self._number, power))
             self._current_steering_power = power
-
-        # Configure valves and set desired opening
-        # TODO: Check union to avoid opening same valves in heating and cooling
-        if power > 0:
-            self._pump_valve_controller.set_valves(0, self._cooling_valve_ids, mode=self._valve_config)
-            self._pump_valve_controller.set_valves(power, self._heating_valve_ids, mode=self._valve_config)
         else:
-            power = abs(power)
-            self._pump_valve_controller.set_valves(0, self._heating_valve_ids, mode=self._valve_config)
-            self._pump_valve_controller.set_valves(power, self._cooling_valve_ids, mode=self._valve_config)
+            return
 
-        # Effectively steer pumps and valves according to needs
-        self._pump_valve_controller.steer()
+        # if no steer drivers, do nothing
+        if self._driver_heating is None or self._driver_cooling is None:
+            logger.error('no driver for heating or cooling')
+            return
+
+        # if current mode is not the same as the previous mode, turn off the previous mode
+        if self._mode != self._previous_mode:
+            if self._previous_mode == ThermostatGroup.Modes.HEATING:
+                self._driver_heating.steer(0)
+            elif self._previous_mode == ThermostatGroup.Modes.COOLING:
+                self._driver_cooling.steer(0)
+
+        # set current mode as previous mode
+        self._previous_mode = self._mode
+
+        # send power to the driver of the current mode
+        power = abs(power)
+        if self._mode == ThermostatGroup.Modes.HEATING:
+            self._driver_heating.steer(power)
+        elif self._mode == ThermostatGroup.Modes.COOLING:
+            self._driver_cooling.steer(power)
+
 
     @property
     def kp(self):  # type: () -> float

@@ -1010,7 +1010,9 @@ class WebInterface(object):
         """
         Get the thermostat_group_configuration.
         """
-        thermostat_group_dto = self._thermostat_controller.load_thermostat_group(id)
+        #BE-304: API accepts numbers, not IDs
+        number = id
+        thermostat_group_dto = self._thermostat_controller.load_thermostat_group(number)
         return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
                                                               fields=fields)}
 
@@ -1031,7 +1033,9 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(config='json'))
     def delete_thermostat_group_configuration(self, id):  # type: (int) -> Dict
         """ Remove thermostat_group_configuration. """
-        self._thermostat_controller.remove_thermostat_groups([id])
+        # BE-304: API accepts numbers, not IDs
+        number = id
+        self._thermostat_controller.remove_thermostat_groups([number])
         return {}
 
     @openmotics_api(auth=True)
@@ -1065,7 +1069,9 @@ class WebInterface(object):
         """
         Sets a thermsotat group on a given mode (e.g. cooling or heating) and/or all child thermostats on a given state (e.g. on or off)
         """
-        self._thermostat_controller.set_thermostat_group(thermostat_group_id, state, mode)
+        # BE-304: API accepts numbers, not IDs
+        number = thermostat_group_id
+        self._thermostat_controller.set_thermostat_group(number, state, mode)
         return {}
 
     @openmotics_api(auth=True, deprecated='get_thermostat_group_status')
@@ -1093,7 +1099,9 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))
     def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
         """ Set the current setpoint of a thermostat. """
-        self._thermostat_controller.set_current_setpoint(thermostat, temperature)
+        # BE-304: API accepts numbers, not IDs
+        number = thermostat
+        self._thermostat_controller.set_current_setpoint(number, temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int), deprecated='set_thermostat')
@@ -1103,13 +1111,17 @@ class WebInterface(object):
         Set the thermostat mode of a given thermostat. Thermostats can be set to automatic or
         manual, in case of manual a setpoint (0 to 5) can be provided.
         """
-        self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        # BE-304: API accepts numbers, not IDs
+        number = thermostat_id
+        self._thermostat_controller.set_per_thermostat_mode(number, automatic, setpoint)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, preset=str, state=str, setpoint=float))
     def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
         # type: (int, Optional[str], Optional[str], Optional[float]) -> Dict[str, str]
-        self._thermostat_controller.set_thermostat(thermostat_id=thermostat_id,
+        # BE-304: API accepts numbers, not IDs
+        number = thermostat_id
+        self._thermostat_controller.set_thermostat(thermostat_number=number,
                                                    preset=preset,
                                                    state=state,
                                                    temperature=temperature)
@@ -1531,13 +1543,15 @@ class WebInterface(object):
     # Heating thermostats
 
     def _fetch_heating_thermostat_dto(self, thermostat_id):
+        # BE-304: API accepts numbers, not IDs
+        number = thermostat_id
         try:
-            return self._thermostat_controller.load_heating_thermostat(thermostat_id=thermostat_id)
+            return self._thermostat_controller.load_heating_thermostat(thermostat_number=number)
         except NoResultFound:
-            if thermostat_id >= 32:
+            if number >= 32:
                 raise
             mode = 'heating'  # type: Literal['heating']
-            return ThermostatMapper.get_default_dto(thermostat_id=thermostat_id, mode=mode)
+            return ThermostatMapper.get_default_dto(thermostat_number=number, mode=mode)
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_thermostat_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
@@ -1546,7 +1560,9 @@ class WebInterface(object):
         :param id: The id of the thermostat_configuration
         :param fields: The field of the thermostat_configuration to get, None if all
         """
-        thermostat_dto = self._fetch_heating_thermostat_dto(thermostat_id=id)
+        # BE-304: API accepts numbers, not IDs
+        number = id
+        thermostat_dto = self._fetch_heating_thermostat_dto(thermostat_id=number)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1557,11 +1573,11 @@ class WebInterface(object):
         :param fields: The field of the thermostat_configuration to get, None if all
         """
         mode = 'heating'  # type: Literal['heating']
-        thermostat_dtos = {thermostat.id: thermostat
+        thermostat_dtos = {thermostat.number: thermostat
                            for thermostat in self._thermostat_controller.load_heating_thermostats()}
         all_dtos = []
-        for thermostat_id in set(list(thermostat_dtos.keys()) + list(range(32))):
-            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatMapper.get_default_dto(thermostat_id=thermostat_id,
+        for thermostat_number in set(list(thermostat_dtos.keys()) + list(range(32))):
+            all_dtos.append(thermostat_dtos.get(thermostat_number, ThermostatMapper.get_default_dto(thermostat_number=thermostat_number,
                                                                                                 mode=mode)))
         return {'config': [ThermostatSerializer.serialize(thermostat_dto=thermostat, fields=fields)
                            for thermostat in all_dtos]}
@@ -1585,8 +1601,11 @@ class WebInterface(object):
         """
         Copies the schedule from one thermostat to the other
         """
-        source_dto = self._fetch_heating_thermostat_dto(thermostat_id=source_id)
-        destination_dto = self._fetch_heating_thermostat_dto(thermostat_id=destination_id)
+        # BE-304: API accepts numbers, not IDs
+        source_number = source_id
+        destination_number = destination_id
+        source_dto = self._fetch_heating_thermostat_dto(thermostat_id=source_number)
+        destination_dto = self._fetch_heating_thermostat_dto(thermostat_id=destination_number)
         self._thermostat_controller.copy_heating_schedule(source_dto=source_dto,
                                                           destination_dto=destination_dto)
         return {}
@@ -1639,7 +1658,9 @@ class WebInterface(object):
         :param id: The id of the heating pump_group_configuration
         :param fields: The field of the heating pump_group_configuration to get, None if all
         """
-        pump_group_dto = self._thermostat_controller.load_heating_pump_group(pump_group_id=id)
+        # BE-304: API accepts numbers, not IDs
+        number = id
+        pump_group_dto = self._thermostat_controller.load_heating_pump_group(pump_group_number=number)
         return {'config': PumpGroupSerializer.serialize(pump_group_dto=pump_group_dto,
                                                         fields=fields)}
 
@@ -1673,13 +1694,15 @@ class WebInterface(object):
     # Cooling thermostats
 
     def _fetch_cooling_thermostat_dto(self, thermostat_id):
+        # BE-304: API accepts numbers, not IDs
+        number = thermostat_id
         try:
-            return self._thermostat_controller.load_cooling_thermostat(thermostat_id=thermostat_id)
+            return self._thermostat_controller.load_cooling_thermostat(thermostat_number=number)
         except NoResultFound:
-            if thermostat_id >= 32:
+            if number >= 32:
                 raise
             mode = 'cooling'  # type: Literal['cooling']
-            return ThermostatMapper.get_default_dto(thermostat_id=thermostat_id, mode=mode)
+            return ThermostatMapper.get_default_dto(thermostat_number=number, mode=mode)
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_cooling_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
@@ -1688,7 +1711,9 @@ class WebInterface(object):
         :param id: The id of the cooling_configuration
         :param fields: The field of the cooling_configuration to get, None if all
         """
-        thermostat_dto = self._fetch_cooling_thermostat_dto(thermostat_id=id)
+        # BE-304: API accepts numbers, not IDs
+        number = id
+        thermostat_dto = self._fetch_cooling_thermostat_dto(thermostat_id=number)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1699,11 +1724,11 @@ class WebInterface(object):
         :param fields: The field of the cooling_configuration to get, None if all
         """
         mode = 'cooling'  # type: Literal['cooling']
-        thermostat_dtos = {thermostat.id: thermostat
+        thermostat_dtos = {thermostat.number: thermostat
                            for thermostat in self._thermostat_controller.load_cooling_thermostats()}
         all_dtos = []
-        for thermostat_id in set(list(thermostat_dtos.keys()) + list(range(32))):
-            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatMapper.get_default_dto(thermostat_id=thermostat_id,
+        for thermostat_number in set(list(thermostat_dtos.keys()) + list(range(32))):
+            all_dtos.append(thermostat_dtos.get(thermostat_number, ThermostatMapper.get_default_dto(thermostat_number=thermostat_number,
                                                                                                 mode=mode)))
         return {'config': [ThermostatSerializer.serialize(thermostat_dto=thermostat, fields=fields)
                            for thermostat in all_dtos]}
@@ -1727,8 +1752,11 @@ class WebInterface(object):
         """
         Copies the schedule from one thermostat to the other
         """
-        source_dto = self._fetch_cooling_thermostat_dto(thermostat_id=source_id)
-        destination_dto = self._fetch_cooling_thermostat_dto(thermostat_id=destination_id)
+        # BE-304: API accepts numbers, not IDs
+        source_number = source_id
+        destination_number = destination_id
+        source_dto = self._fetch_cooling_thermostat_dto(thermostat_id=source_number)
+        destination_dto = self._fetch_cooling_thermostat_dto(thermostat_id=destination_number)
         self._thermostat_controller.copy_cooling_schedule(source_dto=source_dto,
                                                           destination_dto=destination_dto)
         return {}
@@ -1742,7 +1770,9 @@ class WebInterface(object):
         :param id: The id of the cooling pump_group_configuration
         :param fields: The field of the cooling pump_group_configuration to get, None if all
         """
-        return {'config': PumpGroupSerializer.serialize(pump_group_dto=self._thermostat_controller.load_cooling_pump_group(pump_group_id=id),
+        # BE-304: API accepts numbers, not IDs
+        number = id
+        return {'config': PumpGroupSerializer.serialize(pump_group_dto=self._thermostat_controller.load_cooling_pump_group(pump_group_number=number),
                                                         fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))

@@ -85,7 +85,6 @@ class SchedulingController(object):
         self._web_interface = None  # type: Optional[WebInterface]
         self._sync_thread = None  # type: Optional[DaemonThread]
         self._schedules = {}  # type: Dict[int, ScheduleDTO]
-        self._thermostat_setpoints = {} # type: Dict[Tuple[int,str],List[ScheduleSetpointDTO]]
         timezone = system_controller.get_timezone()
         self._scheduler = BackgroundScheduler(timezone=timezone, job_defaults={
             'coalesce': True,
@@ -213,30 +212,6 @@ class SchedulingController(object):
             db.commit()
         self.refresh_schedules()
 
-    def update_thermostat_setpoints(self, thermostat_id, mode, day_schedules):
-        # type: (int, str, List[DaySchedule]) -> None
-        key = (thermostat_id, mode)
-        setpoints = []
-        for t, setpoint in calculate_transitions(day_schedules, datetime.now()):
-            setpoints.append(ScheduleSetpointDTO(thermostat=thermostat_id,
-                                                 mode=mode,
-                                                 temperature=setpoint,
-                                                 weekday=t.weekday(),
-                                                 hour=t.hour,
-                                                 minute=t.minute))
-        current_setpoints = self._thermostat_setpoints.get(key, [])
-        if current_setpoints != setpoints:
-            for setpoint_dto in current_setpoints:
-                self._abort(setpoint_dto)
-            for setpoint_dto in setpoints:
-                self._submit_setpoint(setpoint_dto)
-            self._thermostat_setpoints[key] = setpoints
-
-    def last_thermostat_setpoint(self, day_schedules):
-        # type: (List[DaySchedule]) -> Tuple[datetime, float]
-        now = datetime.now()
-        transitions = sorted(calculate_transitions(day_schedules, now), reverse=True)
-        return next((t, v) for t, v in transitions if t <= now)
 
     def _submit_setpoint(self, setpoint_dto):
         # type: (ScheduleSetpointDTO) -> None
@@ -357,28 +332,6 @@ class SchedulingController(object):
             if check is not None:
                 params_parser(arguments['parameters'], check)
 
-
-def calculate_transitions(day_schedules, at):
-    # type: (List[DaySchedule], datetime) -> Iterable[Tuple[datetime, float]]
-    """
-    Calculate the setpoint transitions relative to a timestamp based on the
-    given day schedules.
-    """
-    index = at.weekday()
-    start_of_day = datetime(at.year, at.month, at.day)
-
-    data = {}
-    for day_schedule in day_schedules:
-        offset = max(day_schedule.index, index) - min(day_schedule.index, index)
-        # Shift last day schedule when at start of the week.
-        if index == 0 and day_schedule.index == 6:
-            offset -= 7
-        if day_schedule.index < index:
-            offset = -offset
-        d = start_of_day + timedelta(days=offset)
-        data.update({d + timedelta(seconds=int(k)): v
-                     for k, v in day_schedule.schedule_data.items()})
-    return sorted(data.items())
 
 
 def datetime_to_timestamp(date):

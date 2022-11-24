@@ -177,10 +177,11 @@ class ThermostatControllerMaster(ThermostatController):
                 was_incorrect = True
         return was_incorrect
 
-    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+    def load_heating_thermostat(self, thermostat_number):  # type: (int) -> ThermostatDTO
+        # BE-304: API accepts numbers, not IDs
         if not self._enabled:
             raise RuntimeError('Master thermostats are disabled')
-        thermostat_dto = self._master_controller.load_heating_thermostat(thermostat_id)
+        thermostat_dto = self._master_controller.load_heating_thermostat(thermostat_number)
         thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
         if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
                                                         mode='heating'):
@@ -215,10 +216,11 @@ class ThermostatControllerMaster(ThermostatController):
         self._master_controller.save_heating_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
 
-    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+    def load_cooling_thermostat(self, thermostat_number):  # type: (int) -> ThermostatDTO
+        # BE-304: API accepts numbers, not IDs
         if not self._enabled:
             raise RuntimeError('Master thermostats are disabled')
-        thermostat_dto = self._master_controller.load_cooling_thermostat(thermostat_id)
+        thermostat_dto = self._master_controller.load_cooling_thermostat(thermostat_number)
         thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
         if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
                                                         mode='cooling'):
@@ -328,8 +330,9 @@ class ThermostatControllerMaster(ThermostatController):
     def remove_thermostat_groups(self, thermostat_group_ids):  # type: (List[int]) -> None
         raise NotImplementedError('Thermostat groups not supported')
 
-    def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
-        return self._master_controller.load_heating_pump_group(pump_group_id)
+    def load_heating_pump_group(self, pump_group_number):  # type: (int) -> PumpGroupDTO
+        # BE-304: API accepts numbers, not IDs
+        return self._master_controller.load_heating_pump_group(pump_group_number)
 
     def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
         return self._master_controller.load_heating_pump_groups()
@@ -392,22 +395,24 @@ class ThermostatControllerMaster(ThermostatController):
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
         # type: (int, bool, int) -> None
         """ Set the setpoint/mode for a certain thermostat. """
-        if thermostat_id < 0 or thermostat_id > 31:
-            raise ValueError('Thermostat_id not in [0, 31]: %d' % thermostat_id)
+        # BE-304: API accepts numbers, not IDs
+        number = thermostat_id
+        if number < 0 or number > 31:
+            raise ValueError('Thermostat_id not in [0, 31]: %d' % number)
 
         if setpoint < 0 or setpoint > 5:
             raise ValueError('Setpoint not in [0, 5]: %d' % setpoint)
 
         if automatic:
-            self._master_controller.set_thermostat_tenant_auto(thermostat_id)
+            self._master_controller.set_thermostat_tenant_auto(number)
         else:
-            self._master_controller.set_thermostat_tenant_manual(thermostat_id)
+            self._master_controller.set_thermostat_tenant_manual(number)
             self._master_controller.set_thermostat_setpoint(thermostat_id, setpoint)
 
         self.invalidate_cache(THERMOSTATS)
         self.increase_interval(THERMOSTATS, interval=2, window=10)
 
-    def set_thermostat(self, thermostat_id, preset=None, state=None, temperature=None):
+    def set_thermostat(self, thermostat_number, preset=None, state=None, temperature=None):
         # type: (int, Optional[str], Optional[str], Optional[float]) -> None
         raise FeatureUnavailableException()
 
@@ -490,10 +495,10 @@ class ThermostatControllerMaster(ThermostatController):
 
         try:
             if cooling:
-                self._thermostats_config = {thermostat.id: thermostat
+                self._thermostats_config = {thermostat.number: thermostat
                                             for thermostat in self.load_cooling_thermostats()}
             else:
-                self._thermostats_config = {thermostat.id: thermostat
+                self._thermostats_config = {thermostat.number: thermostat
                                             for thermostat in self.load_heating_thermostats()}
         except CommunicationFailure:
             return
@@ -535,7 +540,7 @@ class ThermostatControllerMaster(ThermostatController):
         # type: () -> List[ThermostatGroupStatusDTO]
         """ Returns thermostat information """
         if not self._enabled:
-            return [ThermostatGroupStatusDTO(id=0,
+            return [ThermostatGroupStatusDTO(number=0,
                                              automatic=False,
                                              setpoint=None,
                                              cooling=False,
@@ -558,7 +563,7 @@ class ThermostatControllerMaster(ThermostatController):
                                                  output_0_level=thermostat['output0'],
                                                  output_1_level=thermostat['output1'],
                                                  steering_power=thermostat['steering_power']))
-        return [ThermostatGroupStatusDTO(id=0,
+        return [ThermostatGroupStatusDTO(number=0,
                                          automatic=master_status['automatic'],
                                          setpoint=master_status['setpoint'],
                                          cooling=master_status['cooling'],

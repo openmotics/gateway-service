@@ -31,21 +31,24 @@ from gateway.dto import OutputStatusDTO, PumpGroupDTO, ScheduleDTO, \
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Base, Database, DaySchedule, Output, \
-    OutputToThermostatGroupAssociation, Preset, Pump, PumpToValveAssociation, \
+    HvacOutputLink, Preset, Pump, PumpToValveAssociation, \
     Room, Sensor, Thermostat, ThermostatGroup, Valve, \
-    ValveToThermostatAssociation
+    IndoorLinkValves
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
+from gateway.valve_pump.valve_pump_controller import ValvePumpController
 from gateway.sensor_controller import SensorController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
+from gateway.thermostat.gateway.setpoint_controller import SetpointController
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
 MODELS = [Pump, Output, Valve, PumpToValveAssociation, Thermostat,
-          ThermostatGroup, ValveToThermostatAssociation, Room, Sensor, Preset,
-          OutputToThermostatGroupAssociation, DaySchedule]
+          ThermostatGroup, IndoorLinkValves, Room, Sensor, Preset,
+          HvacOutputLink, DaySchedule]
+
 
 
 class ThermostatControllerTest(unittest.TestCase):
@@ -74,13 +77,19 @@ class ThermostatControllerTest(unittest.TestCase):
         sensor_controller = mock.Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self.scheduling_controller = mock.Mock(SchedulingController)
+        valve_pump_controller = ValvePumpController()
+        SetUpTestInjections(scheduling_controller=self.scheduling_controller)
+        self.setpoint_controller = SetpointController()
+        # self.setpoint_controller = mock.Mock(SetpointController)
+
         SetUpTestInjections(pubsub=self.pubsub,
-                            scheduling_controller=self.scheduling_controller,
                             output_controller=self.output_controller,
-                            sensor_controller=sensor_controller)
-        self.controller = ThermostatControllerGateway()
-        self.controller._sync_auto_setpoints = False
-        SetUpTestInjections(thermostat_controller=self.controller)
+                            sensor_controller=sensor_controller,
+                            setpoint_controller=self.setpoint_controller,
+                            valve_pump_controller=valve_pump_controller)
+        self.thermostat_controller = ThermostatControllerGateway()
+        self.thermostat_controller._sync_auto_setpoints = False
+        SetUpTestInjections(thermostat_controller=self.thermostat_controller)
 
         # sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')
         # self._thermostat_group = ThermostatGroup.create(number=0,
@@ -115,17 +124,17 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 
-        self.controller.save_heating_thermostats([
-            ThermostatDTO(id=0, sensor=None, output0=None)
+        self.thermostat_controller.save_heating_thermostats([
+            ThermostatDTO(number=0, sensor=None, output0=None)
         ])
-        thermostats = self.controller.load_heating_thermostats()
+        thermostats = self.thermostat_controller.load_heating_thermostats()
         self.assertEqual(len(thermostats), 0)
 
     def test_update_schedules(self):
@@ -153,14 +162,14 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 
-        self.controller._sync_thread = mock.Mock()
+        self.thermostat_controller._sync_thread = mock.Mock()
         schedule_dto = ThermostatScheduleDTO(temp_day_1=22.0,
                                              start_day_1='06:30',
                                              end_day_1='10:00',
@@ -168,8 +177,8 @@ class ThermostatControllerTest(unittest.TestCase):
                                              start_day_2='16:00',
                                              end_day_2='23:00',
                                              temp_night=16.5)
-        self.controller.save_heating_thermostats([
-            ThermostatDTO(id=0,
+        self.thermostat_controller.save_heating_thermostats([
+            ThermostatDTO(number=0,
                           auto_mon=schedule_dto,
                           auto_tue=schedule_dto,
                           auto_wed=schedule_dto,
@@ -178,15 +187,12 @@ class ThermostatControllerTest(unittest.TestCase):
                           auto_sat=schedule_dto,
                           auto_sun=schedule_dto)
         ])
-        self.controller._sync_thread.request_single_run.assert_called_with()
-        self.controller.refresh_thermostats_from_db()
+        self.thermostat_controller._sync_thread.request_single_run.assert_called_with()
+        self.thermostat_controller.refresh_thermostats_from_db()
 
         with self.session as db:
             thermostat = db.query(Thermostat).filter_by(number=0).one()
             assert len(thermostat.heating_schedules) == 7
-            # FIXME
-            # assert mock.call(0, 'heating', thermostat.heating_schedules) in self.scheduling_controller.update_thermostat_setpoints.call_args_list
-            # assert mock.call(0, 'cooling', []) in self.scheduling_controller.update_thermostat_setpoints.call_args_list
 
     def test_save_pumpgroups(self):
         with self.session as db:
@@ -213,39 +219,39 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
-                ValveToThermostatAssociation(mode='cooling',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 9)',
-                                                         output=Output(number=9))),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 10)',
-                                                         output=Output(number=10))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
+                IndoorLinkValves(mode='cooling',
+                                 thermostat_link_id=1,
+                                 valve=Valve(name='Valve (output 9)',
+                                             output=Output(number=9))),
+                IndoorLinkValves(mode='heating',
+                                 thermostat_link_id=1,
+                                 valve=Valve(name='Valve (output 10)',
+                                             output=Output(number=10))),
             ])
             db.commit()
 
-        heating_pump_groups = self.controller.load_heating_pump_groups()
+        heating_pump_groups = self.thermostat_controller.load_heating_pump_groups()
         self.assertEqual([], heating_pump_groups)
 
         with self.session as db:
             db.add(Output(number=1))
             db.commit()
-        self.controller.save_heating_pump_groups([PumpGroupDTO(id=0,
+        self.thermostat_controller.save_heating_pump_groups([PumpGroupDTO(id=0,
                                                                pump_output_id=1,
                                                                valve_output_ids=[8])])
-        self.controller.save_cooling_pump_groups([PumpGroupDTO(id=0,
+        self.thermostat_controller.save_cooling_pump_groups([PumpGroupDTO(id=0,
                                                                pump_output_id=1,
                                                                valve_output_ids=[9])])
 
-        pump_groups = self.controller.load_heating_pump_groups()
+        pump_groups = self.thermostat_controller.load_heating_pump_groups()
         self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=1,
                                        valve_output_ids=[8])], pump_groups)
-        pump_groups = self.controller.load_cooling_pump_groups()
+        pump_groups = self.thermostat_controller.load_cooling_pump_groups()
         self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=1,
                                        valve_output_ids=[9])], pump_groups)
@@ -253,26 +259,26 @@ class ThermostatControllerTest(unittest.TestCase):
         with self.session as db:
             db.add(Output(number=2))
             db.commit()
-        self.controller.save_heating_pump_groups([
+        self.thermostat_controller.save_heating_pump_groups([
             PumpGroupDTO(id=0,
                          pump_output_id=2,
                          valve_output_ids=[8, 10])
         ])
-        pump_groups = self.controller.load_heating_pump_groups()
+        pump_groups = self.thermostat_controller.load_heating_pump_groups()
         self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=2,
                                        valve_output_ids=[8, 10])], pump_groups)
-        pump_groups = self.controller.load_cooling_pump_groups()
+        pump_groups = self.thermostat_controller.load_cooling_pump_groups()
         self.assertEqual([PumpGroupDTO(id=0,
                                        pump_output_id=2,
                                        valve_output_ids=[9])], pump_groups)
 
-        self.controller.save_heating_pump_groups([
+        self.thermostat_controller.save_heating_pump_groups([
             PumpGroupDTO(id=0,
                          pump_output_id=None,
                          valve_output_ids=[])
         ])
-        pump_groups = self.controller.load_heating_pump_groups()
+        pump_groups = self.thermostat_controller.load_heating_pump_groups()
         self.assertEqual([], pump_groups)
 
     def test_save_thermostat_groups(self):
@@ -300,10 +306,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
                 Sensor(source='master', external_id='11', physical_quantity='temperature', name=''),
                 Output(number=0),
                 Output(number=1),
@@ -323,8 +329,8 @@ class ThermostatControllerTest(unittest.TestCase):
             self.assertEqual(10.0, group.threshold_temperature)
             self.assertEqual(0, len(group.outputs))
 
-        self.controller.save_thermostat_groups([
-            ThermostatGroupDTO(id=0,
+        self.thermostat_controller.save_thermostat_groups([
+            ThermostatGroupDTO(number=0,
                                outside_sensor_id=1,
                                pump_delay=30,
                                threshold_temperature=15,
@@ -337,17 +343,17 @@ class ThermostatControllerTest(unittest.TestCase):
         with self.session as db:
             group = db.query(ThermostatGroup).filter_by(number=0).one()
             self.assertEqual(15.0, group.threshold_temperature)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.heating_output_associations]
             self.assertEqual(2, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 0, 'mode': 'heating', 'output': 0}, associations)
-            self.assertIn({'index': 1, 'value': 100, 'mode': 'heating', 'output': 1}, associations)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            self.assertIn({'value': 0, 'mode': 'heating', 'output': 0}, associations)
+            self.assertIn({'value': 100, 'mode': 'heating', 'output': 1}, associations)
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.cooling_output_associations]
             self.assertEqual(1, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 100, 'mode': 'cooling', 'output': 2}, associations)
+            self.assertIn({'value': 100, 'mode': 'cooling', 'output': 2}, associations)
 
-        new_thermostat_group_dto = ThermostatGroupDTO(id=0,
+        new_thermostat_group_dto = ThermostatGroupDTO(number=0,
                                                       name='Default',
                                                       pump_delay=60,
                                                       outside_sensor_id=None,
@@ -356,7 +362,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                                       switch_to_heating_1=None,
                                                       switch_to_cooling_0=(2, 0),
                                                       switch_to_cooling_1=None)
-        self.controller.save_thermostat_groups([new_thermostat_group_dto])
+        self.thermostat_controller.save_thermostat_groups([new_thermostat_group_dto])
 
         self.pubsub._publish_all_events(blocking=False)
         self.assertIn(GatewayEvent('THERMOSTAT_GROUP_CHANGE', {'id': 0, 'status': {'mode': 'HEATING'}}), events)
@@ -364,16 +370,16 @@ class ThermostatControllerTest(unittest.TestCase):
             group = db.query(ThermostatGroup).filter_by(number=0).one()
             self.assertIsNone(group.sensor)
             self.assertIsNone(group.threshold_temperature)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.heating_output_associations]
             self.assertEqual(1, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 50, 'mode': 'heating', 'output': 0}, associations)
-            associations = [{'index': x.index, 'value': x.value, 'mode': x.mode, 'output': x.output.number}
+            self.assertIn({'value': 50, 'mode': 'heating', 'output': 0}, associations)
+            associations = [{'value': x.value, 'mode': x.mode, 'output': x.output.number}
                             for x in group.cooling_output_associations]
             self.assertEqual(1, len(associations), associations)
-            self.assertIn({'index': 0, 'value': 0, 'mode': 'cooling', 'output': 2}, associations)
+            self.assertIn({'value': 0, 'mode': 'cooling', 'output': 2}, associations)
 
-        self.assertEqual(new_thermostat_group_dto, self.controller.load_thermostat_group(0))
+        self.assertEqual(new_thermostat_group_dto, self.thermostat_controller.load_thermostat_group(0))
 
     def test_thermostat_control(self):
         with self.session as db:
@@ -401,20 +407,18 @@ class ThermostatControllerTest(unittest.TestCase):
                                cooling_setpoint=25.0)
                     ]
                 ),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
-                OutputToThermostatGroupAssociation(thermostat_group_id=1,
-                                                   mode='heating',
-                                                   value=100,
-                                                   index=0,
-                                                   output=Output(number=0)),
-                OutputToThermostatGroupAssociation(thermostat_group_id=1,
-                                                   mode='cooling',
-                                                   value=0,
-                                                   index=0,
-                                                   output=Output(number=1)),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
+                HvacOutputLink(hvac_id=1,
+                               mode='heating',
+                               value=100,
+                               output=Output(number=0)),
+                HvacOutputLink(hvac_id=1,
+                               mode='cooling',
+                               value=0,
+                               output=Output(number=1)),
             ])
             db.commit()
 
@@ -426,85 +430,92 @@ class ThermostatControllerTest(unittest.TestCase):
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, handle_event)
 
         now = datetime.now()
-        self.scheduling_controller.last_thermostat_setpoint.return_value = (datetime(now.year, now.month, now.day, 0), 21.5)
-        self.controller.refresh_config_from_db()
+        with mock.patch.object(self.setpoint_controller, 'last_thermostat_setpoint', return_value=(datetime(now.year, now.month, now.day, 0), 21.5)):
+            self.thermostat_controller.refresh_config_from_db()
 
-        # Apply last auto scheduled setpoints
-        self.controller._sync_auto_setpoints = True
-        self.controller.refresh_config_from_db()
-        expected = ThermostatGroupStatusDTO(id=0,
-                                            setpoint=0,
-                                            cooling=False,
-                                            automatic=True,
-                                            mode='heating',
-                                            statusses=[ThermostatStatusDTO(id=0,
-                                                                           automatic=True,
-                                                                           setpoint=0,
-                                                                           state='on',
-                                                                           preset='auto',
-                                                                           actual_temperature=10.0,
-                                                                           setpoint_temperature=21.5,
-                                                                           outside_temperature=10.0,
-                                                                           output_0_level=0,  # Valve drivers are not active
-                                                                           output_1_level=0,
-                                                                           steering_power=100,  # PID active
-                                                                           mode='heating')])
-        assert expected.statusses[0] == self.controller.get_thermostat_group_status()[0].statusses[0]
-        assert expected == self.controller.get_thermostat_group_status()[0]
-
-        self.controller.set_current_setpoint(0, heating_temperature=15.0)
-        expected.statusses[0].setpoint_temperature = 15.0
-        assert expected == self.controller.get_thermostat_group_status()[0]
-
-        self.scheduling_controller.last_thermostat_setpoint.return_value = (datetime(now.year, now.month, now.day, 0), 19.0)
-        # Restore auto scheduled setpoints
-        self.controller.set_thermostat(0, preset='auto')
-        expected.statusses[0].setpoint_temperature = 19.0
-        assert expected == self.controller.get_thermostat_group_status()[0]
-
-        self.controller.set_per_thermostat_mode(0,
-                                                automatic=False,
-                                                setpoint=3)
-        self.pubsub._publish_all_events(blocking=False)
-        event_data = {'id': 0,
-                      'status': {'state': 'ON',
-                                 'preset': 'AWAY',
-                                 'mode': 'HEATING',
-                                 'current_setpoint': 16.0,
-                                 'actual_temperature': 10.0,
-                                 'output_0': 100,
-                                 'output_1': None,
-                                 'steering_power': 100}}
-        self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
-        expected.statusses[0].setpoint_temperature = 16.0
-        expected.statusses[0].setpoint = 3
-        expected.statusses[0].automatic = False
-        expected.statusses[0].preset = 'away'
-        expected.automatic = False
-        expected.setpoint = 3
-        self.assertEqual([expected], self.controller.get_thermostat_group_status())
-
-        self.controller.set_per_thermostat_mode(0,
+            # Apply last auto scheduled setpoints
+            self.thermostat_controller._sync_auto_setpoints = True
+            self.thermostat_controller.refresh_config_from_db()
+            expected = ThermostatGroupStatusDTO(number=0,
+                                                setpoint=0,
+                                                cooling=False,
                                                 automatic=True,
-                                                setpoint=3)  # This is conflicting with automatic = True above
-        self.pubsub._publish_all_events(blocking=False)
-        event_data = {'id': 0,
-                      'status': {'state': 'ON',
-                                 'preset': 'AUTO',
-                                 'mode': 'HEATING',
-                                 'current_setpoint': 15.0,
-                                 'actual_temperature': 10.0,
-                                 'output_0': 100,
-                                 'output_1': None,
-                                 'steering_power': 100}}
-        self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
-        expected.statusses[0].setpoint_temperature = 19.0
-        expected.statusses[0].setpoint = 0
-        expected.statusses[0].automatic = True
-        expected.statusses[0].preset = 'auto'
-        expected.automatic = True
-        expected.setpoint = 0
-        self.assertEqual([expected], self.controller.get_thermostat_group_status())
+                                                mode='heating',
+                                                statusses=[ThermostatStatusDTO(id=0,
+                                                                               automatic=True,
+                                                                               setpoint=0,
+                                                                               state='on',
+                                                                               preset='auto',
+                                                                               actual_temperature=10.0,
+                                                                               setpoint_temperature=21.5,
+                                                                               outside_temperature=10.0,
+                                                                               output_0_level=0,  # Valve drivers are not active
+                                                                               output_1_level=0,
+                                                                               steering_power=100,  # PID active
+                                                                               mode='heating')])
+
+            response = self.thermostat_controller.get_thermostat_group_status()[0].statusses[0]
+            print('------------------------------')
+            print(expected)
+            print(response)
+
+            
+            assert expected.statusses[0] == self.thermostat_controller.get_thermostat_group_status()[0].statusses[0]
+            assert expected == self.thermostat_controller.get_thermostat_group_status()[0]
+
+            self.thermostat_controller.set_current_setpoint(0, heating_temperature=15.0)
+            expected.statusses[0].setpoint_temperature = 15.0
+            assert expected == self.thermostat_controller.get_thermostat_group_status()[0]
+
+        with mock.patch.object(self.setpoint_controller, 'last_thermostat_setpoint', return_value=(datetime(now.year, now.month, now.day, 0), 19.0)):
+            # Restore auto scheduled setpoints
+            self.thermostat_controller.set_thermostat(0, preset='auto')
+            expected.statusses[0].setpoint_temperature = 19.0
+            assert expected == self.thermostat_controller.get_thermostat_group_status()[0]
+
+            self.thermostat_controller.set_per_thermostat_mode(0,
+                                                    automatic=False,
+                                                    setpoint=3)
+            self.pubsub._publish_all_events(blocking=False)
+            event_data = {'id': 0,
+                          'status': {'state': 'ON',
+                                     'preset': 'AWAY',
+                                     'mode': 'HEATING',
+                                     'current_setpoint': 16.0,
+                                     'actual_temperature': 10.0,
+                                     'output_0': 100,
+                                     'output_1': None,
+                                     'steering_power': 100}}
+            self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
+            expected.statusses[0].setpoint_temperature = 16.0
+            expected.statusses[0].setpoint = 3
+            expected.statusses[0].automatic = False
+            expected.statusses[0].preset = 'away'
+            expected.automatic = False
+            expected.setpoint = 3
+            self.assertEqual([expected], self.thermostat_controller.get_thermostat_group_status())
+
+            self.thermostat_controller.set_per_thermostat_mode(0,
+                                                    automatic=True,
+                                                    setpoint=3)  # This is conflicting with automatic = True above
+            self.pubsub._publish_all_events(blocking=False)
+            event_data = {'id': 0,
+                          'status': {'state': 'ON',
+                                     'preset': 'AUTO',
+                                     'mode': 'HEATING',
+                                     'current_setpoint': 15.0,
+                                     'actual_temperature': 10.0,
+                                     'output_0': 100,
+                                     'output_1': None,
+                                     'steering_power': 100}}
+            self.assertIn(GatewayEvent('THERMOSTAT_CHANGE', event_data), events)
+            expected.statusses[0].setpoint_temperature = 19.0
+            expected.statusses[0].setpoint = 0
+            expected.statusses[0].automatic = True
+            expected.statusses[0].preset = 'auto'
+            expected.automatic = True
+            expected.setpoint = 0
+            self.assertEqual([expected], self.thermostat_controller.get_thermostat_group_status())
 
     def test_copy_schedule(self):
         with self.session as db:
@@ -523,15 +534,15 @@ class ThermostatControllerTest(unittest.TestCase):
                            valve_config='equal',
                            sensor=Sensor(source='master', external_id='10', physical_quantity='temperature', name=''),
                            group=ThermostatGroup(number=0, name='thermostat group', threshold_temperature=10.0, mode='heating')),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 
-        thermostat_dto = self.controller.load_heating_thermostat(thermostat_id=0)
-        self.controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
+        thermostat_dto = self.thermostat_controller.load_heating_thermostat(thermostat_number=0)
+        self.thermostat_controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
 
         with self.session as db:
             thermostat = db.query(Thermostat).filter_by(number=0).one()
@@ -543,14 +554,14 @@ class ThermostatControllerTest(unittest.TestCase):
                         Preset.Types.PARTY: 22.0}
             self.assertEqual(expected, {x.type: x.heating_setpoint for x in thermostat.presets})
 
-        source_dto = ThermostatDTO(id=8)
+        source_dto = ThermostatDTO(number=8)
         source_dto.auto_mon = ThermostatScheduleDTO(temp_night=1.0, temp_day_1=2.0, temp_day_2=3.0,
                                                     start_day_1='04:00', end_day_1='05:00',
                                                     start_day_2='06:00', end_day_2='07:00')
         source_dto.setp3 = 8.0
         source_dto.setp4 = 9.0
         source_dto.setp5 = 10.0
-        self.controller.copy_heating_schedule(source_dto, thermostat_dto)
+        self.thermostat_controller.copy_heating_schedule(source_dto, thermostat_dto)
 
         with self.session as db:
             thermostat = db.get(Thermostat, 1)
@@ -579,49 +590,55 @@ class ThermostatControllerTest(unittest.TestCase):
                            valve_config='equal',
                            sensor=Sensor(source='master', external_id='10', physical_quantity='temperature', name=''),
                            group=ThermostatGroup(number=0, name='thermostat group', threshold_temperature=10.0, mode='heating')),
-                ValveToThermostatAssociation(mode='heating',
-                                             thermostat_id=1,
-                                             valve=Valve(name='Valve (output 8)',
-                                                         output=Output(number=8))),
+                IndoorLinkValves(mode='heating',
+                                thermostat_link_id=1,
+                                valve=Valve(name='Valve (output 8)',
+                                            output=Output(number=8))),
             ])
             db.commit()
 
-        thermostat_dto = self.controller.load_heating_thermostat(thermostat_id=0)
-        self.controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
+        thermostat_dto = self.thermostat_controller.load_heating_thermostat(thermostat_number=0)
+        self.thermostat_controller.save_heating_thermostats([thermostat_dto])  # Make sure all defaults are populated
 
         now = datetime.now()
-        self.scheduling_controller.last_thermostat_setpoint.return_value = (datetime(now.year, now.month, now.day, 0), 21.5)
+        with mock.patch.object(self.setpoint_controller, 'last_thermostat_setpoint', return_value=(datetime(now.year, now.month, now.day, 0), 21.5)):
 
-        self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
-                                                         data={'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
-                                                               'data': {'state': 'on',
-                                                                        'mode': 'cooling'}}))
-        with self.session as db:
-            thermostat = db.query(Thermostat).filter_by(number=0).one()
-            self.assertEqual('on', thermostat.state)
-            self.assertEqual('cooling', thermostat.group.mode)
+            self.thermostat_controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                             data={'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
+                                                                   'data': {'state': 'on',
+                                                                            'mode': 'cooling'}}))
+            with self.session as db:
+                thermostat = db.query(Thermostat).filter_by(number=0).one()
+                self.assertEqual('on', thermostat.state)
+                self.assertEqual('cooling', thermostat.group.mode)
 
-        self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
-                                                         data={'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
-                                                               'data': {'state': 'off',
-                                                                        'mode': 'heating'}}))
-        with self.session as db:
-            thermostat = db.query(Thermostat).filter_by(number=0).one()
-            self.assertEqual('off', thermostat.state)
-            self.assertEqual('heating', thermostat.group.mode)
 
-            self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+
+            self.thermostat_controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                             data={'type': MasterEvent.APITypes.SET_THERMOSTAT_MODE,
+                                                                   'data': {'state': 'off',
+                                                                            'mode': 'heating'}}))
+            with self.session as db:
+                thermostat = db.query(Thermostat).filter_by(number=0).one()
+                self.assertEqual('off', thermostat.state)
+                self.assertEqual('heating', thermostat.group.mode)
+
+
+
+            self.thermostat_controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
                                                              data={'type': MasterEvent.APITypes.SET_THERMOSTAT_PRESET,
                                                                    'data': {'preset': 'away'}}))
 
-        with self.session as db:
-            thermostat = db.query(Thermostat).filter_by(number=0).one()
-            self.assertEqual('away', thermostat.active_preset.type)
+            with self.session as db:
+                thermostat = db.query(Thermostat).filter_by(number=0).one()
+                self.assertEqual('away', thermostat.active_preset.type)
 
-            self.controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+
+
+            self.thermostat_controller._handle_master_event(MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
                                                              data={'type': MasterEvent.APITypes.SET_THERMOSTAT_PRESET,
                                                                    'data': {'preset': 'party'}}))
 
-        with self.session as db:
-            thermostat = db.query(Thermostat).filter_by(number=0).one()
-            self.assertEqual('party', thermostat.active_preset.type)
+            with self.session as db:
+                thermostat = db.query(Thermostat).filter_by(number=0).one()
+                self.assertEqual('party', thermostat.active_preset.type)

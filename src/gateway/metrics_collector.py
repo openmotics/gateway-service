@@ -610,7 +610,7 @@ class MetricsCollector(object):
                     self._enqueue_metrics(metric_type=metric_type,
                                           values={'on': group_on,
                                                   'cooling': status.cooling},
-                                          tags={'id': 'G.{0}'.format(status.id)},
+                                          tags={'id': 'G.{0}'.format(status.number)},
                                           timestamp=now)
             except CommunicationFailure as ex:
                 logger.error('Error getting thermostat status: {}'.format(ex))
