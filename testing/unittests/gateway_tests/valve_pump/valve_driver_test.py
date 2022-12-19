@@ -67,9 +67,9 @@ class ValveDriverTest(unittest.TestCase):
             driver = ValveDriver(valve)
             self.assertEqual(valve.id, driver.id)
 
-        self.assertEqual(0, driver.percentage)
+        self.assertEqual(None, driver._current_percentage)
+        self.assertEqual(None, driver.percentage)
         self.assertEqual(0, driver._desired_percentage)
-        self.assertEqual(0, driver._current_percentage)
         self.assertFalse(driver.is_open())
         self.assertFalse(driver.in_transition)
 
@@ -79,6 +79,7 @@ class ValveDriverTest(unittest.TestCase):
         self.assertEqual(0, driver._desired_percentage)
         driver.open()
         self.assertEqual(100, driver._desired_percentage)
+        driver._current_percentage = 0
         self.assertTrue(driver.will_open)
         driver.steer_output()
         driver._output_controller.set_output_status.assert_called_once()
