@@ -148,7 +148,8 @@ class SchedulingController(object):
             # TODO: parse
             minute, hour, day, month, day_of_week = schedule_dto.repeat.split(' ')
             end_date = datetime.fromtimestamp(schedule_dto.end) if schedule_dto.end else None
-            kwargs.update({'trigger': 'cron', 'end_date': end_date,
+            start_date = datetime.fromtimestamp(schedule_dto.start) if schedule_dto.start else None
+            kwargs.update({'trigger': 'cron', 'start_date': start_date, 'end_date': end_date,
                            'minute': minute, 'hour': hour, 'day': day, 'month': month, 'day_of_week': day_of_week})
         self._scheduler.add_job(self._execute_schedule, **kwargs)
 
