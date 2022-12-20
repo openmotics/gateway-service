@@ -34,7 +34,7 @@ class ValveDriver(object):
         self._output_controller = output_controller
         self._valve = valve
         self._percentage = 0
-        self._current_percentage = 0
+        self._current_percentage = None # type: Optional[int]
         self._desired_percentage = 0
         self._time_state_changed = None  # type: Optional[float]
         self._state_change_lock = Lock()
@@ -44,11 +44,13 @@ class ValveDriver(object):
         return self._valve.id
 
     @property
-    def percentage(self):  # type: () -> int
+    def percentage(self):  # type: () -> Optional[int]
         return self._current_percentage
 
     def is_open(self, percentage=0):  # type: (int) -> bool
         # return true if valve is open, return false if valve is not open or still moving
+        if self._current_percentage is None:
+            return False
         now_open = self._current_percentage > percentage
         return now_open if not self.in_transition else False
 
@@ -85,10 +87,14 @@ class ValveDriver(object):
 
     @property
     def will_open(self):  # type: () -> bool
+        if self._current_percentage is None:
+            return False
         return self._desired_percentage > 0 and self._current_percentage == 0
 
     @property
     def will_close(self):  # type: () -> bool
+        if self._current_percentage is None:
+            return False
         return self._desired_percentage == 0 and self._current_percentage > 0
 
     def open(self):  # type: () -> None

@@ -120,10 +120,10 @@ class PumpValveControllerTest(unittest.TestCase):
 
         # Initial state, everything is off
         self.assertFalse(pump_driver_1.state)
-        self.assertEqual(0, valve_driver_1.percentage)
-        self.assertEqual(0, valve_driver_2.percentage)
+        self.assertEqual(None, valve_driver_1.percentage)
+        self.assertEqual(None, valve_driver_2.percentage)
         self.assertFalse(pump_driver_2.state)
-        self.assertEqual(0, valve_driver_3.percentage)
+        self.assertEqual(None, valve_driver_3.percentage)
 
         # Set the second valve to 50%
         # The pump should only be turned on after 15s
